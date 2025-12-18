@@ -990,48 +990,6 @@ if(!file.exists( dbh_fnm_temp )){
 processing_data_temp <- readr::read_csv(c2t_tracking_fnm, progress = F, show_col_types = F)
 ```
 
-```{r, include=F, eval=F}
-# model trees
-regional_dbh_height_model_training_data_temp <- file.path(c2t_process_dir, "regional_dbh_height_model_training_data.csv") %>% 
-  readr::read_csv(show_col_types = F, progress = F) 
-
-regional_dbh_height_model_training_data_temp %>% 
-  dplyr::glimpse()
-
-regional_dbh_height_model_training_data_temp %>% 
-  dplyr::count(species_symbol) %>% 
-  dplyr::arrange(desc(n))
-
-regional_dbh_height_model_training_data_temp %>% 
-  ggplot2::ggplot(mapping = ggplot2::aes(x = dbh_cm)) +
-  ggplot2::geom_density()
-
-regional_dbh_height_model_training_data_temp %>% 
-  ggplot2::ggplot(mapping = ggplot2::aes(x = tree_height_m, y = dbh_cm)) +
-  ggplot2::geom_point()
-
-regional_dbh_height_model_training_data_temp %>% 
-  ggplot2::ggplot(mapping = ggplot2::aes(x = tree_height_m, y = dbh_cm, size = tree_weight)) +
-  ggplot2::geom_point()
-
-regional_dbh_height_model_training_data_temp %>% 
-  ggplot2::ggplot(mapping = ggplot2::aes(x = tree_height_m, y = dbh_cm, size = tree_weight, color = species_symbol)) +
-  ggplot2::geom_point(key_glyph = ggplot2::draw_key_rect)
-
-regional_dbh_height_model_training_data_temp %>% 
-  ggplot2::ggplot(mapping = ggplot2::aes(x = tree_height_m, y = dbh_cm, color = species_symbol)) +
-  ggplot2::geom_point() +
-  ggplot2::facet_wrap(facets = dplyr::vars(species_symbol)) +
-  ggplot2::theme(legend.position = "none")
-
-regional_dbh_height_model_training_data_temp %>% 
-  ggplot2::ggplot(mapping = ggplot2::aes(x = tree_height_m, y = dbh_cm, color = species_symbol, size = tree_weight)) +
-  ggplot2::geom_point() +
-  ggplot2::facet_wrap(facets = dplyr::vars(species_symbol)) +
-  ggplot2::theme(legend.position = "none")
-  
-```
-
 Estimating DBH for our tree list of **`r scales::comma(nrow(trees_dbh_ans), accuracy = .01)`** trees took **`r scales::comma(processing_data_temp$timer_trees_dbh_mins, accuracy = .1)`** minutes
 
 let's check the relationship between height and DBH as estimated by the regional allometric relationship
@@ -1073,6 +1031,116 @@ trees_dbh_ans$dbh_cm %>% summary()
 dbh_mod_temp <- readRDS( file.path(c2t_process_dir, "regional_dbh_height_model.rds") )
 # what is this?
 dbh_mod_temp %>% class()
+# model formula
+dbh_mod_temp
+```
+
+```{r, include=FALSE, eval=FALSE}
+# model trees
+regional_dbh_height_model_training_data_temp <- file.path(c2t_process_dir, "regional_dbh_height_model_training_data.csv") %>% 
+  readr::read_csv(show_col_types = F, progress = F) 
+
+regional_dbh_height_model_training_data_temp %>% 
+  dplyr::glimpse()
+
+regional_dbh_height_model_training_data_temp %>% 
+  dplyr::count(species_symbol) %>% 
+  dplyr::arrange(desc(n))
+
+regional_dbh_height_model_training_data_temp %>% 
+  ggplot2::ggplot(mapping = ggplot2::aes(x = dbh_cm)) +
+  ggplot2::geom_density()
+
+regional_dbh_height_model_training_data_temp %>% 
+  ggplot2::ggplot(mapping = ggplot2::aes(x = tree_height_m, y = dbh_cm)) +
+  ggplot2::geom_point()
+
+regional_dbh_height_model_training_data_temp %>% 
+  ggplot2::ggplot(mapping = ggplot2::aes(x = tree_height_m, y = dbh_cm, size = tree_weight)) +
+  ggplot2::geom_point()
+
+regional_dbh_height_model_training_data_temp %>% 
+  ggplot2::ggplot(mapping = ggplot2::aes(x = tree_height_m, y = dbh_cm, size = tree_weight, color = species_symbol)) +
+  ggplot2::geom_point(key_glyph = ggplot2::draw_key_rect)
+
+regional_dbh_height_model_training_data_temp %>% 
+  ggplot2::ggplot(mapping = ggplot2::aes(x = tree_height_m, y = dbh_cm, color = species_symbol)) +
+  ggplot2::geom_point() +
+  ggplot2::facet_wrap(facets = dplyr::vars(species_symbol)) +
+  ggplot2::theme(legend.position = "none")
+
+regional_dbh_height_model_training_data_temp %>% 
+  ggplot2::ggplot(mapping = ggplot2::aes(x = tree_height_m, y = dbh_cm, color = species_symbol, size = tree_weight)) +
+  ggplot2::geom_point() +
+  ggplot2::facet_wrap(facets = dplyr::vars(species_symbol)) +
+  ggplot2::theme(legend.position = "none")
+
+
+# dbh ~ a * height^b # power function
+# dbh ~ asym * (1 - base::exp(-k * height))^p # Chapman-Richards non-linear formula
+# Define the non-linear Chapman-Richards formula for DBH
+dbh_chpmn_rchrds_formula <- brms::bf(
+  dbh_cm|weights(tree_weight) ~ asym * (1 - exp(-k * tree_height_m))^p
+  , asym ~ 1
+  , k ~ 1
+  , p ~ 1
+  , nl = TRUE
+)
+
+# Define Priors
+# Note: Since we are using lognormal, the parameters asym, k, and p are 
+# still interpreted on the original scale of the tree (e.g., inches or cm).
+dbh_priors <- c(
+  # Asymptote: The max diameter. Adjust based on your units (e.g., inches vs cm).
+  brms::prior(normal(60, 20), nlpar = "asym", lb = 0)
+  # k: The rate of approach to the asymptote. Usually a small decimal.
+  , brms::prior(normal(0.05, 0.02), nlpar = "k", lb = 0)
+  # p: The shape parameter. p > 1 creates the initial acceleration.
+  , brms::prior(normal(2, 0.5), nlpar = "p", lb = 0)
+)
+
+# Fit the lognormal model
+fit_dbh_chpmn_rchrds <- brms::brm(
+  formula = dbh_chpmn_rchrds_formula
+  , data = regional_dbh_height_model_training_data_temp
+  , prior = dbh_priors
+  # the lognormal family is a smart move for allometric data. 
+  # In forestry, as trees get larger, the variance in their diameter typically increases (heteroscedasticity). 
+  # The lognormal distribution naturally accounts for this because it assumes the 
+  #  error is multiplicative rather than additive, and it ensures that predicted DBH values are always strictly positive.
+  , family = brms::lognormal()
+  # , iter = 4000, warmup = 2000, chains = 4
+  , iter = 6000, warmup = 3000, chains = 4
+  , cores = lasR::half_cores()
+  # , file = paste0(normalizePath(outfolder), "/regional_dbh_height_model")
+  , file = paste0(normalizePath(c2t_process_dir), "/regional_dbh_height_chpmn_rchrds_model")
+  , file_refit = "always"
+  # Increase adapt_delta if you encounter divergent transitions (common in non-linear models)
+  , control = list(adapt_delta = 0.98)
+)
+
+plt_temp <- 
+  dplyr::tibble(tree_height_m = seq(from = 0, to = 50, by = 1)) %>% 
+  tidybayes::add_epred_draws(fit_dbh_chpmn_rchrds, ndraws = 2000) %>% 
+  ggplot2::ggplot(ggplot2::aes(x = tree_height_m)) +
+    tidybayes::stat_lineribbon(
+      ggplot2::aes(y = .epred, color = "estimate")
+      , .width = c(0.5,0.95)
+      , lwd = 0.6
+    ) +
+    ggplot2::scale_fill_brewer(palette = "Oranges") +
+    ggplot2::scale_color_manual(values = c("gray33")) +
+    ggplot2::labs(x = "tree ht. (m)", y = "est. tree DBH (cm)", color = "") +
+    ggplot2::scale_x_continuous(limits = c(0,NA), breaks = scales::extended_breaks(n=11)) +
+    ggplot2::scale_y_continuous(limits = c(0,NA), breaks = scales::extended_breaks(n=11)) +
+    ggplot2::theme_light()
+
+plt_temp +
+  ggplot2::geom_point(
+    data = regional_dbh_height_model_training_data_temp
+    , mapping = ggplot2::aes(x = tree_height_m, y = dbh_cm)
+    , inherit.aes = F
+  )  
 ```
 
 we can draw fit curves with probability bands using the `tidybayes` package
