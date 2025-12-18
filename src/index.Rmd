@@ -1,0 +1,35 @@
+--- 
+title: "BLM Tres Rios Field Office: Dawson project area UAS data"
+author: "George Woolsey"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+site: bookdown::bookdown_site
+output: 
+  bookdown::gitbook:
+    includes:
+      in_header: header.html
+documentclass: book
+book_filename: "blm_trfo_uas"
+output_dir: "../docs"
+language:
+  ui:
+    chapter_name: "Section "
+delete_merged_file: true
+bibliography: [packages.bib]
+biblio-style: apalike
+csl: https://raw.githubusercontent.com/citation-style-language/styles/master/research-institute-for-nature-and-forest.csl
+suppress-bibliography: true
+lang: en-US
+zotero: true
+link-citations: true
+description: "Using the bookdown package to write a book of data exploration. The output format for this example is bookdown::gitbook."
+---
+
+# Introduction
+
+The [Dawson vegetation treatment project area](https://www.blm.gov/sites/default/files/docs/2024-02/Map-BLM-Dawson-piles-Rx-2024.pdf) is located near Dolores, Colorado (USA) on land managed by the BLM Southwest District, Tres Rios Field Office (TRFO).
+
+On April 29th and 30th, 2025, BLM Remote Sensing staff mapped approximately 2,000 acres of the Dawson site using an Uncrewed Aerial System (UAS). In total 24 flights were conducted to collect ~5,500 stereo-images. The raw imagery was then processed photogrammetrically with Agisoft Metashape software to produce high-resolution geospatial data products including 3D point cloud data and an RGB spectral orthomosaic.
+
+## Objective
+
+The objective of this analysis is to process the aerial point cloud data using the `cloud2trees` framework ([Woolsey et al. 2025](https://github.com/georgewoolsey/cloud2trees)) for generating individual tree forest inventory data. `cloud2trees` provides a streamlined, open-source framework for generating broad-area individual tree inventories from aerial point cloud data. The primary outputs are spatial datasets of tree locations and crown polygons attributed with biophysical metrics such as height, crown dimensions, crown base height (CBH), diameter at breast height (DBH), and crown biomass. While height and location are inherently determined through the detection process, the framework augments these inventories with tree-level biophysical information determined via allometric estimates and integrated supplementary data. These high-resolution datasets support a wide range of applications including fire behavior modeling, evaluation of forest management activities, and habitat characterization.

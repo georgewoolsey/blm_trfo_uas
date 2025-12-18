@@ -1,0 +1,19 @@
+book_filename: "blm_trfo_uas"
+output_dir: "../docs"
+output: 
+  bookdown::gitbook:
+    toc_depth: 5
+    includes:
+      in_header: header.html
+language:
+  ui:
+    chapter_name: "Section "
+delete_merged_file: true
+# rmd_subdir: ["src/"]
+# rmd_files: ["index.Rmd"
+#   # , "01_data.Rmd"
+#   , "02_cbh_process.Rmd"
+#   # , "03_species_process.Rmd"
+#   # , "04_hmd_process.Rmd"
+#   , "05_biomass_process.Rmd"
+# ]
