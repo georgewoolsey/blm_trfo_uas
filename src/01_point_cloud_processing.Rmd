@@ -803,6 +803,17 @@ pts_temp <- raw_las_ctg_info %>%
 rate_temp <- (trees_mins_temp*60) / (m2_temp/10000)
 # point density
 dens_temp <- pts_temp / m2_temp
+# save tracking
+readr::read_csv(c2t_tracking_fnm, progress = F, show_col_types = F) %>% 
+  dplyr::mutate(
+    number_of_points = pts_temp
+    , las_area_m2 = m2_temp
+  ) %>% 
+  write.csv(
+    file = c2t_tracking_fnm
+    , row.names = F, append = F
+    )
+
 ```
 
 Tree extraction over **`r scales::comma((m2_temp/10000), accuracy = 0.1)`** hectares took a total of **`r scales::comma(trees_mins_temp, accuracy = 0.1)`** minutes at processing rate of **`r scales::comma(rate_temp, accuracy = 0.01)`** seconds per hectare on point cloud data with a point density of **`r scales::comma(dens_temp, accuracy = 0.1)`** points per square meter (**`r scales::comma(pts_temp, accuracy = 1)`** points total).
@@ -820,9 +831,9 @@ The `trees_cbh()` function uses the tree crown polygons we [delineated from the 
 We'll attempt to extract CBH for a sample and model the rest based on the data we successfully extracted from the point cloud.
 
 ```{r}
-cbh_fnm_temp <- file.path(c2t_process_dir, "cbh_data.csv")
+cbh_fnm <- file.path(c2t_process_dir, "cbh_data.csv")
 # if we don't already have the data, run it
-if(!file.exists( cbh_fnm_temp )){
+if(!file.exists( cbh_fnm )){
   # sample proportion
   sample_prop_temp <- 0.10
   # time it
@@ -849,7 +860,7 @@ if(!file.exists( cbh_fnm_temp )){
   mins_temp <- difftime(Sys.time(),st_temp,units = "mins") %>% as.numeric()
   # save cbh
   trees_cbh_ans %>% sf::st_drop_geometry() %>% 
-    write.csv(file = cbh_fnm_temp, row.names = F, append = F)
+    write.csv(file = cbh_fnm, row.names = F, append = F)
   # save tracking
   readr::read_csv(c2t_tracking_fnm, progress = F, show_col_types = F) %>% 
     dplyr::mutate(
@@ -864,7 +875,7 @@ if(!file.exists( cbh_fnm_temp )){
   
 }else{
   # cbh data
-  trees_cbh_ans <- readr::read_csv( cbh_fnm_temp, progress = F, show_col_types = F)
+  trees_cbh_ans <- readr::read_csv( cbh_fnm, progress = F, show_col_types = F)
 }
 ```
 
@@ -946,6 +957,7 @@ that is good spatial distribution of the training data
 
 ```{r, warning=FALSE, message=FALSE, echo=FALSE, include=FALSE}
 remove(list = ls()[grep("_temp",ls())])
+remove(trees_cbh_ans)
 gc()
 ```
 
@@ -954,9 +966,9 @@ gc()
 The `trees_dbh()` function uses the [TreeMap](https://www.fs.usda.gov/rds/archive/catalog/RDS-2021-0074) FIA plot data in the area of the tree list to estimate the height-DBH allometry relationship. The height predicting DBH model built from the FIA data is then used to predict DBH based on tree height in the tree list.
 
 ```{r}
-dbh_fnm_temp <- file.path(c2t_process_dir, "dbh_data.csv")
+dbh_fnm <- file.path(c2t_process_dir, "dbh_data.csv")
 # if we don't already have the data, run it
-if(!file.exists( dbh_fnm_temp )){
+if(!file.exists( dbh_fnm )){
   # time it
   st_temp <- Sys.time()
   # run it
@@ -969,7 +981,7 @@ if(!file.exists( dbh_fnm_temp )){
   mins_temp <- difftime(Sys.time(),st_temp,units = "mins") %>% as.numeric()
   # save dbh
   trees_dbh_ans %>% sf::st_drop_geometry() %>% 
-    write.csv(file = dbh_fnm_temp, row.names = F, append = F)
+    write.csv(file = dbh_fnm, row.names = F, append = F)
   # save tracking
   readr::read_csv(c2t_tracking_fnm, progress = F, show_col_types = F) %>% 
     dplyr::mutate(
@@ -982,7 +994,7 @@ if(!file.exists( dbh_fnm_temp )){
   
 }else{
   # dbh data
-  trees_dbh_ans <- readr::read_csv( dbh_fnm_temp, progress = F, show_col_types = F)
+  trees_dbh_ans <- readr::read_csv( dbh_fnm, progress = F, show_col_types = F)
 }
 ```
 
@@ -1016,8 +1028,6 @@ trees_dbh_ans %>%
   ggplot2::theme_light() +
   ggplot2::theme(axis.text.y = ggplot2::element_blank(), axis.ticks.y = ggplot2::element_blank())
 ```
-
-...that's a lot of small trees
 
 let's look at the summary statistics
 
@@ -1075,7 +1085,9 @@ regional_dbh_height_model_training_data_temp %>%
   ggplot2::facet_wrap(facets = dplyr::vars(species_symbol)) +
   ggplot2::theme(legend.position = "none")
 
-
+# treemap_trees_df <- "c:/data/usfs/blm_trfo_uas/data/point_cloud_processing_delivery/regional_dbh_height_model_training_data.csv" %>% 
+#   readr::read_csv(show_col_types = F, progress = F) 
+# treemap_trees_df
 # dbh ~ a * height^b # power function
 # dbh ~ asym * (1 - base::exp(-k * height))^p # Chapman-Richards non-linear formula
 # Define the non-linear Chapman-Richards formula for DBH
@@ -1141,6 +1153,60 @@ plt_temp +
     , mapping = ggplot2::aes(x = tree_height_m, y = dbh_cm)
     , inherit.aes = F
   )  
+
+
+####################################################
+# orig dbh
+# population model with no random effects (i.e. no group-level variation)
+      # Define the non-linear model formula for DBH
+      dbh_formula <- brms::bf(
+        formula = dbh_cm|weights(tree_weight) ~ (b1 * tree_height_m) + tree_height_m^b2
+        , b1 + b2 ~ 1
+        , nl = TRUE # !! specify non-linear
+      )
+
+      # Define Priors
+      dbh_priors <- c(
+        brms::prior(normal(1, 2), nlpar = "b1")
+        , brms::prior(normal(0, 2), nlpar = "b2")
+      )
+
+      # non-linear model form with Gamma distribution for strictly positive response variable dbh
+      mod_nl_pop <- brms::brm(
+        formula = dbh_formula
+        , data = treemap_trees_df
+        , prior = dbh_priors
+        , family = brms::brmsfamily("Gamma")
+        , iter = 4000, warmup = 2000, chains = 4
+        , cores = lasR::half_cores()
+        # , file = paste0(normalizePath(outfolder), "/regional_dbh_height_model")
+        # , file_refit = "always"
+      )
+      # plot(mod_nl_pop)
+      # summary(mod_nl_pop)
+
+      ## write out model estimates to tabular file
+      #### extract posterior draws to a df
+      brms::as_draws_df(
+        fit_dbh_chpmn_rchrds
+        , variable = c("^b_", "shape")
+        , regex = TRUE
+      ) %>%
+        # quick way to get a table of summary statistics and diagnostics
+        posterior::summarize_draws(
+          "mean", "median", "sd"
+          ,  ~quantile(.x, probs = c(
+            0.05, 0.95
+            , 0.025, 0.975
+          ))
+          , "rhat"
+        ) %>%
+        dplyr::mutate(
+          variable = stringr::str_remove_all(variable, "_Intercept")
+          , formula = summary(mod_nl_pop)$formula %>%
+            as.character() %>%
+            .[1]
+        )
 ```
 
 we can draw fit curves with probability bands using the `tidybayes` package
@@ -1148,7 +1214,7 @@ we can draw fit curves with probability bands using the `tidybayes` package
 ```{r}
 library(tidybayes)
 # define our height range to predict over
-dplyr::tibble(tree_height_m = seq(from = 0, to = 50, by = 1)) %>% 
+dplyr::tibble(tree_height_m = seq(from = 0, to = 30, by = 1)) %>% 
   tidybayes::add_epred_draws(dbh_mod_temp, ndraws = 2000) %>% 
   ggplot2::ggplot(ggplot2::aes(x = tree_height_m)) +
     tidybayes::stat_lineribbon(
@@ -1164,13 +1230,13 @@ dplyr::tibble(tree_height_m = seq(from = 0, to = 50, by = 1)) %>%
     ggplot2::theme_light()
 ```
 
-The probability bands are there in shades of orange but they are so tight to the median estimate that it's impossible to see them. The model confidence bands are so narrow because the model was trained with lots of FIA measured trees over the broad study area
+The probability bands are there in shades of orange but they are so tight to the median estimate that it's difficult to see them. The model confidence bands are so narrow because the model was trained with lots of FIA measured trees over the broad study area
 
 we can check how many FIA measured trees were used to train our model because `cloud2trees::trees_dbh()` also writes the training data to the disk (that's neat, but  we don't always need to see how the sausage is made)
 
 ```{r}
 readr::read_csv(
-    "../data/point_cloud_processing_delivery/regional_dbh_height_model_training_data.csv"
+    file.path(c2t_process_dir, "regional_dbh_height_model_training_data.csv")
     , progress = F
     , show_col_types = F
   ) %>% 
@@ -1181,58 +1247,62 @@ readr::read_csv(
 
 that's how many FIA measured trees were used to train our model
 
+```{r, warning=FALSE, message=FALSE, echo=FALSE, include=FALSE}
+remove(list = ls()[grep("_temp",ls())])
+remove(trees_dbh_ans, trees_cbh_ans)
+gc()
+```
+
 ## HMD Modeling: `trees_hmd()`
 
 The `trees_hmd()` function uses the tree crown polygons we [delineated from the point cloud](#trees) with the columns `treeID` and `tree_height_m` to attempt to extract height to maximum crown diameter (HMD) directly from the height normalized point cloud by finding the height of the non-ground point farthest from the tree center (i.e. tree top). HMD refers to the vertical height at which a tree's crown has its widest horizontal spread. It describes a characteristic of the overall crown shape and structure.
 
-We have `r scales::comma(nrow(raster2trees_ans), suffix = " M", scale = 1e-6, accuracy = .01)` trees but we'll attempt to extract HMD for the full tree list (100% census) and model the trees for which this process cannot extract a value based on the data we successfully extracted from the point cloud. This is a memory-intensive process, so we'll clear all objects from our R session and read them back in later after processing.
-
-```{r, message=FALSE, warning=FALSE}
-# clean session
-remove(list = base::setdiff(ls(), c("processing_data","dbh_fnm")))
-gc()
-```
-
 ```{r}
-# where should we save the file?
-hmd_fnm <- "../data/point_cloud_processing_delivery/hmd_data.csv"
+hmd_fnm <- file.path(c2t_process_dir, "hmd_data.csv")
 # if we don't already have the data, run it
-if(!file.exists(hmd_fnm)){
+if(!file.exists( hmd_fnm )){
   # sample proportion
-  sample_prop_temp <- 1
+  sample_prop_temp <- (1/3)
   # time it
   st_temp <- Sys.time()
   # run it
   trees_hmd_ans <- cloud2trees::trees_hmd(
-    trees_poly = "../data/point_cloud_processing_delivery"
-    , norm_las = "../data/point_cloud_processing_delivery/norm_las/"
+    trees_poly = c2t_process_dir
+    , norm_las = file.path(c2t_output_dir, "point_cloud_processing_temp", "02_normalize")
     , tree_sample_prop = sample_prop_temp
     , force_same_crs = T
     , estimate_missing_hmd = T
   )
   # timer
   mins_temp <- difftime(Sys.time(),st_temp,units = "mins") %>% as.numeric()
-  processing_data$timer_trees_hmd_mins <- mins_temp
-  processing_data$sttng_hmd_tree_sample_n <- NA
-  processing_data$sttng_hmd_tree_sample_prop <- sample_prop_temp
   # save hmd
   trees_hmd_ans %>% sf::st_drop_geometry() %>% 
     write.csv(file = hmd_fnm, row.names = F, append = F)
   # save tracking
-  processing_data %>% 
+  readr::read_csv(c2t_tracking_fnm, progress = F, show_col_types = F) %>% 
+    dplyr::mutate(
+      timer_trees_hmd_mins = mins_temp
+      , sttng_hmd_tree_sample_n = as.character(NA)
+      , sttng_hmd_tree_sample_prop = sample_prop_temp
+    ) %>% 
     write.csv(
-      file = "../data/point_cloud_processing_delivery/processed_tracking_data.csv"
+      file = c2t_tracking_fnm
       , row.names = F, append = F
     )
+  
 }else{
   # hmd data
-  trees_hmd_ans <- readr::read_csv(hmd_fnm, progress = F, show_col_types = F)
+  trees_hmd_ans <- readr::read_csv( hmd_fnm, progress = F, show_col_types = F)
 }
 ```
 
-HMD extraction took a total of **`r scales::comma(processing_data$timer_trees_hmd_mins, accuracy = 0.1)`** minutes at processing rate of **`r scales::comma((processing_data$timer_trees_hmd_mins/(nrow(trees_hmd_ans)/1000))*60, accuracy = 0.01)`** seconds per 1,000 trees
+```{r, include=F, eval=TRUE}
+processing_data_temp <- readr::read_csv(c2t_tracking_fnm, progress = F, show_col_types = F)
+```
 
-We attempted to extract HMD from `r scales::percent(processing_data$sttng_hmd_tree_sample_prop)` of our tree list, let's see our success rate
+HMD extraction took a total of **`r scales::comma(processing_data_temp$timer_trees_hmd_mins, accuracy = 0.1)`** minutes at processing rate of **`r scales::comma((processing_data_temp$timer_trees_hmd_mins/(nrow(trees_hmd_ans)/1000))*60, accuracy = 0.01)`** seconds per 1,000 trees
+
+We attempted to extract HMD from `r scales::percent(processing_data_temp$sttng_hmd_tree_sample_prop)` of our tree list, let's see our success rate
 
 ```{r}
 trees_hmd_ans %>% 
@@ -1253,7 +1323,7 @@ trees_hmd_ans %>%
   ggplot2::labs(x = "tree ht. (m)", y = "tree HMD (m)") +
   ggplot2::scale_y_continuous(breaks = scales::extended_breaks(n=12)) +
   ggplot2::scale_x_continuous(breaks = scales::extended_breaks(n=14)) +
-  ggplot2::scale_color_viridis_d(option = "turbo", begin = 0.2, alpha = 0.7, name = "is HMD\nfrom cloud?") +
+  ggplot2::scale_color_viridis_d(option = "magma", begin = 0.2, alpha = 0.7, name = "is HMD\nfrom cloud?") +
   ggplot2::theme_light()
 ```
 
@@ -1275,12 +1345,17 @@ and look at the summary statistics of HMD
 trees_hmd_ans$max_crown_diam_height_m %>% summary()
 ```
 
-
-clean our session
-
-```{r, message=FALSE, warning=FALSE}
-# clean session
-remove(list = base::setdiff(ls(), c("processing_data","dbh_fnm","hmd_fnm","cbh_fnm")))
+```{r, warning=FALSE, message=FALSE, echo=FALSE, include=FALSE}
+remove(list = ls()[grep("_temp",ls())])
+remove(
+  list = base::setdiff(
+    ls()
+    , c(
+      "treetops_sf","dbh_fnm","hmd_fnm","cbh_fnm"
+      , "c2t_output_dir", "c2t_process_dir", "c2t_tracking_fnm"
+    )
+  )
+)
 gc()
 ```
 
@@ -1288,43 +1363,25 @@ gc()
 
 We'll now use `trees_type()` to attach species information using USDA Forest Inventory and Analysis (FIA) codes. FIA Forest Type Group Code is attached to each tree in the tree list based on the spatial overlap with the [Forest Type Groups of the Continental United States](https://www.arcgis.com/home/item.html?id=10760c83b9e44923bd3c18efdaa7319d) data (Wilson 2023).
 
-We now need to read back in our full spatial data frame of points to use as the input tree list, let's just load the tree points
-
-```{r}
-# get the data from already run
-treetops_sf <-
-  list.files(
-    "../data/point_cloud_processing_delivery"
-    , pattern = "final_detected_tree_tops.*\\.gpkg$"
-    , full.names = T
-  ) %>% 
-  normalizePath() %>% 
-  purrr::map(\(x)
-    sf::st_read(dsn = x, quiet = T)
-  ) %>% 
-  dplyr::bind_rows()
-```
-
-let's get the FIA forest type group for our list
+let's get the FIA forest type group for our tree list
 
 ```{r}
 # where should we save the file?
-type_fnm <- "../data/point_cloud_processing_delivery/type_data.csv"
-type_rast_fnm <- "../data/point_cloud_processing_delivery/type_rast.tif"
+type_fnm <- file.path(c2t_process_dir, "type_data.csv")
+type_rast_fnm <- file.path(c2t_process_dir, "type_rast.tif")
 # if we don't already have the data, run it
-if(!file.exists(type_fnm)){
+if(!file.exists(type_fnm) || !file.exists(type_rast_fnm)){
   # time it
   st_temp <- Sys.time()
   # run it
   trees_type_ans <- cloud2trees::trees_type(
     tree_list = treetops_sf
     , study_boundary = 
-      sf::st_read("../data/point_cloud_processing_delivery/raw_las_ctg_info.gpkg") %>% 
+      sf::st_read(file.path(c2t_process_dir, "raw_las_ctg_info.gpkg")) %>% 
         sf::st_union()
   )
   # timer
   mins_temp <- difftime(Sys.time(),st_temp,units = "mins") %>% as.numeric()
-  processing_data$timer_trees_type_mins <- mins_temp
   # save type
   trees_type_ans$tree_list %>% 
     sf::st_drop_geometry() %>% 
@@ -1332,9 +1389,12 @@ if(!file.exists(type_fnm)){
   # save raster
   trees_type_ans$foresttype_rast %>% terra::writeRaster(type_rast_fnm, overwrite=T)
   # save tracking
-  processing_data %>% 
+  readr::read_csv(c2t_tracking_fnm, progress = F, show_col_types = F) %>% 
+    dplyr::mutate(
+      timer_trees_type_mins = mins_temp
+    ) %>% 
     write.csv(
-      file = "../data/point_cloud_processing_delivery/processed_tracking_data.csv"
+      file = c2t_tracking_fnm
       , row.names = F, append = F
     )
 }else{
@@ -1370,23 +1430,24 @@ foresttype_lookup <- file.path(ext_data_temp$foresttype_dir, "foresttype_lookup.
 foresttype_lookup %>% dplyr::glimpse()
 ```
 
-plot the FIA Forest Types Group raster of our study area
+plot the FIA Forest Types Group raster within the footprint of the point cloud data we processed
 
 ```{r, message=FALSE, results=F}
 # study area
-aoi_temp <- sf::st_read("../data/point_cloud_processing_delivery/raw_las_ctg_info.gpkg") %>% 
+aoi_temp <- 
+  sf::st_read(file.path(c2t_process_dir, "raw_las_ctg_info.gpkg")) %>% 
   sf::st_transform(terra::crs(trees_type_ans$foresttype_rast))
 # plot raster
 r_plt <-
   trees_type_ans$foresttype_rast %>%
-    terra::crop(aoi_temp %>% sf::st_buffer(100) %>% terra::vect()) %>% 
+    terra::crop(aoi_temp %>% sf::st_buffer(5) %>% terra::vect()) %>% 
     terra::as.data.frame(xy=T) %>% 
     dplyr::rename(forest_type_group_code = 3) %>% 
     dplyr::left_join(foresttype_lookup, by = "forest_type_group_code") %>% 
     ggplot2::ggplot() + 
     ggplot2::geom_tile(mapping = ggplot2::aes(x=x, y=y, fill = forest_type_group)) +
     ggplot2::labs(fill = "FIA forest\ntype group") +
-    harrypotter::scale_fill_hp_d("lunalovegood", direction=-1) +
+    ggplot2::scale_fill_viridis_d(option = "turbo", alpha = 0.9) +
     ggplot2::theme_void() +
     ggplot2::theme(legend.position = "top") +
     ggplot2::guides(fill = ggplot2::guide_legend(nrow = 2, byrow = T))
@@ -1466,12 +1527,6 @@ trees_hmd_temp <- trees_hmd_temp %>%
   recast_id_fn(cl = class(treetops_sf$treeID))
 trees_type_temp <- trees_type_temp %>% 
   recast_id_fn(cl = class(treetops_sf$treeID))
-# c("700000","600000","100000","200000","300000","2000000","800000","400000","1000000","900000","500000" )
-# trees_type_temp %>% 
-#   dplyr::filter(
-#     treeID %in% 
-#       c("700000","600000","100000","200000","300000","2000000","800000","400000","1000000","900000","500000" )
-#   )
 # now we'll get a list of the columns in our component data to drop from our main data
 cols_to_drop_temp <- c(
     names(trees_dbh_temp), names(trees_cbh_temp)
@@ -1506,48 +1561,9 @@ gc()
 
 Lastly, we'll use `trees_biomass()` to estimate tree crown biomass in kilograms. We'll estimate biomass based on: 1) LANDFIRE's [Forest Canopy Bulk Density (CBD) data](https://landfire.gov/fuel/cbd); and 2) based on the [Cruz et al. (2003)](https://scholar.google.com/scholar?cluster=316241498622221569&oi=gsb&hl=en&as_sdt=0,5) equations and the FIA forest type group we got above
 
-```{r, include=FALSE, eval=FALSE}
-treetops_sf %>% 
-  sf::st_drop_geometry() %>% 
-  dplyr::filter(
-    treeID %in%
-    c("700000","600000","100000","200000","300000","2000000","800000","400000","1000000","900000","500000" )
-  ) %>% 
-  dplyr::arrange(treeID) %>% 
-  View()
-
-treetops_sf %>% 
-      dplyr::filter(
-        treeID %in%
-        c("700000","600000","100000","200000","300000","2000000","800000","400000","1000000","900000","500000" )
-      ) %>% 
-      dplyr::bind_rows(
-        treetops_sf %>% 
-          dplyr::filter(
-            !treeID %in%
-            c("700000","600000","100000","200000","300000","2000000","800000","400000","1000000","900000","500000" )
-          ) %>% 
-        dplyr::slice_sample(n = 6666)
-      ) %>% sf::st_write("c:/users/georg/Downloads/wtf.gpkg")
-
-trees_biomass_ans <- cloud2trees::trees_biomass(
-    tree_list = sf::st_read("c:/users/georg/Downloads/wtf.gpkg")
-    , method = c("cruz","landfire")
-  )
-trees_biomass_ans$tree_list %>% 
-  sf::st_drop_geometry() %>% 
-  dplyr::filter(
-    treeID %in%
-    as.numeric(c("700000","600000","100000","200000","300000","2000000","800000","400000","1000000","900000","500000" ))
-    # is.na(landfire_crown_biomass_kg)
-  ) %>%
-  dplyr::arrange(landfire_crown_biomass_kg, treeID) %>% 
-  View()
-```
-
 ```{r}
 # where should we save the file?
-biomass_fnm <- "../data/point_cloud_processing_delivery/biomass_data.csv"
+biomass_fnm <- file.path(c2t_process_dir,"biomass_data.csv")
 # if we don't already have the data, run it
 if(!file.exists(biomass_fnm)){
   # time it
@@ -1557,12 +1573,11 @@ if(!file.exists(biomass_fnm)){
     tree_list = treetops_sf
     , method = c("cruz","landfire")
     , study_boundary = 
-      sf::st_read("../data/point_cloud_processing_delivery/raw_las_ctg_info.gpkg") %>% 
+      sf::st_read(file.path(c2t_process_dir,"raw_las_ctg_info.gpkg")) %>% 
         sf::st_union()
   )
   # timer
   mins_temp <- difftime(Sys.time(),st_temp,units = "mins") %>% as.numeric()
-  processing_data$timer_trees_biomass_mins <- mins_temp
   # save biomass
   trees_biomass_ans$tree_list %>% 
     sf::st_drop_geometry() %>% 
@@ -1570,32 +1585,39 @@ if(!file.exists(biomass_fnm)){
   # save raster df
   trees_biomass_ans$stand_cell_data_landfire %>% 
     sf::st_drop_geometry() %>% 
-    write.csv(file = "../data/point_cloud_processing_delivery/stand_cell_data_landfire.csv", row.names = F, append = F)
+    write.csv(file = file.path(c2t_process_dir,"stand_cell_data_landfire.csv"), row.names = F, append = F)
   trees_biomass_ans$stand_cell_data_cruz %>% 
     sf::st_drop_geometry() %>% 
-    write.csv(file = "../data/point_cloud_processing_delivery/stand_cell_data_cruz.csv", row.names = F, append = F)
+    write.csv(file = file.path(c2t_process_dir,"stand_cell_data_cruz.csv"), row.names = F, append = F)
   # save tracking
-  processing_data %>% 
+  readr::read_csv(c2t_tracking_fnm, progress = F, show_col_types = F) %>% 
+    dplyr::mutate(
+      timer_trees_biomass_mins = mins_temp
+    ) %>% 
     write.csv(
-      file = "../data/point_cloud_processing_delivery/processed_tracking_data.csv"
+      file = c2t_tracking_fnm
       , row.names = F, append = F
     )
+  
 }else{
   trees_biomass_ans <- list()
   # biomass data
   trees_biomass_ans$tree_list <- readr::read_csv(biomass_fnm, progress = F, show_col_types = F)
   # raster
   trees_biomass_ans$stand_cell_data_landfire <- 
-    readr::read_csv(file = "../data/point_cloud_processing_delivery/stand_cell_data_landfire.csv", progress = F, show_col_types = F)
+    readr::read_csv(file = file.path(c2t_process_dir,"stand_cell_data_landfire.csv"), progress = F, show_col_types = F)
   trees_biomass_ans$stand_cell_data_cruz <- 
-    readr::read_csv(file = "../data/point_cloud_processing_delivery/stand_cell_data_cruz.csv", progress = F, show_col_types = F)
+    readr::read_csv(file = file.path(c2t_process_dir,"stand_cell_data_cruz.csv"), progress = F, show_col_types = F)
 }
 ```
 
+```{r, include=F, eval=TRUE}
+processing_data_temp <- readr::read_csv(c2t_tracking_fnm, progress = F, show_col_types = F)
+```
 
-Tree crown biomass estimation took a total of **`r scales::comma(processing_data$timer_trees_biomass_mins, accuracy = 0.1)`** minutes at processing rate of **`r scales::comma((processing_data$timer_trees_biomass_mins/round(processing_data$las_area_m2[1]/10000))*60, accuracy = 0.01)`** seconds per hectare
+Tree crown biomass estimation took a total of **`r scales::comma(processing_data_temp$timer_trees_biomass_mins, accuracy = 0.1)`** minutes at processing rate of **`r scales::comma((processing_data_temp$timer_trees_biomass_mins/round(processing_data_temp$las_area_m2[1]/10000))*60, accuracy = 0.01)`** seconds per hectare
 
-The `trees_biomass()` process constrains tree crown bulk density (CBD) values to 2.0 kilograms per cubic meter by default based on [Mell et al. (2009)](https://doi.org/10.1016/j.combustflame.2009.06.015) who found the dry bulk density of the tree crown was 2.6 kilograms per cubed meter using Douglas-fir trees grown on Christmas tree farms. Let's check the distribution of CBD values estimated in our study area.
+The `trees_biomass()` process constrains tree crown bulk density (CBD) values. Let's check the distribution of CBD values estimated in our study area.
 
 ```{r}
 trees_biomass_ans$tree_list %>% 
@@ -1623,7 +1645,7 @@ trees_biomass_ans$tree_list %>%
   summary()
 ```
 
-note those NA values for the Cruz et al. (2003) method, these NA values are introduced because this particular methodology is limited in the forest types for which biomass equations exist
+note those NA values for the Cruz et al. (2003) method, these NA values are introduced because this particular methodology is limited to the forest types for which biomass equations exist
 
 check out the break-down by FIA forest type group
 
@@ -1766,13 +1788,13 @@ processing_data <- processing_data %>%
   dplyr::mutate(
     timer_total_time_mins = timer_cloud2raster_mins + timer_raster2trees_mins +
       timer_trees_dbh_mins + timer_trees_cbh_mins + timer_trees_type_mins +
-      timer_trees_hmd_mins + timer_trees_biomass_mins + timer_write_data_mins
+      timer_trees_hmd_mins + timer_trees_biomass_mins
     , timer_tree_extraction_mins = timer_cloud2raster_mins + timer_raster2trees_mins
   ) %>% 
   dplyr::mutate(dplyr::across(
      .cols = c(timer_tree_extraction_mins,
       timer_trees_dbh_mins, timer_trees_cbh_mins, timer_trees_type_mins,
-      timer_trees_hmd_mins, timer_trees_biomass_mins, timer_write_data_mins)
+      timer_trees_hmd_mins, timer_trees_biomass_mins)
      , .fns = ~ .x/timer_total_time_mins
      , .names = "{.col}_pct"
   ))
@@ -1781,7 +1803,7 @@ table_temp <- processing_data %>%
   dplyr::select(
     c(timer_tree_extraction_mins,
       timer_trees_dbh_mins, timer_trees_cbh_mins, timer_trees_type_mins,
-      timer_trees_hmd_mins, timer_trees_biomass_mins, timer_write_data_mins
+      timer_trees_hmd_mins, timer_trees_biomass_mins
       , c(tidyselect::ends_with("_pct") & tidyselect::starts_with("timer_"))
     )
   ) %>% 
@@ -1824,6 +1846,7 @@ plot it
 Now that we have our point cloud-extracted tree list with all of the tree component measurements attached, let's save the data for use in our analysis
 
 first we'll attach the biomass metrics to our spatial tree list
+
 ```{r}
 # new columns added by trees_biomass()
 names_temp <- 
@@ -1857,6 +1880,13 @@ treetops_sf <-
   )
 # what does our final data look like?
 treetops_sf %>% dplyr::glimpse()
+# where should we save the file?
+treetops_fnm <- file.path(c2t_process_dir,"final_detected_tree_tops_attr.gpkg")
+# if we don't already have the data, run it
+if(!file.exists(treetops_fnm)){
+  treetops_sf %>% 
+    sf::st_write(dsn = treetops_fnm, append = FALSE, quiet = TRUE)
+}
 ```
 
 ```{r, warning=FALSE, message=FALSE, echo=FALSE, include=FALSE}
@@ -1864,121 +1894,5 @@ treetops_sf %>% dplyr::glimpse()
 remove(list = ls()[grep("_temp",ls())])
 remove(trees_biomass_ans)
 gc()
-```
-
-load in the crown spatial files and attach the new component data
-
-```{r, eval=FALSE}
-crowns_sf <-
-  list.files(
-    "../data/point_cloud_processing_delivery"
-    , pattern = "final_detected_crowns.*\\.gpkg$"
-    , full.names = T
-  ) %>% 
-  normalizePath() %>% 
-  purrr::map(\(x)
-    sf::st_read(
-      dsn = x
-      , quiet = T
-    )
-  ) %>% 
-  dplyr::bind_rows()
-# the trees are the same, the data in the columns are different
-identical(nrow(crowns_sf), nrow(treetops_sf))
-# attach the new columns
-crowns_sf <- crowns_sf %>% 
-  dplyr::select(treeID, tree_x, tree_y) %>% 
-  dplyr::inner_join(
-    treetops_sf %>%
-      sf::st_drop_geometry() %>% 
-      dplyr::select(-c(tree_x, tree_y))
-    , by = "treeID"
-  )
-```
-
-use the internal function from `cloud2trees` that writes the polygon and point vector data
-
-```{r}
-# this is an internal function from cloud2trees
-write_raster2trees_ans <- function(raster2trees_ans, dir) {
-  ### write the data to the disk
-    if(nrow(raster2trees_ans)>250e3){
-      # split up the detected crowns
-      raster2trees_ans <- raster2trees_ans %>%
-        dplyr::arrange(as.numeric(tree_x),as.numeric(tree_y)) %>%
-        # groups of 250k
-        dplyr::mutate(grp = ceiling(dplyr::row_number()/250e3))
-
-      write_fnl_temp <- raster2trees_ans$grp %>%
-        unique() %>%
-        purrr::map(function(x){
-          # dsn's
-          cf <- file.path( dir, paste0("final_detected_crowns_",x,".gpkg") )
-          tf <- file.path( dir, paste0("final_detected_tree_tops_",x,".gpkg") )
-          ### write the data to the disk
-          # crown vector polygons
-          sf::st_write(
-            raster2trees_ans %>%
-              dplyr::filter(grp == x) %>%
-              dplyr::select(-c(grp))
-            , dsn = cf
-            , append = FALSE
-            , quiet = TRUE
-          )
-          # tree top vector points
-          sf::st_write(
-            # get tree points
-            raster2trees_ans %>%
-              dplyr::filter(grp == x) %>%
-              dplyr::select(-c(grp)) %>%
-              sf::st_drop_geometry() %>%
-              sf::st_as_sf(coords = c("tree_x", "tree_y"), crs = sf::st_crs(raster2trees_ans))
-            , dsn = tf
-            , append = FALSE
-            , quiet = TRUE
-          )
-          return(
-            dplyr::tibble(
-              crowns_file = cf
-              , trees_file = tf
-            )
-          )
-        }) %>%
-        dplyr::bind_rows()
-    }else{
-        # dsn's
-        cf <- file.path( dir, "final_detected_crowns.gpkg" )
-        tf <- file.path( dir, "final_detected_tree_tops.gpkg" )
-        # crown vector polygons
-        sf::st_write(
-          raster2trees_ans
-          , dsn = cf
-          , append = FALSE
-          , quiet = TRUE
-        )
-        # tree top vector points
-        sf::st_write(
-          # get tree points
-          raster2trees_ans %>%
-            sf::st_drop_geometry() %>%
-            sf::st_as_sf(coords = c("tree_x", "tree_y"), crs = sf::st_crs(raster2trees_ans))
-          , dsn = tf
-          , append = FALSE
-          , quiet = TRUE
-        )
-        # df
-        write_fnl_temp <- dplyr::tibble(
-          crowns_file = cf
-          , trees_file = tf
-        )
-    }
-  return(write_fnl_temp)
-}
-```
-
-write the final data (this will overwrite our original data from `cloud2trees()` but that's ok because the tree list and spatial information is the same)
-
-```{r, eval=FALSE}
-write_raster2trees_ans(crowns_sf, dir = "../data/point_cloud_processing_delivery")
 ```
 
