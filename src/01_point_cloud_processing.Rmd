@@ -1306,6 +1306,7 @@ We attempted to extract HMD from `r scales::percent(processing_data_temp$sttng_h
 
 ```{r}
 trees_hmd_ans %>% 
+  sf::st_drop_geometry() %>% 
   dplyr::count(is_training_hmd) %>% 
   dplyr::mutate(pct = n/sum(n))
 ```
@@ -1784,7 +1785,8 @@ Let's summarize how long all of this point cloud processing took and determine w
 
 ```{r}
 # aggregate the total processing time
-processing_data <- processing_data %>% 
+processing_data <- 
+  readr::read_csv(c2t_tracking_fnm, progress = F, show_col_types = F) %>% 
   dplyr::mutate(
     timer_total_time_mins = timer_cloud2raster_mins + timer_raster2trees_mins +
       timer_trees_dbh_mins + timer_trees_cbh_mins + timer_trees_type_mins +

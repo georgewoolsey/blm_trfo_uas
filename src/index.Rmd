@@ -33,3 +33,26 @@ On April 29th and 30th, 2025, BLM Remote Sensing staff mapped approximately 2,00
 ## Objective
 
 The objective of this analysis is to process the aerial point cloud data using the `cloud2trees` framework ([Woolsey et al. 2025](https://github.com/georgewoolsey/cloud2trees)) for generating individual tree forest inventory data. `cloud2trees` provides a streamlined, open-source framework for generating broad-area individual tree inventories from aerial point cloud data. The primary outputs are spatial datasets of tree locations and crown polygons attributed with biophysical metrics such as height, crown dimensions, crown base height (CBH), diameter at breast height (DBH), and crown biomass. While height and location are inherently determined through the detection process, the framework augments these inventories with tree-level biophysical information determined via allometric estimates and integrated supplementary data. These high-resolution datasets support a wide range of applications including fire behavior modeling, evaluation of forest management activities, and habitat characterization.
+
+```{r, include=FALSE, echo=FALSE}
+knitr::write_bib(c(
+  .packages(),
+  "bookdown"
+  , "knitr"
+  , "rmarkdown"
+  , "tidyverse"
+  , "viridis"
+  , "harrypotter"
+  , "RColorBrewer"
+  , "scales"
+  , "latex2exp"
+  , "tidybayes"
+  , "mapview"
+  , "kableExtra"
+  , "patchwork"
+  , "terra"
+  , "sf"
+  , "lidR"
+  , "cloud2trees"
+), 'packages.bib')
+```
