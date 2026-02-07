@@ -1,0 +1,172 @@
+# Slash Piles
+
+detect slash piles from the CHM over the data extent, use RGB data to spectrally refine pile predictions, use pile predictions as a mask to remove detected trees that are actually piles
+
+```{r, warning=FALSE, message=FALSE, echo=FALSE, include=FALSE}
+remove(list = ls()[grep("_temp",ls())])
+gc()
+```
+
+make sure we have the fine-resolution CHM and RGB data ready to go
+
+```{r}
+# hey rgb
+rgb_rast <- terra::rast(rgb_rast_fnm) %>% 
+  terra::subset(c(1,2,3))
+rgb_rast
+# terra::plotRGB(rgb_rast)
+```
+
+chm
+
+```{r}
+# fine-resolution CHM raster
+chm_rast <- terra::rast( file.path(c2t_process_dir, "chm_0.1m.tif") )
+chm_rast
+# chm_rast %>% terra::plot(col = viridis::plasma(n=100), main = "CHM (m)")
+```
+
+load the treatment unit boundaries
+
+```{r}
+stand_boundary <- 
+  sf::st_read("d:/BLM_CO_SWDF_DawsonFuelsTreatment/units/units.shp", quiet=T) %>% 
+  dplyr::rename_with(tolower) %>% 
+  dplyr::rename_with(stringr::str_squish) %>% 
+  dplyr::rename_with(make.names) %>% 
+  dplyr::rename_with(~stringr::str_replace_all(.x, "\\.{2,}", ".")) %>% 
+  dplyr::rename_with(~stringr::str_remove(.x, "\\.$")) %>% 
+  dplyr::rename_with(~stringr::str_replace_all(.x, "\\.", "_")) %>% 
+  sf::st_set_geometry("geometry") %>% 
+  sf::st_transform(terra::crs(chm_rast))
+# stand_boundary %>% dplyr::glimpse()
+```
+
+plot the stands on the CHM
+
+```{r, results = F, fig.show='asis'}
+chm_rast %>% 
+  # terra::aggregate(fact = 2, fun="max",na.rm=T,cores=lasR::half_cores()) %>% 
+  terra::plot(col = viridis::plasma(n=100), main = "CHM (m)", axes = F)
+terra::plot(
+    stand_boundary %>% terra::vect()
+    , add = T, border = "black", col = NA, lwd = 1.5
+  )
+# stand_boundary %>% 
+#   dplyr::ungroup() %>% 
+#   sf::st_union() %>%
+#   sf::st_convex_hull() %>% 
+#   sf::st_buffer(25) %>% 
+#   terra::vect() %>% 
+#   terra::plot(
+#     add = T, border = "red", col = NA, lwd = 2
+#   )
+```
+
+let's crop the RGB and CHM to limit the amount of data we need to process
+
+we'll also make the RGB data more coarse since we only need ~0.06-0.1 m resolution data for the spectral filtering
+
+```{r}
+# outside boundary of stand units with buffer
+crop_bound_temp <- stand_boundary %>% 
+  dplyr::ungroup() %>% 
+  sf::st_union() %>%
+  sf::st_convex_hull() %>% 
+  sf::st_buffer(25)
+## function to change the resolution of RGB 
+change_res_fn <- function(
+  r
+  , my_res=1
+  , m = "bilinear"
+  # , ofile = tempfile(fileext = ".tif")
+  , ofile = NULL
+){
+  if(terra::res(r)[1] == my_res){
+    return(r)
+  }else{
+    r2 <- r
+    terra::res(r2) <- my_res
+    if(!inherits(ofile,"character")){
+      r2 <- terra::resample(r, r2, method = m) 
+    }else{
+      r2 <- terra::resample(r, r2, method = m, filename=ofile, overwrite = T) 
+    }
+    return(r2) 
+  }
+}
+###############################################################
+# clip rgb to boundary and resample to change resolution
+###############################################################
+dir_temp <- c2t_process_dir
+rgb_fnm_temp <- file.path(dir_temp,"pj_rgb_rast.tif") # what should the compiled rgb be called?
+if(!dir.exists(dir_temp)){dir.create(dir_temp, showWarnings = F)}
+if(!file.exists(rgb_fnm_temp)){
+  # Crop the raster to the rectangular extent of the polygon
+  # Specify a filename to ensure the result is written to disk
+  crop_rgb_rast_temp <- rgb_rast %>% 
+    terra::crop(
+      crop_bound_temp %>% 
+        terra::vect() %>% 
+        terra::project(terra::crs(rgb_rast))
+      , filename =  tempfile(fileext = ".tif")
+      , mask = T
+      , overwrite = TRUE
+    ) 
+  
+  ## apply the change_res_fn for our analysis we don't need such finery
+  # this takes too long...
+  rgb_rast <- change_res_fn(rgb_rast, my_res=0.06, ofile = rgb_fnm_temp)
+}else{
+  rgb_rast <- terra::rast(rgb_fnm_temp)
+}
+###############################################################
+# clip chm to boundary
+###############################################################
+chm_fnm_temp <- file.path(dir_temp, paste0("crop_",basename(terra::sources(chm_rast))) ) # what should the compiled rgb be called?
+if(!dir.exists(dir_temp)){dir.create(dir_temp, showWarnings = F)}
+if(!file.exists(chm_fnm_temp)){
+  # Crop the raster to the rectangular extent of the polygon
+  # Specify a filename to ensure the result is written to disk
+  chm_rast <- chm_rast %>% 
+    terra::crop(
+      crop_bound_temp %>% 
+        terra::vect() %>% 
+        terra::project(terra::crs(chm_rast))
+      , filename = chm_fnm_temp
+      , mask = T
+      , overwrite = TRUE
+    ) 
+}else{
+  chm_rast <- terra::rast(chm_fnm_temp)
+}
+```
+
+check the new raster data
+
+```{r}
+rgb_rast
+chm_rast
+```
+
+```{r}
+piles_workflow_ans <- cloud2trees:::piles_workflow(
+  chm_rast = chm_rast
+  , seg_method = "dbscan"
+  , min_ht_m = 0.75
+  , max_ht_m = 3.0
+  , min_area_m2 = 2.0
+  , max_area_m2 = 22.5
+  , min_convexity_ratio = 0.55
+  , min_circularity_ratio = 0.35
+  , smooth_segs = T
+  , outfile = file.path(c2t_process_dir,"piles_detect.gpkg")
+  , spectral_weight = 5
+  , rgb_rast = rgb_rast
+  , red_band_idx = 1
+  , green_band_idx = 2
+  , blue_band_idx = 3
+  , filter_return = F
+)
+```
+
