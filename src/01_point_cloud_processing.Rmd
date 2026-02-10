@@ -1367,7 +1367,7 @@ remove(
     , c(
       "treetops_sf","dbh_fnm","hmd_fnm","cbh_fnm"
       , "c2t_output_dir", "c2t_process_dir", "c2t_tracking_fnm"
-      , "rgb_rast_fnm"
+      , "rgb_rast_fnm", "rmd_files", "temp_r_script"
     )
   )
 )

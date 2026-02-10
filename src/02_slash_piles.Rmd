@@ -1,13 +1,18 @@
 # Slash Piles
 
-detect slash piles from the CHM over the data extent, use RGB data to spectrally refine pile predictions, use pile predictions as a mask to remove detected trees that are actually piles
+In this section, we're going to detect slash piles from the CHM over the data extent and use RGB data to spectrally refine pile predictions. The objective is to use pile predictions as a mask to remove smaller, detected "trees" that are actually piles or downed trees/debris.
 
 ```{r, warning=FALSE, message=FALSE, echo=FALSE, include=FALSE}
 remove(list = ls()[grep("_temp",ls())])
+remove(treetops_sf)
 gc()
 ```
 
+## Slash Pile Detection Workflow
+
 make sure we have the fine-resolution CHM and RGB data ready to go
+
+RGB
 
 ```{r}
 # hey rgb
@@ -17,7 +22,7 @@ rgb_rast
 # terra::plotRGB(rgb_rast)
 ```
 
-chm
+CHM
 
 ```{r}
 # fine-resolution CHM raster
@@ -42,6 +47,15 @@ stand_boundary <-
 # stand_boundary %>% dplyr::glimpse()
 ```
 
+what treatments are there?
+
+```{r}
+stand_boundary %>% 
+  sf::st_drop_geometry() %>% 
+  dplyr::count(tretmnt)
+```
+
+
 plot the stands on the CHM
 
 ```{r, results = F, fig.show='asis'}
@@ -65,7 +79,7 @@ terra::plot(
 
 let's crop the RGB and CHM to limit the amount of data we need to process
 
-we'll also make the RGB data more coarse since we only need ~0.06-0.1 m resolution data for the spectral filtering
+we'll also make the RGB data more coarse since we only need ~0.06-0.1 m resolution data for the spectral filtering step in the pile detection workflow
 
 ```{r}
 # outside boundary of stand units with buffer
@@ -142,6 +156,11 @@ if(!file.exists(chm_fnm_temp)){
 }
 ```
 
+```{r, warning=FALSE, message=FALSE, echo=FALSE, include=FALSE}
+remove(list = ls()[grep("_temp",ls())])
+gc()
+```
+
 check the new raster data
 
 ```{r}
@@ -149,24 +168,186 @@ rgb_rast
 chm_rast
 ```
 
+run the piles detection workflow using `cloud2trees:::piles_workflow()`; note, the `:::` implies the functionality is internal to the package
+
 ```{r}
-piles_workflow_ans <- cloud2trees:::piles_workflow(
-  chm_rast = chm_rast
-  , seg_method = "dbscan"
-  , min_ht_m = 0.75
-  , max_ht_m = 3.0
-  , min_area_m2 = 2.0
-  , max_area_m2 = 22.5
-  , min_convexity_ratio = 0.55
-  , min_circularity_ratio = 0.35
-  , smooth_segs = T
-  , outfile = file.path(c2t_process_dir,"piles_detect.gpkg")
-  , spectral_weight = 5
-  , rgb_rast = rgb_rast
-  , red_band_idx = 1
-  , green_band_idx = 2
-  , blue_band_idx = 3
-  , filter_return = F
-)
+fnm_temp <- file.path(c2t_process_dir,"piles_detect.gpkg")
+if(!file.exists(fnm_temp)){
+  piles_workflow_ans <- cloud2trees:::piles_workflow(
+    chm_rast = chm_rast
+    , seg_method = "watershed"
+    , min_ht_m = 0.75
+    , max_ht_m = 3.0
+    , min_area_m2 = 2.0
+    , max_area_m2 = 22.5
+    , min_convexity_ratio = 0.55
+    , min_circularity_ratio = 0.35
+    , smooth_segs = T
+    , outfile = fnm_temp
+    , spectral_weight = 5
+    , rgb_rast = rgb_rast
+    , red_band_idx = 1
+    , green_band_idx = 2
+    , blue_band_idx = 3
+    , filter_return = F
+  )
+}else{
+  piles_workflow_ans <- sf::st_read(fnm_temp, quiet = T)
+}
+```
+
+```{r, warning=FALSE, message=FALSE, echo=FALSE, include=FALSE}
+remove(list = ls()[grep("_temp",ls())])
+gc()
+```
+
+we should have gotten a list of candidate slash pile locations which we'll spectrally filter after we look at a few examples
+
+```{r}
+piles_workflow_ans %>% dplyr::glimpse()
+```
+
+lets zoom-in on a single stand to look at the candidate pile locations in blue within the unit on the CHM
+
+```{r}
+chm_rast %>% 
+  terra::crop(
+    stand_boundary %>%
+      dplyr::filter(tolower(tretmnt)!="control") %>% 
+      dplyr::slice(1) %>% 
+      sf::st_transform(terra::crs(chm_rast)) %>% 
+      sf::st_buffer(5) %>% 
+      terra::vect()
+  ) %>% 
+  terra::plot(col = viridis::plasma(n=100), main = "CHM (m)", axes = F)
+terra::plot(
+    stand_boundary %>%
+      dplyr::filter(tolower(tretmnt)!="control") %>% dplyr::slice(1) %>% terra::vect()
+    , add = T, border = "black", col = NA, lwd = 1.5
+  )
+piles_workflow_ans %>% 
+  dplyr::filter(inrange_th_votes>=6) %>% 
+  dplyr::inner_join(
+    piles_workflow_ans %>% 
+    sf::st_point_on_surface() %>% 
+    sf::st_transform(sf::st_crs(stand_boundary)) %>% 
+    sf::st_intersection(
+      stand_boundary %>%
+        dplyr::filter(tolower(tretmnt)!="control") %>% 
+        dplyr::slice(1)
+    ) %>% 
+    sf::st_drop_geometry() %>% 
+    dplyr::select(pred_id)
+    , by = "pred_id"
+  ) %>% 
+  sf::st_transform(terra::crs(chm_rast)) %>% 
+  terra::vect() %>% 
+terra::plot(
+    add = T, border = "cyan", col = NA, lwd = 1.8
+  )
+```
+
+let's look at some candidate piles based on the `inrange_th_votes` variable which tells us how many of the 6 spectral index thresholds were met to distinguish a dead wood from living biomass. Where, a value of 5-6 represents high likelihood that the object is *not* living vegetation (e.g. piled slash) and 1-2 indicates a high likelihood that the object is living vegetation (e.g. small tree/shrub)
+
+```{r}
+inunit_piles_temp <- piles_workflow_ans %>% 
+  dplyr::inner_join(
+    piles_workflow_ans %>% 
+    sf::st_point_on_surface() %>% 
+    sf::st_transform(sf::st_crs(stand_boundary)) %>% 
+    sf::st_intersection(
+      stand_boundary %>%
+        dplyr::filter(tolower(tretmnt)!="control")
+    ) %>% 
+    sf::st_drop_geometry() %>% 
+    dplyr::select(pred_id)
+    , by = "pred_id"
+  )
+# sample from inrange_th_votes
+inunit_piles_temp <-
+  inunit_piles_temp %>% 
+  dplyr::group_by(inrange_th_votes) %>% 
+  # dplyr::filter(inrange_th_votes>=6) %>% 
+  dplyr::slice_sample(n = 5) %>% 
+  sf::st_transform(terra::crs(rgb_rast)) %>% 
+  dplyr::ungroup() %>% 
+  dplyr::arrange(inrange_th_votes)
+# map over to plot
+plts_temp <- 1:nrow(inunit_piles_temp) %>% 
+  purrr::map(function(x){
+    sp_temp <- inunit_piles_temp %>% dplyr::slice(x)
+    rgb_temp <- 
+      rgb_rast %>% 
+      terra::crop(
+        sp_temp %>% 
+          sf::st_point_on_surface() %>% 
+          sf::st_buffer(8) %>% 
+          sf::st_bbox() %>% 
+          sf::st_as_sfc() %>% 
+          terra::vect()
+      )
+    # convert raster to a data frame and create hex colors
+    # ?grDevices::rgb
+    rgb_df_temp <-
+      rgb_temp %>% 
+      terra::as.data.frame(xy = TRUE) %>%
+      dplyr::rename(
+        red = 3, green = 4, blue = 5
+      ) %>%
+      dplyr::mutate(
+        # rows that have missing color data
+        is_missing = is.na(red) | is.na(green) | is.na(blue)
+        # hex using 0s for NAs to avoid grDevices::rgb error
+        , hex_col = grDevices::rgb(
+          ifelse(is_missing, 0, red)
+          , ifelse(is_missing, 0, green)
+          , ifelse(is_missing, 0, blue)
+          , maxColorValue = 255
+        )
+        # back to NA
+        , hex_col = ifelse(is_missing, as.character(NA), hex_col)
+      ) %>%
+      dplyr::select(-c(is_missing))
+      
+      # plt
+      plt <-
+        ggplot2::ggplot() +
+          # add rgb base map
+          ggplot2::geom_tile(data = rgb_df_temp, mapping = ggplot2::aes(x = x, y = y, fill = hex_col), color = NA) +
+          # use identity scale so the hex codes are used directly
+          ggplot2::scale_fill_identity(na.value = "transparent") + # !!! don't take this out or RGB plot will kill your computer
+          ggplot2::geom_sf(
+            data = sp_temp
+            , color = "cyan", fill = NA, lwd = 1.5
+          ) +
+          ggplot2::scale_x_continuous(expand = c(0, 0)) +
+          ggplot2::scale_y_continuous(expand = c(0, 0)) +
+          ggplot2::coord_sf(expand = F) +
+          ggplot2::theme_void() +
+          ggplot2::theme(
+            legend.position = "none"
+          )    
+      return(plt)
+  })
+# plts_temp[[1]]
+```
+
+plot with `patchwork`
+
+```{r, fig.height = 11.5}
+wrapped_plots_temp <- patchwork::wrap_plots(plts_temp, ncol = 5, nrow = 6) +
+  patchwork::plot_annotation(
+    tag_levels = list(
+      # as.vector(rbind(paste("Spectral Thrshlds Met", 1:6), matrix("", nrow = 4, ncol = 6)))  
+      rep("", 30) %>% replace(seq(3, 30, by = 5), paste("Spectral Thrshlds Met", 1:6))
+    )
+  ) &
+  ggplot2::theme(
+    plot.tag.position = "top"
+    , plot.tag = ggplot2::element_text(size = 10, face = "bold", hjust = 0.5)
+  )
+# huh?
+wrapped_plots_temp
+
 ```
 
