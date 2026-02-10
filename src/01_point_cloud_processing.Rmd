@@ -249,7 +249,7 @@ The `itd_tuning()` function is used to visually assess tree crown delineation re
 
 Let's run `itd_tuning()` on our CHM data starting with default window size functions
 
-```{r,eval=F,purl=FALSE}
+```{r,eval=T,purl=FALSE}
 ###___________________________________________###
 # itd_tuning
 ###___________________________________________###
@@ -266,7 +266,7 @@ itd_tuning_ans %>% names()
 
 plot the detected trees on the CHM
 
-```{r,eval=F,purl=FALSE, fig.height=6, fig.width=7}
+```{r,eval=T,purl=FALSE, fig.height=6, fig.width=7}
 itd_tuning_ans$plot_samples
 ggplot2::ggsave(
   filename = file.path(c2t_process_dir, "itd_tuning_plot_samples.jpg")
@@ -278,7 +278,7 @@ ggplot2::ggsave(
 
 plot the summary of the detected trees
 
-```{r,eval=F,purl=FALSE, fig.height=7, fig.width=8.3}
+```{r,eval=T,purl=FALSE, fig.height=7, fig.width=8.3}
 itd_tuning_ans$plot_sample_summary
 ggplot2::ggsave(
   filename = file.path(c2t_process_dir, "itd_tuning_plot_sample_summary.jpg")
@@ -292,21 +292,21 @@ the `exp_fn` results in too few trees with crown diameters generally similar to 
 
 check the `ws_fn_list` return which includes the different window size functions tested
 
-```{r,eval=F,purl=FALSE}
+```{r,eval=T,purl=FALSE}
 # what ws_fn_list
 itd_tuning_ans$ws_fn_list %>% str()
 ```
 
 let's look at the function definition for the linear function (`lin_fn`)
 
-```{r,eval=F,purl=FALSE}
+```{r,eval=T,purl=FALSE}
 # the linear function
 itd_tuning_ans$ws_fn_list$lin_fn
 ```
 
 let's plot all of the functions we tested with our call to `itd_tuning()` using the defaults
 
-```{r,eval=F,purl=FALSE}
+```{r,eval=T,purl=FALSE}
 # shape of the ws functions
 plt_ws_fn <- ggplot2::ggplot() +
   ggplot2::geom_function(mapping=ggplot2::aes(color = "lin_fn"),fun=itd_tuning_ans$ws_fn_list$lin_fn, lwd=1.2) +
@@ -335,7 +335,7 @@ my_lin_fn <- function (x) {
 
 add to the plot
 
-```{r,eval=F,purl=FALSE}
+```{r,eval=T,purl=FALSE}
 # plt
 plt_ws_fn +
   ggplot2::geom_function(
@@ -347,7 +347,7 @@ plt_ws_fn +
 
 We'll run another sample test using `itd_tuning()`with our new function
 
-```{r,eval=F,purl=FALSE}
+```{r,eval=T,purl=FALSE}
 itd_tuning_ans2 <- cloud2trees::itd_tuning(
   input_chm_rast = agg_chm_rast
   , min_height = 1.37
@@ -361,7 +361,7 @@ itd_tuning_ans2 <- cloud2trees::itd_tuning(
 
 plot the detected trees on the CHM
 
-```{r,eval=F,purl=FALSE, fig.height=6, fig.width=7}
+```{r,eval=T,purl=FALSE, fig.height=6, fig.width=7}
 itd_tuning_ans2$plot_samples
 ggplot2::ggsave(
   filename = file.path(c2t_process_dir, "itd_tuning_plot_samples2.jpg")
@@ -373,7 +373,7 @@ ggplot2::ggsave(
 
 plot the summary of the detected trees
 
-```{r,eval=F,purl=FALSE, fig.height=7, fig.width=8.3}
+```{r,eval=T,purl=FALSE, fig.height=7, fig.width=8.3}
 itd_tuning_ans2$plot_sample_summary
 ggplot2::ggsave(
   filename = file.path(c2t_process_dir, "itd_tuning_plot_sample_summary2.jpg")
@@ -385,7 +385,7 @@ ggplot2::ggsave(
 
 notice, there is also a tree crown data frame in the return
 
-```{r,eval=F,purl=FALSE}
+```{r,eval=T,purl=FALSE}
 # what?
 itd_tuning_ans2$crowns %>% dplyr::glimpse()
 # count trees by sample
@@ -405,7 +405,7 @@ pj_rgb_rast <- terra::rast(rgb_rast_fnm) %>%
 
 plot it
 
-```{r,eval=F,purl=FALSE}
+```{r,eval=T,purl=FALSE}
 # make a function to plot these detected crowns with rgb data
 plt_rgb_rast_itd_crowns <- function(sample_nmbr = 1, rgb_rast, itd_crowns, plt_lwd = 0.7) {
   # crop
@@ -475,7 +475,7 @@ plt_rgb_rast_itd_crowns <- function(sample_nmbr = 1, rgb_rast, itd_crowns, plt_l
 
 plot the trees detected in sample one on the RGB
 
-```{r,eval=F,purl=FALSE, fig.height=5.5, fig.width=7.2}
+```{r,eval=T,purl=FALSE, fig.height=5.5, fig.width=7.2}
 plt_rgb_rast_itd_crowns(sample_nmbr = 1, rgb_rast = pj_rgb_rast, itd_crowns = itd_tuning_ans2$crowns)
 ```
 
