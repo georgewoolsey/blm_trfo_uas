@@ -43,7 +43,10 @@ stand_boundary <-
   dplyr::rename_with(~stringr::str_remove(.x, "\\.$")) %>% 
   dplyr::rename_with(~stringr::str_replace_all(.x, "\\.", "_")) %>% 
   sf::st_set_geometry("geometry") %>% 
-  sf::st_transform(terra::crs(chm_rast))
+  sf::st_transform(terra::crs(chm_rast)) %>% 
+  dplyr::mutate(
+    unit_ha = as.numeric(sf::st_area(geometry))/10000
+  )
 # stand_boundary %>% dplyr::glimpse()
 ```
 
@@ -191,6 +194,8 @@ if(!file.exists(fnm_temp)){
     , blue_band_idx = 3
     , filter_return = F
   )
+  # just get the piles
+  piles_workflow_ans <- piles_workflow_ans$segs_sf
 }else{
   piles_workflow_ans <- sf::st_read(fnm_temp, quiet = T)
 }
@@ -200,6 +205,8 @@ if(!file.exists(fnm_temp)){
 remove(list = ls()[grep("_temp",ls())])
 gc()
 ```
+
+## Candidate Pile Review
 
 we should have gotten a list of candidate slash pile locations which we'll spectrally filter after we look at a few examples
 
@@ -247,25 +254,51 @@ terra::plot(
   )
 ```
 
-let's look at some candidate piles based on the `inrange_th_votes` variable which tells us how many of the 6 spectral index thresholds were met to distinguish a dead wood from living biomass. Where, a value of 5-6 represents high likelihood that the object is *not* living vegetation (e.g. piled slash) and 1-2 indicates a high likelihood that the object is living vegetation (e.g. small tree/shrub)
+filter for piles only in treatment units since we don't expect piles in non-treated areas
 
 ```{r}
-inunit_piles_temp <- piles_workflow_ans %>% 
-  dplyr::inner_join(
+piles_workflow_ans <-
+  piles_workflow_ans %>% 
+  dplyr::left_join(
     piles_workflow_ans %>% 
-    sf::st_point_on_surface() %>% 
-    sf::st_transform(sf::st_crs(stand_boundary)) %>% 
-    sf::st_intersection(
-      stand_boundary %>%
-        dplyr::filter(tolower(tretmnt)!="control")
-    ) %>% 
-    sf::st_drop_geometry() %>% 
-    dplyr::select(pred_id)
+      # pile determined in unit based on polygon center
+      sf::st_point_on_surface() %>% 
+      sf::st_transform(sf::st_crs(stand_boundary)) %>% 
+      sf::st_intersection(
+        stand_boundary %>%
+          dplyr::select(unit,block,tretmnt,unit_ha) %>% 
+          dplyr::rename(type = tretmnt) %>% 
+          dplyr::mutate(
+            type =
+              tolower(type) %>% 
+              stringr::str_squish()
+          ) %>% 
+          dplyr::rename_with(.fn = ~paste0("trtmnt_", .x, recycle0 = T))
+      ) %>% 
+      sf::st_drop_geometry() %>% 
+      dplyr::select(pred_id, tidyselect::starts_with("trtmnt_"))
     , by = "pred_id"
+  ) %>% 
+  dplyr::mutate(
+    is_in_trtmnt_unit = ifelse(is.na(trtmnt_type) | trtmnt_type=="control",F,T)
   )
+```
+
+quick summary by treatment type
+
+```{r}
+piles_workflow_ans %>% 
+  sf::st_drop_geometry() %>% 
+  dplyr::count(is_in_trtmnt_unit, trtmnt_type)
+```
+
+let's look at some candidate piles based on the `inrange_th_votes` variable which tells us how many of the 6 spectral index thresholds were met to distinguish a dead wood from living biomass. Where, a value of 5-6 represents high likelihood that the object is *not* living vegetation (e.g. piled slash) and 1-2 indicates a high likelihood that the object is living vegetation (e.g. small tree/shrub)
+
+```{r,eval=F,purl=FALSE}
 # sample from inrange_th_votes
 inunit_piles_temp <-
-  inunit_piles_temp %>% 
+  piles_workflow_ans %>% 
+  dplyr::filter(is_in_trtmnt_unit) %>% 
   dplyr::group_by(inrange_th_votes) %>% 
   # dplyr::filter(inrange_th_votes>=6) %>% 
   dplyr::slice_sample(n = 5) %>% 
@@ -334,8 +367,8 @@ plts_temp <- 1:nrow(inunit_piles_temp) %>%
 
 plot with `patchwork`
 
-```{r, fig.height = 11.5}
-wrapped_plots_temp <- patchwork::wrap_plots(plts_temp, ncol = 5, nrow = 6) +
+```{r,eval=F,purl=FALSE, fig.height = 11.5}
+wplts_temp <- patchwork::wrap_plots(plts_temp, ncol = 5, nrow = 6) +
   patchwork::plot_annotation(
     tag_levels = list(
       # as.vector(rbind(paste("Spectral Thrshlds Met", 1:6), matrix("", nrow = 4, ncol = 6)))  
@@ -347,7 +380,296 @@ wrapped_plots_temp <- patchwork::wrap_plots(plts_temp, ncol = 5, nrow = 6) +
     , plot.tag = ggplot2::element_text(size = 10, face = "bold", hjust = 0.5)
   )
 # huh?
-wrapped_plots_temp
-
+wplts_temp
 ```
 
+based on this visual inspection, we'll use all detected piles that meet at least 5 thresholds for our mask to remove detected "trees" that are likely not trees
+
+```{r, warning=FALSE, message=FALSE, echo=FALSE, include=FALSE}
+remove(list = ls()[grep("_temp",ls())])
+gc()
+```
+
+## Slash Pile Summary Statistics
+
+first we'll plot the slash piles in a treatment unit overlaid on the CHM
+
+```{r,eval=F,purl=FALSE, results=F}
+unt_temp <- piles_workflow_ans %>% 
+  sf::st_drop_geometry() %>% 
+  dplyr::filter(is_in_trtmnt_unit) %>% 
+  dplyr::distinct(trtmnt_type,trtmnt_block,trtmnt_unit) %>% 
+  dplyr::arrange(trtmnt_type,trtmnt_block,trtmnt_unit)
+plts_temp <- 
+  1:nrow(unt_temp) %>% 
+  purrr::map(function(x){
+    unit_temp <- stand_boundary %>% 
+      dplyr::filter(
+        unit == unt_temp$trtmnt_unit[x]
+        , block == unt_temp$trtmnt_block[x]
+        , stringr::str_squish(tolower(tretmnt)) == unt_temp$trtmnt_type[x]
+      ) %>% 
+      sf::st_transform(terra::crs(chm_rast))
+    piles_temp <- piles_workflow_ans %>% 
+      dplyr::inner_join(
+        unt_temp %>% dplyr::slice(x)
+        , by = dplyr::join_by(trtmnt_type,trtmnt_block,trtmnt_unit)
+      ) %>% 
+      dplyr::filter(
+        is_in_trtmnt_unit
+        ,inrange_th_votes>=5
+      )
+    chm_temp <- chm_rast %>% 
+      terra::crop(
+        unit_temp %>% sf::st_buffer(5) %>% terra::vect()
+        , mask = T
+      ) %>% 
+      terra::aggregate(fact=2, fun = "max", na.rm = T) %>% 
+      terra::as.data.frame(xy=T) %>% 
+      dplyr::rename(f = 3)
+    # plt
+    ggplot2::ggplot() +
+      ggplot2::geom_tile(
+        data = chm_temp
+        , mapping = ggplot2::aes(x=x,y=y,fill=f)
+        , color = NA
+      ) +
+      ggplot2::scale_fill_viridis_c(
+        option = "plasma", alpha = 0.8
+        , limits = c(0,floor(terra::minmax(chm_rast)[2]*1.02))
+      ) +
+      ggplot2::geom_sf(data = unit_temp, fill = NA, color = "black", lwd = 0.8) +
+      ggplot2::geom_sf(
+        data = piles_temp
+        , fill = NA, color = "cyan", lwd = 0.3
+      ) +
+      ggplot2::labs(
+        subtitle = paste0(
+          piles_temp$trtmnt_type[1]
+          , "\nblock: "
+          , piles_temp$trtmnt_block[1]
+          , " | "
+          , piles_temp$trtmnt_unit[1]
+        )
+        , fill = "CHM (m)"
+      ) +
+      ggplot2::theme_void() +
+      ggplot2::theme(
+        legend.position = "bottom"
+        , legend.title = ggplot2::element_text(size = 6)
+        , legend.text = ggplot2::element_text(size = 7)
+        , plot.subtitle = ggplot2::element_text(size = 6, hjust = 0.5)
+      )  
+  })
+# length(plts_temp)
+# plts_temp[[1]]
+
+# chm_rast %>% 
+#   # terra::aggregate(fact = 2, fun="max",na.rm=T,cores=lasR::half_cores()) %>% 
+#   terra::plot(col = viridis::plasma(n=100), main = "CHM (m)", axes = F)
+# terra::plot(
+#     stand_boundary %>% terra::vect()
+#     , add = T, border = "black", col = NA, lwd = 1.5
+#   )
+# terra::plot(
+#     piles_workflow_ans %>% 
+#       dplyr::filter(is_in_trtmnt_unit) %>% 
+#       terra::vect()
+#     , add = T, border = "cyan", col = NA, lwd = 1.5
+#   )
+```
+
+**heterogenous** units 
+
+```{r,eval=F,purl=FALSE, fig.height = 11}
+wplts_temp <- patchwork::wrap_plots(
+  plts_temp[1:12]
+  , ncol = 4
+  , guides = "collect"
+) &
+ggplot2::theme(
+    legend.position = "bottom"
+    # , legend.text = ggplot2::element_text(size = 7)
+  )
+# huh?
+wplts_temp
+```
+
+**uniform - high** units 
+
+```{r,eval=F,purl=FALSE, fig.height = 11}
+wplts_temp <- patchwork::wrap_plots(
+  plts_temp[13:24]
+  , ncol = 4
+  , guides = "collect"
+) &
+ggplot2::theme(
+    legend.position = "bottom"
+    # , legend.text = ggplot2::element_text(size = 7)
+  )
+# huh?
+wplts_temp
+```
+
+**uniform - low** units 
+
+```{r,eval=F,purl=FALSE, fig.height = 11}
+wplts_temp <- patchwork::wrap_plots(
+  plts_temp[25:36]
+  , ncol = 3
+  , guides = "collect"
+) &
+ggplot2::theme(
+    legend.position = "bottom"
+    # , legend.text = ggplot2::element_text(size = 7)
+  )
+# huh?
+wplts_temp
+```
+
+```{r, warning=FALSE, message=FALSE, echo=FALSE, include=FALSE}
+# ggplot2::ggsave("../data/explt.jpg", height = 11, width = 10.5, dpi = "print")
+remove(list = ls()[grep("_temp",ls())])
+gc()
+```
+
+let's aggregate the detected slash pile information by treatment unit
+
+```{r}
+# hey
+pile_sum_temp <- piles_workflow_ans %>% 
+  sf::st_drop_geometry() %>% 
+  dplyr::filter(
+    is_in_trtmnt_unit
+    , inrange_th_votes>=5
+  ) %>% 
+  dplyr::group_by(
+    trtmnt_type,trtmnt_block,trtmnt_unit, trtmnt_unit_ha
+  ) %>% 
+  dplyr::summarize(
+    n_piles = dplyr::n()
+    , dplyr::across(
+      .cols = c(area_m2, volume_m3)
+      , .fns = list(mean = ~mean(.x,na.rm=T), sum = ~sum(.x,na.rm=T))
+    )
+  ) %>% 
+  dplyr::ungroup() %>% 
+  dplyr::mutate(piles_per_ha = n_piles/trtmnt_unit_ha) %>% 
+  dplyr::arrange(trtmnt_type,trtmnt_block,trtmnt_unit )
+```
+
+table it by treatment unit
+
+```{r}
+pile_sum_temp %>% 
+  dplyr::mutate(
+    dplyr::across(
+      .cols = c(n_piles, tidyselect::ends_with("_sum"))
+      , .fns = ~scales::comma(.x,accuracy=1)
+    )
+    , dplyr::across(
+      .cols = c(trtmnt_unit_ha, piles_per_ha, tidyselect::ends_with("_mean"))
+      , .fns = ~scales::comma(.x,accuracy=0.1)
+    )
+  ) %>% 
+  dplyr::relocate(
+    trtmnt_type,trtmnt_block,trtmnt_unit, trtmnt_unit_ha
+    , n_piles, piles_per_ha
+  ) %>% 
+  kableExtra::kbl(
+    caption = "slash pile quantity by treatment unit"
+    , col.names = c(
+      "type","block","unit","ha"
+      , "# piles", "piles ha<sup>-1</sup>"
+      , "mean pile<br>area (m<sup>2</sup>)"
+      , "tot. pile<br>area (m<sup>2</sup>)"
+      , "mean pile<br>bulk vol. (m<sup>3</sup>)"
+      , "tot. pile<br>bulk vol. (m<sup>3</sup>)"
+    )
+    , escape = F
+    # , digits = 2
+  ) %>% 
+  kableExtra::kable_styling(font_size = 9.7) %>% 
+  kableExtra::column_spec(seq(4,10,by=2), border_right = TRUE, include_thead = TRUE) %>% 
+  kableExtra::collapse_rows(columns = 1, valign = "top") %>% 
+  kableExtra::scroll_box(height = "8.4in")
+```
+
+plot piles per ha by treatment unit
+
+```{r}
+pile_sum_temp %>% 
+  dplyr::ungroup() %>% 
+  dplyr::mutate(
+    dplyr::across(c(trtmnt_type,trtmnt_block,trtmnt_unit),as.ordered)
+    , my_fct = forcats::fct_cross(trtmnt_type,trtmnt_block,trtmnt_unit)
+  ) %>% 
+  dplyr::arrange(desc(trtmnt_type),piles_per_ha) %>% 
+  dplyr::mutate(my_fct = forcats::fct_inorder(my_fct)) %>% 
+  ggplot2::ggplot(mapping = ggplot2::aes(x=piles_per_ha,y=my_fct,fill=trtmnt_type,group = trtmnt_type)) +
+  ggplot2::geom_col() +
+  ggplot2::scale_fill_brewer(palette = "Dark2") +
+  ggplot2::scale_x_continuous(labels = scales::comma) +
+  ggplot2::theme_light() +
+  ggplot2::labs(x = "piles per ha", y = "") +
+  ggplot2::theme(
+    legend.position = "none"
+    , axis.text.y = ggplot2::element_text(size = 7)
+    , axis.text.x = ggplot2::element_text(size = 8)
+  )
+```
+
+table it by treatment type
+
+```{r}
+pile_sum_temp %>% 
+  dplyr::group_by(trtmnt_type) %>% 
+  dplyr::summarise(
+    dplyr::across(
+      .cols = c(trtmnt_unit_ha, n_piles, tidyselect::ends_with("_sum"))
+      , ~sum(.,na.rm = T)
+    )
+  ) %>% 
+  dplyr::mutate(
+    area_m2_mean = area_m2_sum/n_piles
+    , volume_m3_mean = volume_m3_sum/n_piles
+    , piles_per_ha = n_piles/trtmnt_unit_ha
+  ) %>% 
+  dplyr::mutate(
+    dplyr::across(
+      .cols = c(n_piles, tidyselect::ends_with("_sum"))
+      , .fns = ~scales::comma(.x,accuracy=1)
+    )
+    , dplyr::across(
+      .cols = c(trtmnt_unit_ha, piles_per_ha, tidyselect::ends_with("_mean"))
+      , .fns = ~scales::comma(.x,accuracy=0.1)
+    )
+  ) %>% 
+  dplyr::select(
+   trtmnt_type,trtmnt_unit_ha,n_piles
+   , piles_per_ha
+   , area_m2_mean,area_m2_sum
+   , volume_m3_mean,volume_m3_sum
+  ) %>% 
+  kableExtra::kbl(
+    caption = "slash pile quantity by treatment type"
+    , col.names = c(
+      "type","ha"
+      , "# piles", "piles ha<sup>-1</sup>"
+      , "mean pile<br>area (m<sup>2</sup>)"
+      , "tot. pile<br>area (m<sup>2</sup>)"
+      , "mean pile<br>bulk vol. (m<sup>3</sup>)"
+      , "tot. pile<br>bulk vol. (m<sup>3</sup>)"
+    )
+    , escape = F
+    # , digits = 2
+  ) %>% 
+  kableExtra::kable_styling(font_size = 10.1) %>% 
+  kableExtra::column_spec(seq(2,8,by=2), border_right = TRUE, include_thead = TRUE) %>% 
+  kableExtra::collapse_rows(columns = 1, valign = "top")
+```
+
+```{r, warning=FALSE, message=FALSE, echo=FALSE, include=FALSE}
+remove(list = ls()[grep("_temp",ls())])
+gc()
+```
