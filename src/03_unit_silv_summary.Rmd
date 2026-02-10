@@ -1,0 +1,595 @@
+# Treatment Unit Silvicultural Summary
+
+In this section, we're going to aggregate the detected trees by treatment unit to produce silvicultural summaries. Before we do that, we'll use pile predictions as a mask to remove smaller, detected "trees" that are actually piles or downed trees/debris so that we are only working with trees within units.
+
+```{r, warning=FALSE, message=FALSE, echo=FALSE, include=FALSE}
+remove(list = ls()[grep("_temp",ls())])
+remove(treetops_sf)
+gc()
+```
+
+## Remove Slash Piles
+
+read back in the tree point data and attach to treatment units
+
+```{r}
+treetops_sf <- sf::st_read(dsn = treetops_fnm, quiet = TRUE)
+# attach to treatment unit
+treetops_sf <- treetops_sf %>% 
+  dplyr::inner_join(
+    treetops_sf %>% 
+      sf::st_transform(sf::st_crs(stand_boundary)) %>% 
+      sf::st_intersection(
+        stand_boundary %>%
+          dplyr::select(unit,block,tretmnt,unit_ha) %>% 
+          dplyr::rename(type = tretmnt) %>% 
+          dplyr::mutate(
+            type =
+              tolower(type) %>% 
+              stringr::str_squish()
+          ) %>% 
+          dplyr::rename_with(.fn = ~paste0("trtmnt_", .x, recycle0 = T))
+      ) %>% 
+      sf::st_drop_geometry() %>% 
+      dplyr::select(treeID, tidyselect::starts_with("trtmnt_"))
+    , by = "treeID"
+  ) %>% 
+  dplyr::mutate(
+    is_in_trtmnt_unit = ifelse(is.na(trtmnt_type) | trtmnt_type=="control",F,T)
+  )
+# treetops_sf %>% dplyr::glimpse()
+```
+
+use our slash pile mask to remove detected "trees" that are likely not trees. if a tree top point falls within the boundary of a detected pile footprint, it will be removed
+
+```{r}
+# save nrow
+nrow_temp <- nrow(treetops_sf)
+treetops_sf <- 
+  sf::st_filter(
+    treetops_sf
+    , piles_workflow_ans %>% 
+      dplyr::filter(is_in_trtmnt_unit, inrange_th_votes>=5) %>% 
+      sf::st_union()
+    , .predicate = sf::st_disjoint
+  )
+```
+
+what proportion of "trees" were removed?
+
+```{r}
+# nrow_temp
+# nrow(treetops_sf)
+scales::percent((nrow_temp-nrow(treetops_sf))/nrow_temp, accuracy = 0.1)
+```
+
+```{r, warning=FALSE, message=FALSE, echo=FALSE, include=FALSE}
+remove(list = ls()[grep("_temp",ls())])
+gc()
+```
+
+nice. now we'll keep only trees that are at least 2 m in height since we included trees as small as 1.37 m in our [tree detection](#trees)
+
+```{r}
+treetops_sf <- treetops_sf %>% dplyr::filter(tree_height_m>=2)
+```
+
+using our cleaned trees data, how many trees per treatment unit?
+
+```{r}
+treetops_sf %>% 
+  sf::st_drop_geometry() %>% 
+  dplyr::count(trtmnt_type, trtmnt_block, trtmnt_unit,trtmnt_unit_ha) %>% 
+  dplyr::mutate(
+    trees_per_ha = n/trtmnt_unit_ha
+    , trtmnt_unit_ha = scales::comma(trtmnt_unit_ha,accuracy=0.1)
+    , n = scales::comma(n,accuracy=1)
+    , trees_per_ha = scales::comma(trees_per_ha,accuracy=0.1)
+  ) %>% 
+  kableExtra::kbl(
+    caption = "count trees by treatment unit"
+    , col.names = c(
+      "type","block","unit","ha"
+      , "# trees", "trees ha<sup>-1</sup>"
+    )
+    , escape = F
+    # , digits = 2
+  ) %>% 
+  kableExtra::kable_styling(font_size = 9.7) %>% 
+  kableExtra::column_spec(seq(4,6,by=2), border_right = TRUE, include_thead = TRUE) %>% 
+  kableExtra::collapse_rows(columns = 1, valign = "top") %>% 
+  kableExtra::scroll_box(height = "8.4in")
+```
+
+where are these units in space?
+
+```{r}
+ggplot2::ggplot(
+    data = stand_boundary
+    , ggplot2::aes(color = ordered(block), fill = ordered(tolower(tretmnt)))
+  )+
+  ggplot2::geom_sf(lwd = 2, alpha = 0.8) +
+  ggplot2::scale_fill_brewer(palette = "Dark2") +
+  # ggplot2::scale_color_viridis_d(option = "turbo") +
+  ggplot2::scale_color_manual(
+    values = viridis::turbo(n = length(unique(stand_boundary$block))) %>% sample()
+  ) +
+  ggplot2::labs(fill = "treatment\ntype", color = "treatment\nblock") +
+  ggplot2::theme_void() +
+  ggplot2::guides(
+    fill = ggplot2::guide_legend(
+      override.aes = list(
+        color = NA, shape = 15, linetype = 0, size = 6, alpha = 1
+      )
+    )
+    , color = ggplot2::guide_legend(
+      override.aes = list(
+        fill = NA, shape = 15, size = 6, alpha = 1
+      )
+    )
+  )
+```
+
+## Function to Calculate Silviclutural Metrics
+
+let's make a function to summarize the data and create common silvicultural metrics within our stand boundary
+
+```{r}
+###################################################################################
+# define a function to convert columns in data frame from metric to imperial
+# see: 
+# https://www.forestnb.com/archives/forest-nb-news/resources/conversions/
+# https://www.ars.usda.gov/is/np/agbyproducts/agbyappendix.pdf
+###################################################################################
+calc_imperial_units_fn <- function(df) {
+  df %>% 
+  # convert to imperial units
+    dplyr::mutate(
+      dplyr::across(
+        .cols = tidyselect::ends_with("_cm")
+        , ~ .x * 0.394
+        , .names = "{.col}_in"
+      )
+      , dplyr::across(
+        .cols = tidyselect::ends_with("_m")
+        , ~ .x * 3.281
+        , .names = "{.col}_ft"
+      )
+      , dplyr::across(
+        .cols = tidyselect::ends_with("_m2_per_ha")
+        , ~ .x * 4.359
+        , .names = "{.col}_ftac"
+      )
+      , dplyr::across(
+        .cols = tidyselect::ends_with("_kg_per_ha")
+        , ~ .x * 0.892178
+        , .names = "{.col}_lbsac"
+      )
+      , dplyr::across(
+        .cols = tidyselect::ends_with("_per_ha") & 
+          !tidyselect::ends_with("_m2_per_ha") & 
+          !tidyselect::ends_with("_kg_per_ha")
+        , ~ .x * 0.405
+        , .names = "{.col}_ac"
+      )
+      , dplyr::across(
+        .cols = tidyselect::ends_with("_area_ha")
+        , ~ .x * 2.471
+        , .names = "{.col}_ac"
+      )
+      , dplyr::across(
+        .cols = tidyselect::ends_with("kg_per_m2")
+        , ~ .x * 0.20482
+        , .names = "{.col}_lbsft2"
+      )
+      , dplyr::across(
+        .cols = tidyselect::ends_with("kg_per_m3")
+        , ~ .x * 0.0624
+        , .names = "{.col}_lbsft3"
+      )
+      , dplyr::across(
+        .cols = tidyselect::ends_with("_m2") & !tidyselect::ends_with("per_m2")
+        , ~ .x * 10.764
+        , .names = "{.col}_ft2"
+      )
+    ) %>%
+    dplyr::rename_with(
+      .fn = function(x){dplyr::case_when(
+        stringr::str_ends(x,"_cm_in") ~ stringr::str_replace(x,"_cm_in","_in")
+        , stringr::str_ends(x,"_m_ft") ~ stringr::str_replace(x,"_m_ft","_ft")
+        , stringr::str_ends(x,"_m2_per_ha_ftac") ~ stringr::str_replace(x,"_m2_per_ha_ftac","_ft2_per_ac")
+        , stringr::str_ends(x,"_kg_per_ha_lbsac") ~ stringr::str_replace(x,"_kg_per_ha_lbsac","_lbs_per_ac")
+        , stringr::str_ends(x,"_per_ha_ac") ~ stringr::str_replace(x,"_per_ha_ac","_per_ac")
+        , stringr::str_ends(x,"_area_ha_ac") ~ stringr::str_replace(x,"_area_ha_ac","_area_ac")
+        , stringr::str_ends(x,"_kg_per_m2_lbsft2") ~ stringr::str_replace(x,"_kg_per_m2_lbsft2","_lbs_per_ft2")
+        , stringr::str_ends(x,"_kg_per_m3_lbsft3") ~ stringr::str_replace(x,"_kg_per_m3_lbsft3","_lbs_per_ft3")
+        , stringr::str_ends(x,"_m2_ft2") ~ stringr::str_replace(x,"_m2_ft2","_ft2")
+        , TRUE ~ x
+      )}
+    )
+}
+
+###################################################################################
+### stand-level summaries
+###################################################################################
+calc_silv_metrics <- function(tree_list, stand_area_ha = NULL, study_boundary = NULL, calc_imperial_units = F) {
+  # get study area
+  if(!is.null(study_boundary)){
+    # bounds check
+    if(
+      !inherits(study_boundary,"sf")
+      && !inherits(study_boundary,"sfc")
+    ){stop("study_boundary must be sf class object")}
+    if(is.na(sf::st_crs(study_boundary))){stop("study_boundary does not have a CRS")}
+    if(inherits(study_boundary,"sf") && nrow(study_boundary)!=1){
+      stop("study_boundary must only have a single record geometry")
+    }
+    if(inherits(study_boundary,"sfc") && length(study_boundary)!=1){
+      stop("study_boundary must only have a single record geometry")
+    }
+    if(
+      !all( sf::st_is(study_boundary, c("POLYGON","MULTIPOLYGON")) )
+    ){
+      stop("study_boundary must contain POLYGON type geometry only")
+    }
+    # area
+    xxstand_area_ha <- study_boundary %>% 
+      sf::st_area() %>% 
+      as.numeric() %>% 
+      `/`(10000)
+  }else if(is.numeric(stand_area_ha)){
+    xxstand_area_ha <- stand_area_ha[1]
+  }else{
+    stop("must provide `stand_area_ha` as numeric or `study_boundary` as sf object")
+  }
+  
+  if(is.null(xxstand_area_ha) || is.na(xxstand_area_ha) || dplyr::coalesce(xxstand_area_ha,0)<=0){
+    stop("could not determine valid stand_area_ha")
+  }
+  
+  # summarize tree list
+  if(!inherits(tree_list,"data.frame")){stop("tree_list must be data.frame class object")}
+  
+  ###### !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! NEED TO PUT IN CHECKS FOR COLUMNS USED
+  # see: cloud2trees::check_df_cols_all_missing()
+  if( !any(stringr::str_detect(names(tree_list), "landfire_crown_biomass_kg")) ){
+    tree_list <- tree_list %>% dplyr::mutate(landfire_crown_biomass_kg=as.numeric(NA))
+  }
+  if( !any(stringr::str_detect(names(tree_list), "cruz_crown_biomass_kg")) ){
+    tree_list <- tree_list %>% dplyr::mutate(cruz_crown_biomass_kg=as.numeric(NA))
+  }
+  if( !any(stringr::str_detect(names(tree_list), "landfire_tree_kg_per_m3")) ){
+    tree_list <- tree_list %>% dplyr::mutate(landfire_tree_kg_per_m3=as.numeric(NA))
+  }
+  if( !any(stringr::str_detect(names(tree_list), "cruz_tree_kg_per_m3")) ){
+    tree_list <- tree_list %>% dplyr::mutate(cruz_tree_kg_per_m3=as.numeric(NA))
+  }
+  
+  # agg
+  agg <- tree_list %>%
+    sf::st_drop_geometry() %>% 
+    dplyr::ungroup() %>%
+    dplyr::summarise(
+      n_trees = dplyr::n()
+      , mean_dbh_cm = mean(dbh_cm, na.rm = T)
+      , mean_tree_height_m = mean(tree_height_m, na.rm = T)
+      , mean_tree_cbh_m = mean(tree_cbh_m, na.rm = T)
+      , loreys_height_m = sum(basal_area_m2*tree_height_m, na.rm = T) / sum(basal_area_m2, na.rm = T)
+      , basal_area_m2 = sum(basal_area_m2, na.rm = T)
+      , sum_dbh_cm_sq = sum(dbh_cm^2, na.rm = T)
+      , landfire_crown_biomass_kg = sum(landfire_crown_biomass_kg, na.rm = F)
+      , cruz_crown_biomass_kg = sum(cruz_crown_biomass_kg, na.rm = F)
+      , mean_landfire_tree_kg_per_m3 = mean(landfire_tree_kg_per_m3, na.rm = T)
+      , mean_cruz_tree_kg_per_m3 = mean(cruz_tree_kg_per_m3, na.rm = T)
+    ) %>%
+    dplyr::ungroup() %>%
+    dplyr::mutate(
+      stand_area_ha = xxstand_area_ha
+      , trees_per_ha = (n_trees/stand_area_ha)
+      , basal_area_m2_per_ha = (basal_area_m2/stand_area_ha)
+      , qmd_cm = sqrt(sum_dbh_cm_sq/n_trees)
+      , landfire_cfl_kg_per_m2 = landfire_crown_biomass_kg/(stand_area_ha*10000)
+      , cruz_cfl_kg_per_m2 = cruz_crown_biomass_kg/(stand_area_ha*10000)
+    ) %>%
+    dplyr::select(-c(sum_dbh_cm_sq,landfire_crown_biomass_kg,cruz_crown_biomass_kg))
+  # imperial
+  if(calc_imperial_units){
+    agg <- calc_imperial_units_fn(agg)
+  }
+  return(agg)
+}
+```
+
+check out the data structure returned by the `calc_silv_metrics()` function
+
+```{r}
+calc_silv_metrics(
+    tree_list = treetops_sf %>% 
+      # just get one unit
+      dplyr::filter(
+        trtmnt_type==treetops_sf$trtmnt_type[1]
+        , trtmnt_block==treetops_sf$trtmnt_block[1]
+        , trtmnt_unit==treetops_sf$trtmnt_unit[1]
+      )
+    , stand_area_ha = treetops_sf$trtmnt_unit_ha[1]
+    , calc_imperial_units = T
+  ) %>% 
+  dplyr::glimpse()
+```
+
+```{r, warning=FALSE, message=FALSE, echo=FALSE, include=FALSE}
+remove(list = ls()[grep("_temp",ls())])
+gc()
+```
+
+## Treatment Unit Summaries
+
+let's summarize the tree data by treatment unit
+
+```{r}
+unit_sum_df <-
+  treetops_sf %>% 
+    sf::st_drop_geometry() %>% 
+    dplyr::distinct(trtmnt_type,trtmnt_block,trtmnt_unit,trtmnt_unit_ha)
+unit_sum_df <-
+  1:nrow(unit_sum_df) %>% 
+  purrr::map(function(x){
+    unit_temp <- unit_sum_df %>% dplyr::slice(x)
+    unit_temp %>% 
+      dplyr::bind_cols(
+        calc_silv_metrics(
+          tree_list = treetops_sf %>% 
+            # just get one unit
+            dplyr::inner_join(
+              unit_temp
+              , by = dplyr::join_by(trtmnt_type,trtmnt_block,trtmnt_unit)
+            )
+          , stand_area_ha = unit_temp$trtmnt_unit_ha
+          , calc_imperial_units = T
+        )
+      )
+  }) %>% 
+  dplyr::bind_rows() %>% 
+  dplyr::mutate(
+    dplyr::across(c(trtmnt_type,trtmnt_block,trtmnt_unit),ordered)
+    , my_fct = forcats::fct_cross(trtmnt_type,trtmnt_block,trtmnt_unit)
+  ) %>% 
+  dplyr::arrange(desc(trtmnt_type),trees_per_ha) %>% 
+  dplyr::mutate(my_fct = forcats::fct_inorder(my_fct))
+
+# unit_sum_df %>% dplyr::glimpse()
+```
+
+### Tabular
+
+#### Metric units
+
+```{r}
+unit_sum_df %>% 
+  dplyr::arrange(trtmnt_type, trtmnt_block, trtmnt_unit) %>% 
+  dplyr::select(
+    trtmnt_type, trtmnt_block, trtmnt_unit
+    , stand_area_ha
+    # different
+    , n_trees
+    , trees_per_ha
+    , mean_tree_height_m
+    , loreys_height_m
+    , mean_dbh_cm
+    , qmd_cm
+    , basal_area_m2_per_ha
+    , mean_landfire_tree_kg_per_m3
+    , mean_cruz_tree_kg_per_m3
+) %>% 
+dplyr::mutate(
+  dplyr::across(c(n_trees), ~scales::comma(.x,accuracy=1))
+  , dplyr::across(
+    -c(tidyselect::starts_with("trtmnt_"),n_trees,tidyselect::ends_with("3"))
+    , ~scales::comma(.x,accuracy=0.1)
+  )
+  , dplyr::across(
+    tidyselect::ends_with("3")
+    , ~scales::comma(.x,accuracy=0.001)
+  )
+) %>% 
+kableExtra::kbl(
+  caption = "Stand summary metrics in metric units"
+  , col.names = c(
+    "type","block","unit","ha"
+    , "trees"
+    , "trees ha<sup>-1</sup>"
+    , "mean<br>tree ht. (m)"
+    , "Lorey's<br>tree ht. (m)"
+    , "mean<br>DBH (cm)"
+    , "QMD (cm)"
+    , "BA (m<sup>2</sup> ha<sup>-1</sup>)"
+    , "mean<br>CBD (kg m<sup>-3</sup>)<br>LANDFIRE"
+    , "mean<br>CBD (kg m<sup>-3</sup>)<br>Cruz"
+  )
+  , escape = F
+) %>% 
+kableExtra::kable_styling(font_size = 9.7) %>% 
+# kableExtra::column_spec(seq(4,10,by=2), border_right = TRUE, include_thead = TRUE) %>% 
+kableExtra::collapse_rows(columns = 1, valign = "top") %>% 
+kableExtra::scroll_box(height = "8.4in")
+
+```
+
+#### Imperial units
+
+```{r}
+unit_sum_df %>% 
+  dplyr::arrange(trtmnt_type, trtmnt_block, trtmnt_unit) %>% 
+  dplyr::select(
+    trtmnt_type, trtmnt_block, trtmnt_unit
+    , stand_area_ac
+    # different
+    , n_trees
+    , trees_per_ac
+    , mean_tree_height_ft
+    , loreys_height_ft
+    , mean_dbh_in
+    , qmd_in
+    , basal_area_ft2_per_ac
+    , mean_landfire_tree_lbs_per_ft3
+    , mean_cruz_tree_lbs_per_ft3
+) %>% 
+dplyr::mutate(
+  dplyr::across(c(n_trees), ~scales::comma(.x,accuracy=1))
+  , dplyr::across(
+    -c(n_trees,tidyselect::starts_with("trtmnt_"),tidyselect::ends_with("3"))
+    , ~scales::comma(.x,accuracy=0.1)
+  )
+  , dplyr::across(
+    tidyselect::ends_with("3")
+    , ~scales::comma(.x,accuracy=0.001)
+  )
+) %>% 
+kableExtra::kbl(
+  caption = "Stand summary metrics in imperial units"
+  , col.names = c(
+    "type","block","unit","ac"
+    , "trees"
+    , "trees ac<sup>-1</sup>"
+    , "mean<br>tree ht. (ft)"
+    , "Lorey's<br>tree ht. (ft)"
+    , "mean<br>DBH (in)"
+    , "QMD (in)"
+    , "BA (ft<sup>2</sup> ac<sup>-1</sup>)"
+    , "mean<br>CBD (lb ft<sup>-3</sup>)<br>LANDFIRE"
+    , "mean<br>CBD (lb ft<sup>-3</sup>)<br>Cruz"
+  )
+  , escape = F
+) %>% 
+kableExtra::kable_styling(font_size = 9.7) %>% 
+# kableExtra::column_spec(seq(4,10,by=2), border_right = TRUE, include_thead = TRUE) %>% 
+kableExtra::collapse_rows(columns = 1, valign = "top") %>% 
+kableExtra::scroll_box(height = "8.4in")
+```
+
+### Visual
+
+we'll start with a simple bar plot to see if the aggregated trees per ha generally align with the treatment types
+
+```{r}
+unit_sum_df %>% 
+  ggplot2::ggplot(mapping = ggplot2::aes(x=trees_per_ha,y=my_fct,fill=trtmnt_type,group = trtmnt_type)) +
+  ggplot2::geom_col() +
+  ggplot2::scale_fill_brewer(palette = "Dark2") +
+  ggplot2::scale_x_continuous(labels = scales::comma) +
+  ggplot2::theme_light() +
+  ggplot2::labs(x = "trees per ha", y = "") +
+  ggplot2::theme(
+    legend.position = "none"
+    , axis.text.y = ggplot2::element_text(size = 7)
+    , axis.text.x = ggplot2::element_text(size = 8)
+  )
+
+```
+
+that's looks about right, let's check out a unit-level distribution of the TPH
+
+```{r}
+# reusable function for plotting
+plt_metric_dist_fn <- function(df, metric_name, metric_label = NA) {
+  if(any(is.na(metric_label))){metric_label <- metric_name}
+  tit <- paste(
+    "distribution of treatment unit"
+    ,metric_label
+  ) %>% 
+  latex2exp::TeX()
+  
+  df %>% 
+  ggplot2::ggplot(mapping = ggplot2::aes(x=.data[[metric_name]],fill=trtmnt_type)) +
+  ggplot2::geom_density(mapping = ggplot2::aes(y=ggplot2::after_stat(scaled)), alpha = 0.8, color = NA) +
+  ggplot2::facet_grid(
+    rows = dplyr::vars(trtmnt_type)
+    , axes = "all"
+    , switch = "y"
+  ) +
+  ggplot2::scale_fill_brewer(palette = "Dark2") +
+  ggplot2::scale_x_continuous(limits=c(0,NA),labels = scales::comma) +
+  ggplot2::scale_y_continuous(NULL,breaks=NULL) +
+  ggplot2::labs(
+    fill="",x=latex2exp::TeX(metric_label),y=""
+    , title = tit
+    , subtitle = "\nby treatment type"
+  ) +
+  ggplot2::theme_light() +
+  ggplot2::theme(
+    legend.position = "none"
+    , strip.text = ggplot2::element_text(size = 10, color = "black", face = "bold")
+    , axis.text.x = ggplot2::element_text(size = 9)
+    , plot.subtitle = ggplot2::element_text(margin = margin(t = -10, unit = "pt"))
+  )
+}
+plt_metric_violin_fn <- function(df, metric_name, metric_label = NA) {
+  if(any(is.na(metric_label))){metric_label <- metric_name}
+  tit <- paste(
+    "distribution of treatment unit"
+    ,metric_label
+  ) %>% 
+  latex2exp::TeX()
+  
+  df %>% 
+  ggplot2::ggplot(mapping = ggplot2::aes(x=.data[[metric_name]])) +
+  ggplot2::geom_violin(
+    mapping = ggplot2::aes(y = 0, fill=trtmnt_type)
+    , alpha = 0.8, color = NA
+  ) +
+  ggplot2::geom_boxplot(width = 0.1, fill = NA, outliers = F) +
+  ggplot2::facet_grid(
+    rows = dplyr::vars(trtmnt_type)
+    , axes = "all"
+    , switch = "y"
+  ) +
+  ggplot2::scale_fill_brewer(palette = "Dark2") +
+  ggplot2::scale_x_continuous(limits=c(0,NA),labels = scales::comma) +
+  ggplot2::scale_y_continuous(NULL,breaks=NULL) +
+  ggplot2::labs(
+    fill="",x=latex2exp::TeX(metric_label),y=""
+    , title = tit
+    , subtitle = "\nby treatment type"
+  ) +
+  ggplot2::theme_light() +
+  ggplot2::theme(
+    legend.position = "none"
+    , strip.text = ggplot2::element_text(size = 10, color = "black", face = "bold")
+    , axis.text.x = ggplot2::element_text(size = 9)
+    , plot.subtitle = ggplot2::element_text(margin = margin(t = -10, unit = "pt"))
+  )
+}
+# plot it
+plt_metric_violin_fn(unit_sum_df,"trees_per_ha",metric_label = "trees $ha^{-1}$")
+# plt_metric_dist_fn(unit_sum_df,"trees_per_ha",metric_label = "trees $ha^{-1}$")
+```
+
+since we also have imperial units let's see TPA
+
+```{r}
+plt_metric_violin_fn(unit_sum_df,"trees_per_ac",metric_label = "trees $ac^{-1}$")
+```
+
+we can also look at the QMD in cm
+
+```{r}
+plt_metric_violin_fn(unit_sum_df,"qmd_cm",metric_label = "QMD (cm)")
+```
+
+and QMD in inches
+
+```{r}
+plt_metric_violin_fn(unit_sum_df,"qmd_in",metric_label = "QMD (in)")
+```
+
+and basal area in square meters per hectare
+
+```{r}
+plt_metric_violin_fn(unit_sum_df,"basal_area_m2_per_ha",metric_label = "basal area ($m^{2} ha^{-1}$)")
+```
+
+but also basal area in square feet per acre
+
+```{r}
+plt_metric_violin_fn(unit_sum_df,"basal_area_ft2_per_ac",metric_label = "basal area ($ft^{2} ac^{-1}$)")
+```
