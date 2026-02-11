@@ -47,7 +47,7 @@ stand_boundary <-
   sf::st_set_geometry("geometry") %>% 
   sf::st_transform(terra::crs(chm_rast)) %>% 
   dplyr::mutate(
-    unit_ha = as.numeric(sf::st_area(geometry))/10000
+    unit_area_ha = as.numeric(sf::st_area(geometry))/10000
   )
 # stand_boundary %>% dplyr::glimpse()
 ```
@@ -268,7 +268,7 @@ piles_workflow_ans <-
       sf::st_transform(sf::st_crs(stand_boundary)) %>% 
       sf::st_intersection(
         stand_boundary %>%
-          dplyr::select(unit,block,tretmnt,unit_ha) %>% 
+          dplyr::select(unit,block,tretmnt,unit_area_ha) %>% 
           dplyr::rename(type = tretmnt) %>% 
           dplyr::mutate(
             type =
@@ -546,7 +546,7 @@ pile_sum_temp <- piles_workflow_ans %>%
     , inrange_th_votes>=5
   ) %>% 
   dplyr::group_by(
-    trtmnt_type,trtmnt_block,trtmnt_unit, trtmnt_unit_ha
+    trtmnt_type,trtmnt_block,trtmnt_unit, trtmnt_unit_area_ha
   ) %>% 
   dplyr::summarize(
     n_piles = dplyr::n()
@@ -556,7 +556,7 @@ pile_sum_temp <- piles_workflow_ans %>%
     )
   ) %>% 
   dplyr::ungroup() %>% 
-  dplyr::mutate(piles_per_ha = n_piles/trtmnt_unit_ha) %>% 
+  dplyr::mutate(piles_per_ha = n_piles/trtmnt_unit_area_ha) %>% 
   dplyr::arrange(trtmnt_type,trtmnt_block,trtmnt_unit )
 ```
 
@@ -570,12 +570,12 @@ pile_sum_temp %>%
       , .fns = ~scales::comma(.x,accuracy=1)
     )
     , dplyr::across(
-      .cols = c(trtmnt_unit_ha, piles_per_ha, tidyselect::ends_with("_mean"))
+      .cols = c(trtmnt_unit_area_ha, piles_per_ha, tidyselect::ends_with("_mean"))
       , .fns = ~scales::comma(.x,accuracy=0.1)
     )
   ) %>% 
   dplyr::relocate(
-    trtmnt_type,trtmnt_block,trtmnt_unit, trtmnt_unit_ha
+    trtmnt_type,trtmnt_block,trtmnt_unit, trtmnt_unit_area_ha
     , n_piles, piles_per_ha
   ) %>% 
   kableExtra::kbl(
@@ -609,8 +609,9 @@ pile_sum_temp %>%
   dplyr::arrange(desc(trtmnt_type),piles_per_ha) %>% 
   dplyr::mutate(my_fct = forcats::fct_inorder(my_fct)) %>% 
   ggplot2::ggplot(mapping = ggplot2::aes(x=piles_per_ha,y=my_fct,fill=trtmnt_type,group = trtmnt_type)) +
-  ggplot2::geom_col() +
-  ggplot2::scale_fill_brewer(palette = "Dark2") +
+  ggplot2::geom_col(alpha = 0.9) +
+  ggplot2::scale_fill_manual(values = RColorBrewer::brewer.pal(n=4,name="Dark2")[2:4]) +
+  # ggplot2::scale_fill_brewer(palette = "Dark2") +
   ggplot2::scale_x_continuous(labels = scales::comma) +
   ggplot2::theme_light() +
   ggplot2::labs(x = "piles per ha", y = "") +
@@ -628,14 +629,14 @@ pile_sum_temp %>%
   dplyr::group_by(trtmnt_type) %>% 
   dplyr::summarise(
     dplyr::across(
-      .cols = c(trtmnt_unit_ha, n_piles, tidyselect::ends_with("_sum"))
+      .cols = c(trtmnt_unit_area_ha, n_piles, tidyselect::ends_with("_sum"))
       , ~sum(.,na.rm = T)
     )
   ) %>% 
   dplyr::mutate(
     area_m2_mean = area_m2_sum/n_piles
     , volume_m3_mean = volume_m3_sum/n_piles
-    , piles_per_ha = n_piles/trtmnt_unit_ha
+    , piles_per_ha = n_piles/trtmnt_unit_area_ha
   ) %>% 
   dplyr::mutate(
     dplyr::across(
@@ -643,12 +644,12 @@ pile_sum_temp %>%
       , .fns = ~scales::comma(.x,accuracy=1)
     )
     , dplyr::across(
-      .cols = c(trtmnt_unit_ha, piles_per_ha, tidyselect::ends_with("_mean"))
+      .cols = c(trtmnt_unit_area_ha, piles_per_ha, tidyselect::ends_with("_mean"))
       , .fns = ~scales::comma(.x,accuracy=0.1)
     )
   ) %>% 
   dplyr::select(
-   trtmnt_type,trtmnt_unit_ha,n_piles
+   trtmnt_type,trtmnt_unit_area_ha,n_piles
    , piles_per_ha
    , area_m2_mean,area_m2_sum
    , volume_m3_mean,volume_m3_sum

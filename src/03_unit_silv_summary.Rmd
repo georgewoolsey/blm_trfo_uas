@@ -21,7 +21,7 @@ treetops_sf <- treetops_sf %>%
       sf::st_transform(sf::st_crs(stand_boundary)) %>% 
       sf::st_intersection(
         stand_boundary %>%
-          dplyr::select(unit,block,tretmnt,unit_ha) %>% 
+          dplyr::select(unit,block,tretmnt,unit_area_ha) %>% 
           dplyr::rename(type = tretmnt) %>% 
           dplyr::mutate(
             type =
@@ -36,6 +36,7 @@ treetops_sf <- treetops_sf %>%
   ) %>% 
   dplyr::mutate(
     is_in_trtmnt_unit = ifelse(is.na(trtmnt_type) | trtmnt_type=="control",F,T)
+    , dplyr::across(c(trtmnt_type,trtmnt_block,trtmnt_unit),ordered)
   )
 # treetops_sf %>% dplyr::glimpse()
 ```
@@ -65,6 +66,7 @@ scales::percent((nrow_temp-nrow(treetops_sf))/nrow_temp, accuracy = 0.1)
 
 ```{r, warning=FALSE, message=FALSE, echo=FALSE, include=FALSE}
 remove(list = ls()[grep("_temp",ls())])
+remove(piles_workflow_ans)
 gc()
 ```
 
@@ -79,10 +81,10 @@ using our cleaned trees data, how many trees per treatment unit?
 ```{r}
 treetops_sf %>% 
   sf::st_drop_geometry() %>% 
-  dplyr::count(trtmnt_type, trtmnt_block, trtmnt_unit,trtmnt_unit_ha) %>% 
+  dplyr::count(trtmnt_type, trtmnt_block, trtmnt_unit,trtmnt_unit_area_ha) %>% 
   dplyr::mutate(
-    trees_per_ha = n/trtmnt_unit_ha
-    , trtmnt_unit_ha = scales::comma(trtmnt_unit_ha,accuracy=0.1)
+    trees_per_ha = n/trtmnt_unit_area_ha
+    , trtmnt_unit_area_ha = scales::comma(trtmnt_unit_area_ha,accuracy=0.1)
     , n = scales::comma(n,accuracy=1)
     , trees_per_ha = scales::comma(trees_per_ha,accuracy=0.1)
   ) %>% 
@@ -311,7 +313,7 @@ calc_silv_metrics(
         , trtmnt_block==treetops_sf$trtmnt_block[1]
         , trtmnt_unit==treetops_sf$trtmnt_unit[1]
       )
-    , stand_area_ha = treetops_sf$trtmnt_unit_ha[1]
+    , stand_area_ha = treetops_sf$trtmnt_unit_area_ha[1]
     , calc_imperial_units = T
   ) %>% 
   dplyr::glimpse()
@@ -330,7 +332,7 @@ let's summarize the tree data by treatment unit
 unit_sum_df <-
   treetops_sf %>% 
     sf::st_drop_geometry() %>% 
-    dplyr::distinct(trtmnt_type,trtmnt_block,trtmnt_unit,trtmnt_unit_ha)
+    dplyr::distinct(trtmnt_type,trtmnt_block,trtmnt_unit,trtmnt_unit_area_ha)
 unit_sum_df <-
   1:nrow(unit_sum_df) %>% 
   purrr::map(function(x){
@@ -344,15 +346,14 @@ unit_sum_df <-
               unit_temp
               , by = dplyr::join_by(trtmnt_type,trtmnt_block,trtmnt_unit)
             )
-          , stand_area_ha = unit_temp$trtmnt_unit_ha
+          , stand_area_ha = unit_temp$trtmnt_unit_area_ha
           , calc_imperial_units = T
         )
       )
   }) %>% 
   dplyr::bind_rows() %>% 
   dplyr::mutate(
-    dplyr::across(c(trtmnt_type,trtmnt_block,trtmnt_unit),ordered)
-    , my_fct = forcats::fct_cross(trtmnt_type,trtmnt_block,trtmnt_unit)
+    my_fct = forcats::fct_cross(trtmnt_type,trtmnt_block,trtmnt_unit)
   ) %>% 
   dplyr::arrange(desc(trtmnt_type),trees_per_ha) %>% 
   dplyr::mutate(my_fct = forcats::fct_inorder(my_fct))
@@ -595,43 +596,66 @@ but also basal area in square feet per acre
 plt_metric_violin_fn(unit_sum_df,"basal_area_ft2_per_ac",metric_label = "basal area ($ft^{2} ac^{-1}$)")
 ```
 
-## Tree Distribution by Unit
+## Tree Distribution by Treatment Type
 
-distribution of individual tree metrics by treatment
+distribution of individual tree height and DBH by treatment type (this groups all trees under the same treatment type together)
 
-tree height by treatment type (this groups all trees under the same treatment type together)
-
-```{r}
+```{r, fig.height=8}
 treetops_sf %>% 
   sf::st_drop_geometry() %>% 
   # dplyr::count(trtmnt_type, trtmnt_block)
+  dplyr::select(trtmnt_type, tree_height_m, dbh_cm) %>% 
+  tidyr::pivot_longer(cols = -c(trtmnt_type)) %>% 
+  dplyr::mutate(
+    name = dplyr::case_match(
+      name
+      , "tree_height_m" ~ "tree height (m)"
+      , "dbh_cm" ~ "tree DBH (cm)"
+    )
+  ) %>% 
   ggplot2::ggplot(
     mapping = ggplot2::aes(fill = trtmnt_type)
   ) +
   ggplot2::geom_density(
-    mapping = ggplot2::aes(x = tree_height_m,y=ggplot2::after_stat(scaled))
+    mapping = ggplot2::aes(x = value,y=ggplot2::after_stat(scaled))
     , alpha = 0.8, color = NA
   ) +
   ggplot2::geom_vline(
-    data = treetops_sf %>% 
-      sf::st_drop_geometry() %>% 
-      dplyr::group_by(trtmnt_type) %>% 
-      dplyr::summarise(median_tree_height_m=median(tree_height_m,na.rm=T))
-    , mapping = ggplot2::aes(xintercept = median_tree_height_m)
+    data = 
+      treetops_sf %>%
+        sf::st_drop_geometry() %>%
+        dplyr::group_by(trtmnt_type) %>%
+        dplyr::summarise(dplyr::across(
+          .cols = c(tree_height_m, dbh_cm) 
+          , ~median(.x,na.rm=T)
+        )) %>% 
+        tidyr::pivot_longer(cols = -c(trtmnt_type)) %>% 
+        dplyr::mutate(
+          name = dplyr::case_match(
+            name
+            , "tree_height_m" ~ "tree height (m)"
+            , "dbh_cm" ~ "tree DBH (cm)"
+          )
+        )
+    , mapping = ggplot2::aes(xintercept = value)
     , linetype = "dashed", lwd = 1, color = "gray33"
   ) +
   ggplot2::facet_grid(
     rows = dplyr::vars(trtmnt_type)
+    , cols = dplyr::vars(name)
     # rows = dplyr::vars(trtmnt_block)
     , axes = "all"
     , switch = "y"
+    , scales = "free_x"
   ) +
   ggplot2::scale_fill_brewer(palette = "Dark2") +
   ggplot2::scale_x_continuous(limits=c(0,NA),labels = scales::comma) +
   ggplot2::scale_y_continuous(NULL,breaks=NULL) +
   ggplot2::labs(
-    fill="",x="tree height (m)",y=""
-    , title = "distribution of tree height"
+    fill=""
+    , x=""
+    ,y=""
+    , title = "distribution of individual tree measurements with line at median value"
     , subtitle = "\nby treatment type"
     , caption = "*minimum height to be considered a 'tree': 2 m"
   ) +
@@ -644,39 +668,69 @@ treetops_sf %>%
   )
 ```
 
-tree DBH by treatment type (this groups all trees under the same treatment type together)
+and in imperial units
 
-```{r}
+```{r, fig.height=8}
 treetops_sf %>% 
   sf::st_drop_geometry() %>% 
   # dplyr::count(trtmnt_type, trtmnt_block)
+  dplyr::select(trtmnt_type, tree_height_m, dbh_cm) %>% 
+  calc_imperial_units_fn() %>% 
+  dplyr::select(-c(tree_height_m, dbh_cm)) %>% 
+  tidyr::pivot_longer(cols = -c(trtmnt_type)) %>% 
+  dplyr::mutate(
+    name = dplyr::case_match(
+      name
+      , "tree_height_ft" ~ "tree height (ft)"
+      , "dbh_in" ~ "tree DBH (in)"
+    )
+  ) %>% 
   ggplot2::ggplot(
     mapping = ggplot2::aes(fill = trtmnt_type)
   ) +
   ggplot2::geom_density(
-    mapping = ggplot2::aes(x = dbh_cm,y=ggplot2::after_stat(scaled))
+    mapping = ggplot2::aes(x = value,y=ggplot2::after_stat(scaled))
     , alpha = 0.8, color = NA
   ) +
   ggplot2::geom_vline(
-    data = treetops_sf %>% 
-      sf::st_drop_geometry() %>% 
-      dplyr::group_by(trtmnt_type) %>% 
-      dplyr::summarise(median_dbh_cm=median(dbh_cm,na.rm=T))
-    , mapping = ggplot2::aes(xintercept = median_dbh_cm)
+    data = 
+      treetops_sf %>%
+        sf::st_drop_geometry() %>%
+        dplyr::select(trtmnt_type, tree_height_m, dbh_cm) %>% 
+        calc_imperial_units_fn() %>% 
+        dplyr::select(-c(tree_height_m, dbh_cm)) %>% 
+        dplyr::group_by(trtmnt_type) %>%
+        dplyr::summarise(dplyr::across(
+          .cols = c(tree_height_ft, dbh_in) 
+          , ~median(.x,na.rm=T)
+        )) %>% 
+        tidyr::pivot_longer(cols = -c(trtmnt_type)) %>% 
+        dplyr::mutate(
+          name = dplyr::case_match(
+            name
+            , "tree_height_ft" ~ "tree height (ft)"
+            , "dbh_in" ~ "tree DBH (in)"
+          )
+        )
+    , mapping = ggplot2::aes(xintercept = value)
     , linetype = "dashed", lwd = 1, color = "gray33"
   ) +
   ggplot2::facet_grid(
     rows = dplyr::vars(trtmnt_type)
+    , cols = dplyr::vars(name)
     # rows = dplyr::vars(trtmnt_block)
     , axes = "all"
     , switch = "y"
+    , scales = "free_x"
   ) +
   ggplot2::scale_fill_brewer(palette = "Dark2") +
   ggplot2::scale_x_continuous(limits=c(0,NA),labels = scales::comma) +
   ggplot2::scale_y_continuous(NULL,breaks=NULL) +
   ggplot2::labs(
-    fill="",x="tree DBH (cm)",y=""
-    , title = "distribution of tree DBH"
+    fill=""
+    , x=""
+    ,y=""
+    , title = "distribution of individual tree measurements with line at median value"
     , subtitle = "\nby treatment type"
     , caption = "*minimum height to be considered a 'tree': 2 m"
   ) +
@@ -689,7 +743,467 @@ treetops_sf %>%
   )
 ```
 
+table it
+
 ```{r}
-list.files("c:/Users/georg/Downloads/", pattern = ".*\\.(R|r)$")
+tbl_df_temp <- 
+  treetops_sf %>% 
+  sf::st_drop_geometry() %>%
+  dplyr::select(-c(dbh_m,trtmnt_unit_area_ha, tidyselect::ends_with("_ft2"))) %>% 
+  calc_imperial_units_fn() %>% 
+  dplyr::select(
+    dplyr::any_of(c(tidyselect::starts_with("trtmnt_")))
+    , tidyselect::starts_with("dbh_")
+      | tidyselect::starts_with("tree_height_")
+      | tidyselect::starts_with("tree_cbh_")
+  ) %>%
+  dplyr::group_by(
+    trtmnt_type # , trtmnt_block, trtmnt_unit,trtmnt_unit_area_ha
+  ) %>% 
+  dplyr::summarise(
+    dplyr::across(
+      dplyr::where(is.numeric)
+      , .fns = list(
+        mean = ~mean(.x,na.rm=T)
+        , sd = ~sd(.x,na.rm=T)
+        # , q10 = ~quantile(.x,na.rm=T,probs=0.1)
+        # , q50 = ~quantile(.x,na.rm=T,probs=0.5)
+        # , q90 = ~quantile(.x,na.rm=T,probs=0.9)
+        # , min = ~min(.x,na.rm=T)
+        # , max = ~max(.x,na.rm=T)
+        , range = ~paste0(
+          scales::comma(min(.x,na.rm=T), accuracy = 0.1)
+          ,"-"
+          , scales::comma(max(.x,na.rm=T), accuracy = 0.1)
+        )
+      )
+    )
+    , n = dplyr::n()
+  ) %>% 
+  dplyr::ungroup() 
+# tbl_df_temp %>% dplyr::glimpse()
+```
+
+summary statistics of selected tree metrics by treatment type
+
+*metric* units
+
+```{r}
+# table metric
+tbl_df_temp %>% 
+  dplyr::select(
+    -c(
+      tidyselect::contains("_in_")
+      , tidyselect::contains("_ft_")
+      , n
+    )
+  ) %>% 
+  dplyr::mutate(
+    dplyr::across(
+      dplyr::where(is.numeric)
+      , ~scales::comma(.x,accuracy=0.1)
+    )
+  ) %>% 
+  # ncol()
+  kableExtra::kbl(
+    caption = paste0(
+      "Summary statistics of individual tree measurements"
+      ,"<br>"
+      , "by treatment type"
+    )
+    , col.names = c(
+      " "
+      , rep(c("Mean","Std Dev","Range"), times = 3)
+    )
+    , escape = F
+  ) %>% 
+  kableExtra::kable_styling(font_size = 11.5) %>% 
+  kableExtra::add_header_above(
+    c(
+      " "=1
+      , "DBH (cm)" = 3
+      , "Height (m)" = 3
+      , "CBH (m)" = 3
+    )
+    , escape = F
+  ) %>% 
+  kableExtra::column_spec(seq(1,10,by=3), border_right = TRUE, include_thead = TRUE) %>% 
+  kableExtra::column_spec(
+    column = 1:10
+    , extra_css = "font-size: 11px;"
+    , include_thead = T
+  ) %>% 
+  # kableExtra::scroll_box(width = "740px")
+  kableExtra::footnote(
+    general = "*minimum height to be considered a 'tree': 2 m"
+    # , number = c("Footnote 1; ", "Footnote 2; ")
+    # , alphabet = c("Footnote A; ", "Footnote B; ")
+    # , symbol = c("Footnote Symbol 1; ", "Footnote Symbol 2")
+  )
+```
+
+*imperial* units
+
+```{r}
+# table metric
+tbl_df_temp %>% 
+  dplyr::select(
+    -c(
+      tidyselect::contains("_cm_")
+      , tidyselect::contains("_m_")
+      , n
+    )
+  ) %>% 
+  dplyr::mutate(
+    dplyr::across(
+      dplyr::where(is.numeric)
+      , ~scales::comma(.x,accuracy=0.1)
+    )
+  ) %>% 
+  # ncol()
+  kableExtra::kbl(
+    caption = paste0(
+      "Summary statistics of individual tree measurements"
+      ,"<br>"
+      , "by treatment type"
+    )
+    , col.names = c(
+      " "
+      , rep(c("Mean","Std Dev","Range"), times = 3)
+    )
+    , escape = F
+  ) %>% 
+  kableExtra::kable_styling(font_size = 11.5) %>% 
+  kableExtra::add_header_above(
+    c(
+      " "=1
+      , "DBH (in)" = 3
+      , "Height (ft)" = 3
+      , "CBH (ft)" = 3
+    )
+    , escape = F
+  ) %>% 
+  kableExtra::column_spec(seq(1,10,by=3), border_right = TRUE, include_thead = TRUE) %>% 
+  kableExtra::column_spec(
+    column = 1:10
+    , extra_css = "font-size: 11px;"
+    , include_thead = T
+  ) %>% 
+  # kableExtra::scroll_box(width = "740px")
+  kableExtra::footnote(
+    general = "*minimum height to be considered a 'tree': 2 m"
+    # , number = c("Footnote 1; ", "Footnote 2; ")
+    # , alphabet = c("Footnote A; ", "Footnote B; ")
+    # , symbol = c("Footnote Symbol 1; ", "Footnote Symbol 2")
+  )
+```
+
+another common thing to look at are binned height/DBH distributions
+
+```{r, include = F, eval = F}
+# what does this look like from WTT?
+unit_sum_df %>% 
+  dplyr::slice(1) %>% 
+  dplyr::select(tidyselect::starts_with("trtmnt_"), stand_area_ac, stand_area_ha) %>% 
+  dplyr::inner_join(
+    treetops_sf %>% sf::st_drop_geometry()  
+    , by = dplyr::join_by(trtmnt_type, trtmnt_block, trtmnt_unit)
+  ) %>% 
+  # dplyr::glimpse()
+ggplot2::ggplot() +
+  ggplot2::stat_bin(
+    mapping = ggplot2::aes(
+      x = dbh_cm / 2.54
+      , y = ggplot2::after_stat(count / (unit_sum_df %>% dplyr::slice(1) %>% dplyr::pull(stand_area_ac)) )
+    )
+   , binwidth = 2
+   , center = 1
+   , fill = "darkgrey"
+   , color = "black"
+  ) +
+  ggplot2::labs(
+    x = "DBH (inches)"
+    , y = "Trees per Acre"
+  ) +
+  ggplot2::theme_light(base_size = 14)
+
+# make ggplot2::cut_* bins pretty
+make_bins_pretty <- function(bin_factor, suffix = "") {
+  # convert factor to character and remove brackets and parens
+  clean_labels <- bin_factor %>%
+    as.character() %>%
+    stringr::str_replace_all(c("\\[" = "", "\\(" = "", "\\]" = "", "\\)" = "")) %>%
+    stringr::str_replace(",", "-")
+  
+  # suffix
+  if(stringr::str_squish(suffix) != "" && inherits(suffix,"character")){
+    clean_labels <- stringr::str_c(clean_labels, " ", suffix) %>% stringr::str_squish()
+  }
+  
+  # reorder based on the original factor levels 
+  forcats::fct_reorder(factor(clean_labels), as.numeric(bin_factor))
+}
+
+treetops_sf %>% 
+  dplyr::slice_sample(n=2222) %>% 
+  sf::st_drop_geometry() %>% 
+  dplyr::select(-c(tidyselect::ends_with("_ft2"))) %>% 
+  calc_imperial_units_fn() %>% 
+  # metric cuts/bins
+  dplyr::mutate(
+    dbh_in_bin = ggplot2::cut_width(dbh_in, width = 2, boundary = 0) %>% 
+      make_bins_pretty(suffix = "in") # pretty that
+    # , tree_height_ft_bin = ggplot2::cut_width(tree_height_ft, width = 2, boundary = 0) %>% 
+    #   make_bins_pretty(" ft") # pretty that
+  ) %>% 
+  # dplyr::group_by(dplyr::across(
+  #   c(
+  #     tidyselect::starts_with("trtmnt_") # & !tidyselect::contains("_area_"))
+  #     , dbh_in_bin
+  #   )
+  # )) %>% 
+  # dplyr::summarize(
+  #   n=dplyr::n()
+  # )
+  dplyr::count(dplyr::across(
+    c(
+      tidyselect::starts_with("trtmnt_")
+      , dbh_in_bin
+    )
+  )) %>%
+  dplyr::group_by(dplyr::across(
+    c(
+      tidyselect::starts_with("trtmnt_")
+    )
+  )) %>%
+  dplyr::mutate(
+    pct = n/sum(n)
+    # , pct_lab = scales::percent(pct,accuracy=0.1)
+    , tpa = n/trtmnt_unit_area_ac
+    , tph = n/trtmnt_unit_area_ha
+    , lab = paste0(scales::comma(tpa,accuracy=0.1), "\n(",scales::percent(pct,accuracy=1) , ")")
+  ) %>% 
+  dplyr::ungroup() %>% 
+  # dplyr::glimpse()
+  # dplyr::arrange(desc(dbh_in_bin))
+  ggplot2::ggplot(
+    mapping = ggplot2::aes(y = tpa, x = dbh_in_bin)
+  ) +
+  ggplot2::geom_col(
+    mapping = ggplot2::aes(fill = trtmnt_type)
+    , width = 0.6
+    , color = NA, alpha = 0.8
+  ) +
+  ggplot2::geom_text(
+    mapping = ggplot2::aes(label = lab)
+    , color = "black", size = 2, vjust = -0.2
+  ) +
+  ggplot2::scale_fill_brewer(palette = "Dark2") +
+  ggplot2::scale_x_discrete(drop = F) + 
+  ggplot2::scale_y_continuous(
+    # breaks = seq(0,1,by=0.2)
+    # , labels = scales::percent
+    expand = ggplot2::expansion(mult = c(0,0.25))
+  ) +
+  ggplot2::facet_grid(
+    cols = dplyr::vars(trtmnt_type)
+    , rows = dplyr::vars(trtmnt_block)
+    # , ncol = 2
+    # , axes = "all"
+    , switch = "y"
+  ) +
+  ggplot2::labs(
+    x = "DBH", y = "block", fill = ""
+  ) +
+  ggplot2::theme_light() +
+  ggplot2::theme(
+    legend.position = "none"
+    , strip.text = ggplot2::element_text(size = 11, color = "black", face = "bold")
+    , axis.text.x = ggplot2::element_text(size = 9, angle = 45, hjust = 1, vjust = 1)
+    # , axis.text.x = ggplot2::element_text(size = 12)
+    , axis.text.y = ggplot2::element_blank()
+    , axis.ticks.y = ggplot2::element_blank()
+  )
+ggplot2::ggsave("../data/explt.jpg", height = 11, width = 10.5, dpi = "print")
+```
+
+we'll start with DBH bins
+
+```{r}
+# make ggplot2::cut_* bins pretty
+make_bins_pretty <- function(bin_factor, suffix = "") {
+  # convert factor to character and remove brackets and parens
+  clean_labels <- bin_factor %>%
+    as.character() %>%
+    stringr::str_replace_all(c("\\[" = "", "\\(" = "", "\\]" = "", "\\)" = "")) %>%
+    stringr::str_replace(",", "-")
+  
+  # suffix
+  if(stringr::str_squish(suffix) != "" && inherits(suffix,"character")){
+    clean_labels <- stringr::str_c(clean_labels, " ", suffix) %>% stringr::str_squish()
+  }
+  
+  # reorder based on the original factor levels 
+  forcats::fct_reorder(factor(clean_labels), as.numeric(bin_factor))
+}
+# plot 
+treetops_sf %>% 
+  sf::st_drop_geometry() %>% 
+  dplyr::select(trtmnt_type,dbh_cm) %>% 
+  calc_imperial_units_fn() %>% # get dbh inches
+  # metric cuts/bins
+  dplyr::mutate(
+    dbh_in_bin = ggplot2::cut_width(dbh_in, width = 2, boundary = 0) %>% 
+      make_bins_pretty(suffix = "in") # pretty that
+  ) %>% 
+  dplyr::count(trtmnt_type, dbh_in_bin) %>% 
+  dplyr::ungroup() %>% 
+  # area by type
+  dplyr::inner_join(
+    unit_sum_df %>% 
+      dplyr::group_by(trtmnt_type) %>% 
+      dplyr::summarise(trtmnt_unit_area_ha=sum(trtmnt_unit_area_ha,na.rm=T))
+    , by = "trtmnt_type"
+  ) %>% 
+  calc_imperial_units_fn() %>% # get acres
+  dplyr::group_by(trtmnt_type) %>% 
+  dplyr::mutate(
+    pct = n/sum(n)
+    # , pct_lab = scales::percent(pct,accuracy=0.1)
+    , tpa = n/trtmnt_unit_area_ac
+    , tph = n/trtmnt_unit_area_ha
+    , lab = paste0(scales::comma(tpa,accuracy=1), "\n",scales::percent(pct,accuracy=1) )
+  ) %>% 
+  dplyr::ungroup() %>% 
+  # dplyr::glimpse()
+  ggplot2::ggplot(
+    mapping = ggplot2::aes(y = tpa, x = dbh_in_bin)
+  ) +
+  ggplot2::geom_col(
+    mapping = ggplot2::aes(fill = trtmnt_type)
+    , width = 0.6
+    , color = NA, alpha = 0.8
+  ) +
+  ggplot2::geom_text(
+    mapping = ggplot2::aes(label = lab)
+    , color = "black", size = 2.5, vjust = -0.2
+  ) +
+  ggplot2::scale_fill_brewer(palette = "Dark2") +
+  ggplot2::scale_x_discrete(drop = F) + 
+  ggplot2::scale_y_continuous(
+    # breaks = seq(0,1,by=0.2)
+    labels = scales::comma
+    , expand = ggplot2::expansion(mult = c(0,0.1))
+  ) +
+  ggplot2::facet_grid(
+    cols = dplyr::vars(trtmnt_type)
+    # , rows = dplyr::vars(trtmnt_block)
+    # , ncol = 2
+    , axes = "all"
+    # , switch = "y"
+  ) +
+  ggplot2::labs(
+    x = "DBH", y = "TPA", fill = ""
+    , subtitle = "Trees per acre by DBH bin"
+  ) +
+  ggplot2::theme_light() +
+  ggplot2::theme(
+    legend.position = "none"
+    , strip.text = ggplot2::element_text(size = 11, color = "black", face = "bold")
+    , axis.text.x = ggplot2::element_text(size = 9, angle = 45, hjust = 1, vjust = 1)
+    # , axis.text.x = ggplot2::element_text(size = 12)
+    # , axis.text.y = ggplot2::element_blank()
+    # , axis.ticks.y = ggplot2::element_blank()
+  )
+# ggplot2::ggsave("../data/explt.jpg", height = 7.5, width = 10.5, dpi = "print")
+```
+
+and height bins
+
+```{r}
+# plot 
+treetops_sf %>% 
+  sf::st_drop_geometry() %>% 
+  dplyr::select(trtmnt_type,tree_height_m) %>% 
+  calc_imperial_units_fn() %>% # get ft
+  # metric cuts/bins
+  dplyr::mutate(
+    tree_height_ft_bin = ggplot2::cut_width(tree_height_ft, width = 3, boundary = 0) %>% 
+      make_bins_pretty(suffix = "ft") # pretty that
+  ) %>% 
+  dplyr::count(trtmnt_type, tree_height_ft_bin) %>% 
+  dplyr::ungroup() %>% 
+  # area by type
+  dplyr::inner_join(
+    unit_sum_df %>% 
+      dplyr::group_by(trtmnt_type) %>% 
+      dplyr::summarise(trtmnt_unit_area_ha=sum(trtmnt_unit_area_ha,na.rm=T))
+    , by = "trtmnt_type"
+  ) %>% 
+  calc_imperial_units_fn() %>% # get acres
+  dplyr::group_by(trtmnt_type) %>% 
+  dplyr::mutate(
+    pct = n/sum(n)
+    # , pct_lab = scales::percent(pct,accuracy=0.1)
+    , tpa = n/trtmnt_unit_area_ac
+    , tph = n/trtmnt_unit_area_ha
+    , lab = ifelse(
+      pct>0.02
+      , paste0(scales::comma(tpa,accuracy=1), "\n",scales::percent(pct,accuracy=1) )
+      , ""
+    )
+  ) %>% 
+  dplyr::ungroup() %>% 
+  
+  ###### this makes sure the long tail isn't plotted :/
+  dplyr::group_by(trtmnt_type) %>% 
+  dplyr::arrange(trtmnt_type,tree_height_ft_bin) %>% 
+  dplyr::mutate(cum = cumsum(pct)) %>% 
+  dplyr::group_by(tree_height_ft_bin) %>% 
+  dplyr::filter(min(cum)<0.998) %>% 
+  dplyr::ungroup() %>% 
+  ###### this makes sure the long tail isn't plotted :/
+  
+  # dplyr::glimpse()
+  ggplot2::ggplot(
+    mapping = ggplot2::aes(y = tpa, x = tree_height_ft_bin)
+  ) +
+  ggplot2::geom_col(
+    mapping = ggplot2::aes(fill = trtmnt_type)
+    , width = 0.6
+    , color = NA, alpha = 0.8
+  ) +
+  ggplot2::geom_text(
+    mapping = ggplot2::aes(label = lab)
+    , color = "black", size = 2.5, vjust = -0.2
+  ) +
+  ggplot2::scale_fill_brewer(palette = "Dark2") +
+  # ggplot2::scale_x_discrete(drop = F) + 
+  ggplot2::scale_y_continuous(
+    # breaks = seq(0,1,by=0.2)
+    labels = scales::comma
+    , expand = ggplot2::expansion(mult = c(0,0.1))
+  ) +
+  ggplot2::facet_grid(
+    cols = dplyr::vars(trtmnt_type)
+    # , rows = dplyr::vars(trtmnt_block)
+    # , ncol = 2
+    , axes = "all"
+    # , switch = "y"
+  ) +
+  ggplot2::labs(
+    x = "tree height", y = "TPA", fill = ""
+    , subtitle = "Trees per acre by tree height bin"
+  ) +
+  ggplot2::theme_light() +
+  ggplot2::theme(
+    legend.position = "none"
+    , strip.text = ggplot2::element_text(size = 11, color = "black", face = "bold")
+    , axis.text.x = ggplot2::element_text(size = 8, angle = 45, hjust = 1, vjust = 1)
+    # , axis.text.x = ggplot2::element_text(size = 12)
+    # , axis.text.y = ggplot2::element_blank()
+    # , axis.ticks.y = ggplot2::element_blank()
+  )
+# ggplot2::ggsave("../data/explt.jpg", height = 7.5, width = 10.5, dpi = "print")
 ```
 
