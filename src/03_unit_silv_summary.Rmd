@@ -520,7 +520,8 @@ plt_metric_dist_fn <- function(df, metric_name, metric_label = NA) {
     legend.position = "none"
     , strip.text = ggplot2::element_text(size = 10, color = "black", face = "bold")
     , axis.text.x = ggplot2::element_text(size = 9)
-    , plot.subtitle = ggplot2::element_text(margin = margin(t = -10, unit = "pt"))
+    , plot.subtitle = ggplot2::element_text(margin = ggplot2::margin(t = -20, unit = "pt"))
+    
   )
 }
 plt_metric_violin_fn <- function(df, metric_name, metric_label = NA) {
@@ -556,7 +557,7 @@ plt_metric_violin_fn <- function(df, metric_name, metric_label = NA) {
     legend.position = "none"
     , strip.text = ggplot2::element_text(size = 10, color = "black", face = "bold")
     , axis.text.x = ggplot2::element_text(size = 9)
-    , plot.subtitle = ggplot2::element_text(margin = margin(t = -10, unit = "pt"))
+    , plot.subtitle = ggplot2::element_text(margin = ggplot2::margin(t = -20, unit = "pt"))
   )
 }
 # plot it
@@ -593,3 +594,102 @@ but also basal area in square feet per acre
 ```{r}
 plt_metric_violin_fn(unit_sum_df,"basal_area_ft2_per_ac",metric_label = "basal area ($ft^{2} ac^{-1}$)")
 ```
+
+## Tree Distribution by Unit
+
+distribution of individual tree metrics by treatment
+
+tree height by treatment type (this groups all trees under the same treatment type together)
+
+```{r}
+treetops_sf %>% 
+  sf::st_drop_geometry() %>% 
+  # dplyr::count(trtmnt_type, trtmnt_block)
+  ggplot2::ggplot(
+    mapping = ggplot2::aes(fill = trtmnt_type)
+  ) +
+  ggplot2::geom_density(
+    mapping = ggplot2::aes(x = tree_height_m,y=ggplot2::after_stat(scaled))
+    , alpha = 0.8, color = NA
+  ) +
+  ggplot2::geom_vline(
+    data = treetops_sf %>% 
+      sf::st_drop_geometry() %>% 
+      dplyr::group_by(trtmnt_type) %>% 
+      dplyr::summarise(median_tree_height_m=median(tree_height_m,na.rm=T))
+    , mapping = ggplot2::aes(xintercept = median_tree_height_m)
+    , linetype = "dashed", lwd = 1, color = "gray33"
+  ) +
+  ggplot2::facet_grid(
+    rows = dplyr::vars(trtmnt_type)
+    # rows = dplyr::vars(trtmnt_block)
+    , axes = "all"
+    , switch = "y"
+  ) +
+  ggplot2::scale_fill_brewer(palette = "Dark2") +
+  ggplot2::scale_x_continuous(limits=c(0,NA),labels = scales::comma) +
+  ggplot2::scale_y_continuous(NULL,breaks=NULL) +
+  ggplot2::labs(
+    fill="",x="tree height (m)",y=""
+    , title = "distribution of tree height"
+    , subtitle = "\nby treatment type"
+    , caption = "*minimum height to be considered a 'tree': 2 m"
+  ) +
+  ggplot2::theme_light() +
+  ggplot2::theme(
+    legend.position = "none"
+    , strip.text = ggplot2::element_text(size = 10, color = "black", face = "bold")
+    , axis.text.x = ggplot2::element_text(size = 9)
+    , plot.subtitle = ggplot2::element_text(margin = ggplot2::margin(t = -20, unit = "pt"))
+  )
+```
+
+tree DBH by treatment type (this groups all trees under the same treatment type together)
+
+```{r}
+treetops_sf %>% 
+  sf::st_drop_geometry() %>% 
+  # dplyr::count(trtmnt_type, trtmnt_block)
+  ggplot2::ggplot(
+    mapping = ggplot2::aes(fill = trtmnt_type)
+  ) +
+  ggplot2::geom_density(
+    mapping = ggplot2::aes(x = dbh_cm,y=ggplot2::after_stat(scaled))
+    , alpha = 0.8, color = NA
+  ) +
+  ggplot2::geom_vline(
+    data = treetops_sf %>% 
+      sf::st_drop_geometry() %>% 
+      dplyr::group_by(trtmnt_type) %>% 
+      dplyr::summarise(median_dbh_cm=median(dbh_cm,na.rm=T))
+    , mapping = ggplot2::aes(xintercept = median_dbh_cm)
+    , linetype = "dashed", lwd = 1, color = "gray33"
+  ) +
+  ggplot2::facet_grid(
+    rows = dplyr::vars(trtmnt_type)
+    # rows = dplyr::vars(trtmnt_block)
+    , axes = "all"
+    , switch = "y"
+  ) +
+  ggplot2::scale_fill_brewer(palette = "Dark2") +
+  ggplot2::scale_x_continuous(limits=c(0,NA),labels = scales::comma) +
+  ggplot2::scale_y_continuous(NULL,breaks=NULL) +
+  ggplot2::labs(
+    fill="",x="tree DBH (cm)",y=""
+    , title = "distribution of tree DBH"
+    , subtitle = "\nby treatment type"
+    , caption = "*minimum height to be considered a 'tree': 2 m"
+  ) +
+  ggplot2::theme_light() +
+  ggplot2::theme(
+    legend.position = "none"
+    , strip.text = ggplot2::element_text(size = 10, color = "black", face = "bold")
+    , axis.text.x = ggplot2::element_text(size = 9)
+    , plot.subtitle = ggplot2::element_text(margin = ggplot2::margin(t = -20, unit = "pt"))
+  )
+```
+
+```{r}
+list.files("c:/Users/georg/Downloads/", pattern = ".*\\.(R|r)$")
+```
+

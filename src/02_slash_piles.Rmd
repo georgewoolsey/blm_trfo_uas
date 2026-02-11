@@ -14,7 +14,7 @@ make sure we have the fine-resolution CHM and RGB data ready to go
 
 RGB
 
-```{r}
+```{r,eval=F,purl=FALSE}
 # hey rgb
 rgb_rast <- terra::rast(rgb_rast_fnm) %>% 
   terra::subset(c(1,2,3))
@@ -35,7 +35,9 @@ load the treatment unit boundaries
 
 ```{r}
 stand_boundary <- 
-  sf::st_read("d:/BLM_CO_SWDF_DawsonFuelsTreatment/units/units.shp", quiet=T) %>% 
+  "c:/data/usfs/slash_pile_detecting/data/Dawson_Data/units/units.shp" %>% 
+  # "d:/BLM_CO_SWDF_DawsonFuelsTreatment/units/units.shp" %>% 
+  sf::st_read(quiet=T) %>% 
   dplyr::rename_with(tolower) %>% 
   dplyr::rename_with(stringr::str_squish) %>% 
   dplyr::rename_with(make.names) %>% 
@@ -294,7 +296,7 @@ piles_workflow_ans %>%
 
 let's look at some candidate piles based on the `inrange_th_votes` variable which tells us how many of the 6 spectral index thresholds were met to distinguish a dead wood from living biomass. Where, a value of 5-6 represents high likelihood that the object is *not* living vegetation (e.g. piled slash) and 1-2 indicates a high likelihood that the object is living vegetation (e.g. small tree/shrub)
 
-```{r,eval=T,purl=FALSE}
+```{r,eval=F,purl=FALSE}
 # sample from inrange_th_votes
 inunit_piles_temp <-
   piles_workflow_ans %>% 
@@ -367,7 +369,7 @@ plts_temp <- 1:nrow(inunit_piles_temp) %>%
 
 plot with `patchwork`
 
-```{r,eval=T,purl=FALSE, fig.height = 11.5}
+```{r,eval=F,purl=FALSE, fig.height = 11.5}
 wplts_temp <- patchwork::wrap_plots(plts_temp, ncol = 5, nrow = 6) +
   patchwork::plot_annotation(
     tag_levels = list(
@@ -394,7 +396,7 @@ gc()
 
 first we'll plot the slash piles in a treatment unit overlaid on the CHM
 
-```{r,eval=T,purl=FALSE, results=F}
+```{r,eval=F,purl=FALSE, results=F}
 unt_temp <- piles_workflow_ans %>% 
   sf::st_drop_geometry() %>% 
   dplyr::filter(is_in_trtmnt_unit) %>% 
@@ -481,7 +483,7 @@ plts_temp <-
 
 **heterogenous** units 
 
-```{r,eval=T,purl=FALSE, fig.height = 11}
+```{r,eval=F,purl=FALSE, fig.height = 9.8}
 wplts_temp <- patchwork::wrap_plots(
   plts_temp[1:12]
   , ncol = 4
@@ -497,7 +499,7 @@ wplts_temp
 
 **uniform - high** units 
 
-```{r,eval=T,purl=FALSE, fig.height = 11}
+```{r,eval=F,purl=FALSE, fig.height = 9}
 wplts_temp <- patchwork::wrap_plots(
   plts_temp[13:24]
   , ncol = 4
@@ -513,7 +515,7 @@ wplts_temp
 
 **uniform - low** units 
 
-```{r,eval=T,purl=FALSE, fig.height = 11}
+```{r,eval=F,purl=FALSE, fig.height = 10.7}
 wplts_temp <- patchwork::wrap_plots(
   plts_temp[25:36]
   , ncol = 3
