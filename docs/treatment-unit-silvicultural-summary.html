@@ -212,6 +212,7 @@ code span.wa { color: #60a0b0; font-weight: bold; font-style: italic; } /* Warni
 <li class="chapter" data-level="4.3.2" data-path="treatment-unit-silvicultural-summary.html"><a href="treatment-unit-silvicultural-summary.html#visual"><i class="fa fa-check"></i><b>4.3.2</b> Visual</a></li>
 </ul></li>
 <li class="chapter" data-level="4.4" data-path="treatment-unit-silvicultural-summary.html"><a href="treatment-unit-silvicultural-summary.html#tree-distribution-by-treatment-type"><i class="fa fa-check"></i><b>4.4</b> Tree Distribution by Treatment Type</a></li>
+<li class="chapter" data-level="4.5" data-path="treatment-unit-silvicultural-summary.html"><a href="treatment-unit-silvicultural-summary.html#visual-crowns-by-unit"><i class="fa fa-check"></i><b>4.5</b> Visual Crowns by Unit</a></li>
 </ul></li>
 </ul>
 
@@ -6274,6 +6275,137 @@ uniform- low
 <span id="cb176-83"><a href="treatment-unit-silvicultural-summary.html#cb176-83" tabindex="-1"></a>  )</span></code></pre></div>
 <p><img src="blm_trfo_uas_files/figure-html/unnamed-chunk-148-1.png" alt="" width="1008" /></p>
 <div class="sourceCode" id="cb177"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb177-1"><a href="treatment-unit-silvicultural-summary.html#cb177-1" tabindex="-1"></a><span class="co"># ggplot2::ggsave(&quot;../data/explt.jpg&quot;, height = 7.5, width = 10.5, dpi = &quot;print&quot;)</span></span></code></pre></div>
+</div>
+<div id="visual-crowns-by-unit" class="section level2 hasAnchor" number="4.5">
+<h2><span class="header-section-number">4.5</span> Visual Crowns by Unit<a href="treatment-unit-silvicultural-summary.html#visual-crowns-by-unit" class="anchor-section" aria-label="Anchor link to header"></a></h2>
+<p>read in the crowns and keep only those we filtered for based on the tree top points (start of this section)</p>
+<div class="sourceCode" id="cb178"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb178-1"><a href="treatment-unit-silvicultural-summary.html#cb178-1" tabindex="-1"></a>crowns_sf <span class="ot">&lt;-</span> </span>
+<span id="cb178-2"><a href="treatment-unit-silvicultural-summary.html#cb178-2" tabindex="-1"></a>  cloud2trees<span class="sc">:::</span><span class="fu">search_dir_final_detected</span>(<span class="at">dir =</span> c2t_process_dir)[[<span class="st">&quot;crowns_flist&quot;</span>]] <span class="sc">%&gt;%</span> </span>
+<span id="cb178-3"><a href="treatment-unit-silvicultural-summary.html#cb178-3" tabindex="-1"></a>  purrr<span class="sc">::</span><span class="fu">map</span>(<span class="cf">function</span>(x){</span>
+<span id="cb178-4"><a href="treatment-unit-silvicultural-summary.html#cb178-4" tabindex="-1"></a>    sf<span class="sc">::</span><span class="fu">st_read</span>(</span>
+<span id="cb178-5"><a href="treatment-unit-silvicultural-summary.html#cb178-5" tabindex="-1"></a>      <span class="at">dsn =</span> x</span>
+<span id="cb178-6"><a href="treatment-unit-silvicultural-summary.html#cb178-6" tabindex="-1"></a>      , <span class="at">quiet =</span> T</span>
+<span id="cb178-7"><a href="treatment-unit-silvicultural-summary.html#cb178-7" tabindex="-1"></a>    ) <span class="sc">%&gt;%</span></span>
+<span id="cb178-8"><a href="treatment-unit-silvicultural-summary.html#cb178-8" tabindex="-1"></a>    dplyr<span class="sc">::</span><span class="fu">select</span>(treeID) <span class="sc">%&gt;%</span> </span>
+<span id="cb178-9"><a href="treatment-unit-silvicultural-summary.html#cb178-9" tabindex="-1"></a>    dplyr<span class="sc">::</span><span class="fu">inner_join</span>(</span>
+<span id="cb178-10"><a href="treatment-unit-silvicultural-summary.html#cb178-10" tabindex="-1"></a>      treetops_sf <span class="sc">%&gt;%</span> sf<span class="sc">::</span><span class="fu">st_drop_geometry</span>()</span>
+<span id="cb178-11"><a href="treatment-unit-silvicultural-summary.html#cb178-11" tabindex="-1"></a>      , <span class="at">by =</span> <span class="st">&quot;treeID&quot;</span></span>
+<span id="cb178-12"><a href="treatment-unit-silvicultural-summary.html#cb178-12" tabindex="-1"></a>    )</span>
+<span id="cb178-13"><a href="treatment-unit-silvicultural-summary.html#cb178-13" tabindex="-1"></a>  }) <span class="sc">%&gt;%</span></span>
+<span id="cb178-14"><a href="treatment-unit-silvicultural-summary.html#cb178-14" tabindex="-1"></a>  dplyr<span class="sc">::</span><span class="fu">bind_rows</span>() <span class="sc">%&gt;%</span> </span>
+<span id="cb178-15"><a href="treatment-unit-silvicultural-summary.html#cb178-15" tabindex="-1"></a>  cloud2trees<span class="sc">::</span><span class="fu">simplify_multipolygon_crowns</span>()</span>
+<span id="cb178-16"><a href="treatment-unit-silvicultural-summary.html#cb178-16" tabindex="-1"></a><span class="co"># crowns_sf %&gt;% dplyr::glimpse()</span></span></code></pre></div>
+<p>function to plot using <code>terra</code> which is fast</p>
+<div class="sourceCode" id="cb179"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb179-1"><a href="treatment-unit-silvicultural-summary.html#cb179-1" tabindex="-1"></a><span class="co"># function to plot ortho</span></span>
+<span id="cb179-2"><a href="treatment-unit-silvicultural-summary.html#cb179-2" tabindex="-1"></a>terra_plt_ortho <span class="ot">&lt;-</span> <span class="cf">function</span>(</span>
+<span id="cb179-3"><a href="treatment-unit-silvicultural-summary.html#cb179-3" tabindex="-1"></a>  ortho</span>
+<span id="cb179-4"><a href="treatment-unit-silvicultural-summary.html#cb179-4" tabindex="-1"></a>  , crowns</span>
+<span id="cb179-5"><a href="treatment-unit-silvicultural-summary.html#cb179-5" tabindex="-1"></a>  , boundary</span>
+<span id="cb179-6"><a href="treatment-unit-silvicultural-summary.html#cb179-6" tabindex="-1"></a>  , title</span>
+<span id="cb179-7"><a href="treatment-unit-silvicultural-summary.html#cb179-7" tabindex="-1"></a>) {</span>
+<span id="cb179-8"><a href="treatment-unit-silvicultural-summary.html#cb179-8" tabindex="-1"></a>  <span class="cf">if</span>(terra<span class="sc">::</span><span class="fu">nlyr</span>(ortho)<span class="sc">==</span><span class="dv">3</span>){</span>
+<span id="cb179-9"><a href="treatment-unit-silvicultural-summary.html#cb179-9" tabindex="-1"></a>    terra<span class="sc">::</span><span class="fu">plotRGB</span>(ortho, <span class="at">stretch =</span> <span class="st">&quot;lin&quot;</span>, <span class="at">mar =</span> <span class="fu">c</span>(<span class="fl">0.2</span>,<span class="fl">0.2</span>,<span class="dv">2</span>,<span class="fl">0.2</span>)) </span>
+<span id="cb179-10"><a href="treatment-unit-silvicultural-summary.html#cb179-10" tabindex="-1"></a>  }<span class="cf">else</span>{</span>
+<span id="cb179-11"><a href="treatment-unit-silvicultural-summary.html#cb179-11" tabindex="-1"></a>    terra<span class="sc">::</span><span class="fu">plot</span>(ortho, <span class="at">col =</span> viridis<span class="sc">::</span><span class="fu">plasma</span>(<span class="at">n=</span><span class="dv">100</span>), <span class="at">mar =</span> <span class="fu">c</span>(<span class="fl">0.2</span>,<span class="fl">0.2</span>,<span class="dv">2</span>,<span class="fl">3.5</span>), <span class="at">axes =</span> F) </span>
+<span id="cb179-12"><a href="treatment-unit-silvicultural-summary.html#cb179-12" tabindex="-1"></a>  }</span>
+<span id="cb179-13"><a href="treatment-unit-silvicultural-summary.html#cb179-13" tabindex="-1"></a>  terra<span class="sc">::</span><span class="fu">plot</span>(</span>
+<span id="cb179-14"><a href="treatment-unit-silvicultural-summary.html#cb179-14" tabindex="-1"></a>    boundary <span class="sc">%&gt;%</span> </span>
+<span id="cb179-15"><a href="treatment-unit-silvicultural-summary.html#cb179-15" tabindex="-1"></a>      sf<span class="sc">::</span><span class="fu">st_transform</span>(terra<span class="sc">::</span><span class="fu">crs</span>(ortho)) <span class="sc">%&gt;%</span> </span>
+<span id="cb179-16"><a href="treatment-unit-silvicultural-summary.html#cb179-16" tabindex="-1"></a>      terra<span class="sc">::</span><span class="fu">vect</span>()</span>
+<span id="cb179-17"><a href="treatment-unit-silvicultural-summary.html#cb179-17" tabindex="-1"></a>    , <span class="at">add =</span> T, <span class="at">border =</span> <span class="st">&quot;black&quot;</span>, <span class="at">col =</span> <span class="cn">NA</span></span>
+<span id="cb179-18"><a href="treatment-unit-silvicultural-summary.html#cb179-18" tabindex="-1"></a>    , <span class="at">main =</span> title</span>
+<span id="cb179-19"><a href="treatment-unit-silvicultural-summary.html#cb179-19" tabindex="-1"></a>  )</span>
+<span id="cb179-20"><a href="treatment-unit-silvicultural-summary.html#cb179-20" tabindex="-1"></a>  terra<span class="sc">::</span><span class="fu">plot</span>(</span>
+<span id="cb179-21"><a href="treatment-unit-silvicultural-summary.html#cb179-21" tabindex="-1"></a>    crowns <span class="sc">%&gt;%</span> </span>
+<span id="cb179-22"><a href="treatment-unit-silvicultural-summary.html#cb179-22" tabindex="-1"></a>      sf<span class="sc">::</span><span class="fu">st_transform</span>(terra<span class="sc">::</span><span class="fu">crs</span>(ortho)) <span class="sc">%&gt;%</span> </span>
+<span id="cb179-23"><a href="treatment-unit-silvicultural-summary.html#cb179-23" tabindex="-1"></a>      terra<span class="sc">::</span><span class="fu">vect</span>()</span>
+<span id="cb179-24"><a href="treatment-unit-silvicultural-summary.html#cb179-24" tabindex="-1"></a>    , <span class="at">add =</span> T, <span class="at">border =</span> <span class="st">&quot;cyan&quot;</span>, <span class="at">col =</span> <span class="cn">NA</span>, <span class="at">lwd =</span> <span class="fl">0.5</span></span>
+<span id="cb179-25"><a href="treatment-unit-silvicultural-summary.html#cb179-25" tabindex="-1"></a>  )</span>
+<span id="cb179-26"><a href="treatment-unit-silvicultural-summary.html#cb179-26" tabindex="-1"></a>}</span></code></pre></div>
+<p>plot example unit</p>
+<div class="sourceCode" id="cb180"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb180-1"><a href="treatment-unit-silvicultural-summary.html#cb180-1" tabindex="-1"></a><span class="co"># mapping</span></span>
+<span id="cb180-2"><a href="treatment-unit-silvicultural-summary.html#cb180-2" tabindex="-1"></a>unt_temp <span class="ot">&lt;-</span> treetops_sf <span class="sc">%&gt;%</span> </span>
+<span id="cb180-3"><a href="treatment-unit-silvicultural-summary.html#cb180-3" tabindex="-1"></a>  sf<span class="sc">::</span><span class="fu">st_drop_geometry</span>() <span class="sc">%&gt;%</span> </span>
+<span id="cb180-4"><a href="treatment-unit-silvicultural-summary.html#cb180-4" tabindex="-1"></a>  dplyr<span class="sc">::</span><span class="fu">distinct</span>(trtmnt_type,trtmnt_block,trtmnt_unit) <span class="sc">%&gt;%</span> </span>
+<span id="cb180-5"><a href="treatment-unit-silvicultural-summary.html#cb180-5" tabindex="-1"></a>  dplyr<span class="sc">::</span><span class="fu">arrange</span>(trtmnt_type,trtmnt_block,trtmnt_unit)</span>
+<span id="cb180-6"><a href="treatment-unit-silvicultural-summary.html#cb180-6" tabindex="-1"></a><span class="co"># map over it </span></span>
+<span id="cb180-7"><a href="treatment-unit-silvicultural-summary.html#cb180-7" tabindex="-1"></a>plts_temp <span class="ot">&lt;-</span> </span>
+<span id="cb180-8"><a href="treatment-unit-silvicultural-summary.html#cb180-8" tabindex="-1"></a>  <span class="dv">1</span><span class="sc">:</span><span class="fu">nrow</span>(unt_temp) <span class="sc">%&gt;%</span> </span>
+<span id="cb180-9"><a href="treatment-unit-silvicultural-summary.html#cb180-9" tabindex="-1"></a>  .[<span class="dv">1</span>] <span class="sc">%&gt;%</span> </span>
+<span id="cb180-10"><a href="treatment-unit-silvicultural-summary.html#cb180-10" tabindex="-1"></a>  purrr<span class="sc">::</span><span class="fu">map</span>(<span class="cf">function</span>(x){</span>
+<span id="cb180-11"><a href="treatment-unit-silvicultural-summary.html#cb180-11" tabindex="-1"></a>    unit_temp <span class="ot">&lt;-</span> stand_boundary <span class="sc">%&gt;%</span> </span>
+<span id="cb180-12"><a href="treatment-unit-silvicultural-summary.html#cb180-12" tabindex="-1"></a>      dplyr<span class="sc">::</span><span class="fu">filter</span>(</span>
+<span id="cb180-13"><a href="treatment-unit-silvicultural-summary.html#cb180-13" tabindex="-1"></a>        unit <span class="sc">==</span> unt_temp<span class="sc">$</span>trtmnt_unit[x]</span>
+<span id="cb180-14"><a href="treatment-unit-silvicultural-summary.html#cb180-14" tabindex="-1"></a>        , block <span class="sc">==</span> unt_temp<span class="sc">$</span>trtmnt_block[x]</span>
+<span id="cb180-15"><a href="treatment-unit-silvicultural-summary.html#cb180-15" tabindex="-1"></a>        , stringr<span class="sc">::</span><span class="fu">str_squish</span>(<span class="fu">tolower</span>(tretmnt)) <span class="sc">==</span> unt_temp<span class="sc">$</span>trtmnt_type[x]</span>
+<span id="cb180-16"><a href="treatment-unit-silvicultural-summary.html#cb180-16" tabindex="-1"></a>      ) <span class="sc">%&gt;%</span> </span>
+<span id="cb180-17"><a href="treatment-unit-silvicultural-summary.html#cb180-17" tabindex="-1"></a>      sf<span class="sc">::</span><span class="fu">st_transform</span>(terra<span class="sc">::</span><span class="fu">crs</span>(rgb_rast))</span>
+<span id="cb180-18"><a href="treatment-unit-silvicultural-summary.html#cb180-18" tabindex="-1"></a>    ortho_temp <span class="ot">&lt;-</span> rgb_rast <span class="sc">%&gt;%</span> </span>
+<span id="cb180-19"><a href="treatment-unit-silvicultural-summary.html#cb180-19" tabindex="-1"></a>      terra<span class="sc">::</span><span class="fu">crop</span>(unit_temp <span class="sc">%&gt;%</span> sf<span class="sc">::</span><span class="fu">st_buffer</span>(<span class="dv">3</span>) <span class="sc">%&gt;%</span> terra<span class="sc">::</span><span class="fu">vect</span>(), <span class="at">mask =</span> T)</span>
+<span id="cb180-20"><a href="treatment-unit-silvicultural-summary.html#cb180-20" tabindex="-1"></a>    crowns_temp <span class="ot">&lt;-</span> crowns_sf <span class="sc">%&gt;%</span> </span>
+<span id="cb180-21"><a href="treatment-unit-silvicultural-summary.html#cb180-21" tabindex="-1"></a>      dplyr<span class="sc">::</span><span class="fu">inner_join</span>(</span>
+<span id="cb180-22"><a href="treatment-unit-silvicultural-summary.html#cb180-22" tabindex="-1"></a>        unt_temp <span class="sc">%&gt;%</span> dplyr<span class="sc">::</span><span class="fu">slice</span>(x)</span>
+<span id="cb180-23"><a href="treatment-unit-silvicultural-summary.html#cb180-23" tabindex="-1"></a>        , <span class="at">by =</span> dplyr<span class="sc">::</span><span class="fu">join_by</span>(trtmnt_type,trtmnt_block,trtmnt_unit)</span>
+<span id="cb180-24"><a href="treatment-unit-silvicultural-summary.html#cb180-24" tabindex="-1"></a>      )</span>
+<span id="cb180-25"><a href="treatment-unit-silvicultural-summary.html#cb180-25" tabindex="-1"></a>    <span class="co"># plt</span></span>
+<span id="cb180-26"><a href="treatment-unit-silvicultural-summary.html#cb180-26" tabindex="-1"></a>    <span class="fu">terra_plt_ortho</span>(</span>
+<span id="cb180-27"><a href="treatment-unit-silvicultural-summary.html#cb180-27" tabindex="-1"></a>      <span class="at">ortho =</span> ortho_temp</span>
+<span id="cb180-28"><a href="treatment-unit-silvicultural-summary.html#cb180-28" tabindex="-1"></a>      , <span class="at">crowns =</span> crowns_temp</span>
+<span id="cb180-29"><a href="treatment-unit-silvicultural-summary.html#cb180-29" tabindex="-1"></a>      , <span class="at">boundary =</span> unit_temp</span>
+<span id="cb180-30"><a href="treatment-unit-silvicultural-summary.html#cb180-30" tabindex="-1"></a>      , <span class="at">title =</span> <span class="fu">paste0</span>(</span>
+<span id="cb180-31"><a href="treatment-unit-silvicultural-summary.html#cb180-31" tabindex="-1"></a>        unt_temp <span class="sc">%&gt;%</span> dplyr<span class="sc">::</span><span class="fu">slice</span>(x) <span class="sc">%&gt;%</span> dplyr<span class="sc">::</span><span class="fu">pull</span>(trtmnt_type)</span>
+<span id="cb180-32"><a href="treatment-unit-silvicultural-summary.html#cb180-32" tabindex="-1"></a>        , <span class="st">&quot;| block &quot;</span></span>
+<span id="cb180-33"><a href="treatment-unit-silvicultural-summary.html#cb180-33" tabindex="-1"></a>        , unt_temp <span class="sc">%&gt;%</span> dplyr<span class="sc">::</span><span class="fu">slice</span>(x) <span class="sc">%&gt;%</span> dplyr<span class="sc">::</span><span class="fu">pull</span>(trtmnt_block)</span>
+<span id="cb180-34"><a href="treatment-unit-silvicultural-summary.html#cb180-34" tabindex="-1"></a>        , <span class="st">&quot; | &quot;</span></span>
+<span id="cb180-35"><a href="treatment-unit-silvicultural-summary.html#cb180-35" tabindex="-1"></a>        , unt_temp <span class="sc">%&gt;%</span> dplyr<span class="sc">::</span><span class="fu">slice</span>(x) <span class="sc">%&gt;%</span> dplyr<span class="sc">::</span><span class="fu">pull</span>(trtmnt_unit)</span>
+<span id="cb180-36"><a href="treatment-unit-silvicultural-summary.html#cb180-36" tabindex="-1"></a>      )</span>
+<span id="cb180-37"><a href="treatment-unit-silvicultural-summary.html#cb180-37" tabindex="-1"></a>    )</span>
+<span id="cb180-38"><a href="treatment-unit-silvicultural-summary.html#cb180-38" tabindex="-1"></a>    </span>
+<span id="cb180-39"><a href="treatment-unit-silvicultural-summary.html#cb180-39" tabindex="-1"></a>  })</span></code></pre></div>
+<p><img src="blm_trfo_uas_files/figure-html/unnamed-chunk-152-1.png" alt="" width="1008" /></p>
+<div class="sourceCode" id="cb181"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb181-1"><a href="treatment-unit-silvicultural-summary.html#cb181-1" tabindex="-1"></a>plts_temp[[<span class="dv">1</span>]]</span></code></pre></div>
+<p>zoom in</p>
+<div class="sourceCode" id="cb182"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb182-1"><a href="treatment-unit-silvicultural-summary.html#cb182-1" tabindex="-1"></a>unit_temp <span class="ot">&lt;-</span> stand_boundary <span class="sc">%&gt;%</span> </span>
+<span id="cb182-2"><a href="treatment-unit-silvicultural-summary.html#cb182-2" tabindex="-1"></a>  dplyr<span class="sc">::</span><span class="fu">slice</span>(<span class="dv">4</span>) <span class="sc">%&gt;%</span> </span>
+<span id="cb182-3"><a href="treatment-unit-silvicultural-summary.html#cb182-3" tabindex="-1"></a>  sf<span class="sc">::</span><span class="fu">st_centroid</span>() <span class="sc">%&gt;%</span> </span>
+<span id="cb182-4"><a href="treatment-unit-silvicultural-summary.html#cb182-4" tabindex="-1"></a>  <span class="co"># sf::st_buffer(50) %&gt;% </span></span>
+<span id="cb182-5"><a href="treatment-unit-silvicultural-summary.html#cb182-5" tabindex="-1"></a>  sf<span class="sc">::</span><span class="fu">st_buffer</span>(<span class="fu">sqrt</span>(<span class="dv">10000</span><span class="sc">/</span><span class="dv">4</span>),<span class="at">endCapStyle =</span> <span class="st">&quot;SQUARE&quot;</span>) <span class="do">## numerator = desired plot size in m2) %&gt;% </span></span>
+<span id="cb182-6"><a href="treatment-unit-silvicultural-summary.html#cb182-6" tabindex="-1"></a><span class="co"># sf::st_area(unit_temp)</span></span>
+<span id="cb182-7"><a href="treatment-unit-silvicultural-summary.html#cb182-7" tabindex="-1"></a><span class="co"># terra::plot(stand_boundary %&gt;% </span></span>
+<span id="cb182-8"><a href="treatment-unit-silvicultural-summary.html#cb182-8" tabindex="-1"></a><span class="co">#   dplyr::slice(1) %&gt;% terra::vect(),col = NA)</span></span>
+<span id="cb182-9"><a href="treatment-unit-silvicultural-summary.html#cb182-9" tabindex="-1"></a><span class="co"># terra::plot(unit_temp %&gt;% terra::vect(), col = NA, border = &quot;red&quot;, add = T)</span></span>
+<span id="cb182-10"><a href="treatment-unit-silvicultural-summary.html#cb182-10" tabindex="-1"></a>rgb_temp <span class="ot">&lt;-</span> rgb_rast <span class="sc">%&gt;%</span> </span>
+<span id="cb182-11"><a href="treatment-unit-silvicultural-summary.html#cb182-11" tabindex="-1"></a>  terra<span class="sc">::</span><span class="fu">crop</span>(unit_temp <span class="sc">%&gt;%</span> sf<span class="sc">::</span><span class="fu">st_buffer</span>(<span class="dv">3</span>) <span class="sc">%&gt;%</span> terra<span class="sc">::</span><span class="fu">vect</span>(), <span class="at">mask =</span> T)</span>
+<span id="cb182-12"><a href="treatment-unit-silvicultural-summary.html#cb182-12" tabindex="-1"></a>crowns_temp <span class="ot">&lt;-</span> crowns_sf <span class="sc">%&gt;%</span> </span>
+<span id="cb182-13"><a href="treatment-unit-silvicultural-summary.html#cb182-13" tabindex="-1"></a>  dplyr<span class="sc">::</span><span class="fu">inner_join</span>(</span>
+<span id="cb182-14"><a href="treatment-unit-silvicultural-summary.html#cb182-14" tabindex="-1"></a>    treetops_sf <span class="sc">%&gt;%</span> </span>
+<span id="cb182-15"><a href="treatment-unit-silvicultural-summary.html#cb182-15" tabindex="-1"></a>      sf<span class="sc">::</span><span class="fu">st_intersection</span>(unit_temp) <span class="sc">%&gt;%</span> </span>
+<span id="cb182-16"><a href="treatment-unit-silvicultural-summary.html#cb182-16" tabindex="-1"></a>      sf<span class="sc">::</span><span class="fu">st_drop_geometry</span>() <span class="sc">%&gt;%</span> </span>
+<span id="cb182-17"><a href="treatment-unit-silvicultural-summary.html#cb182-17" tabindex="-1"></a>      dplyr<span class="sc">::</span><span class="fu">select</span>(treeID)</span>
+<span id="cb182-18"><a href="treatment-unit-silvicultural-summary.html#cb182-18" tabindex="-1"></a>    , <span class="at">by =</span> <span class="st">&quot;treeID&quot;</span></span>
+<span id="cb182-19"><a href="treatment-unit-silvicultural-summary.html#cb182-19" tabindex="-1"></a>  )</span>
+<span id="cb182-20"><a href="treatment-unit-silvicultural-summary.html#cb182-20" tabindex="-1"></a><span class="fu">terra_plt_ortho</span>(</span>
+<span id="cb182-21"><a href="treatment-unit-silvicultural-summary.html#cb182-21" tabindex="-1"></a>  <span class="at">ortho =</span> rgb_temp</span>
+<span id="cb182-22"><a href="treatment-unit-silvicultural-summary.html#cb182-22" tabindex="-1"></a>  , <span class="at">crowns =</span> crowns_temp</span>
+<span id="cb182-23"><a href="treatment-unit-silvicultural-summary.html#cb182-23" tabindex="-1"></a>  , <span class="at">boundary =</span> unit_temp</span>
+<span id="cb182-24"><a href="treatment-unit-silvicultural-summary.html#cb182-24" tabindex="-1"></a>  , <span class="at">title =</span> <span class="st">&quot;example UAS-detected trees&quot;</span></span>
+<span id="cb182-25"><a href="treatment-unit-silvicultural-summary.html#cb182-25" tabindex="-1"></a>)</span></code></pre></div>
+<p><img src="blm_trfo_uas_files/figure-html/unnamed-chunk-154-1.png" alt="" width="1008" /></p>
+<p>how about on the CHM?</p>
+<div class="sourceCode" id="cb183"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb183-1"><a href="treatment-unit-silvicultural-summary.html#cb183-1" tabindex="-1"></a>chm_temp <span class="ot">&lt;-</span> chm_rast <span class="sc">%&gt;%</span> </span>
+<span id="cb183-2"><a href="treatment-unit-silvicultural-summary.html#cb183-2" tabindex="-1"></a>  terra<span class="sc">::</span><span class="fu">crop</span>(unit_temp <span class="sc">%&gt;%</span> sf<span class="sc">::</span><span class="fu">st_buffer</span>(<span class="dv">3</span>) <span class="sc">%&gt;%</span> terra<span class="sc">::</span><span class="fu">vect</span>(), <span class="at">mask =</span> T) <span class="sc">%&gt;%</span> </span>
+<span id="cb183-3"><a href="treatment-unit-silvicultural-summary.html#cb183-3" tabindex="-1"></a>  cloud2trees<span class="sc">:::</span><span class="fu">adjust_raster_resolution</span>(</span>
+<span id="cb183-4"><a href="treatment-unit-silvicultural-summary.html#cb183-4" tabindex="-1"></a>    <span class="at">target_resolution =</span> <span class="fl">0.25</span></span>
+<span id="cb183-5"><a href="treatment-unit-silvicultural-summary.html#cb183-5" tabindex="-1"></a>    , <span class="at">fun =</span> max</span>
+<span id="cb183-6"><a href="treatment-unit-silvicultural-summary.html#cb183-6" tabindex="-1"></a>    , <span class="at">resample_method =</span> <span class="st">&quot;max&quot;</span></span>
+<span id="cb183-7"><a href="treatment-unit-silvicultural-summary.html#cb183-7" tabindex="-1"></a>  )</span>
+<span id="cb183-8"><a href="treatment-unit-silvicultural-summary.html#cb183-8" tabindex="-1"></a><span class="fu">terra_plt_ortho</span>(</span>
+<span id="cb183-9"><a href="treatment-unit-silvicultural-summary.html#cb183-9" tabindex="-1"></a>  <span class="at">ortho =</span> chm_temp</span>
+<span id="cb183-10"><a href="treatment-unit-silvicultural-summary.html#cb183-10" tabindex="-1"></a>  , <span class="at">crowns =</span> crowns_temp</span>
+<span id="cb183-11"><a href="treatment-unit-silvicultural-summary.html#cb183-11" tabindex="-1"></a>  , <span class="at">boundary =</span> unit_temp</span>
+<span id="cb183-12"><a href="treatment-unit-silvicultural-summary.html#cb183-12" tabindex="-1"></a>  , <span class="at">title =</span> <span class="st">&quot;example UAS-detected trees on CHM (m)&quot;</span></span>
+<span id="cb183-13"><a href="treatment-unit-silvicultural-summary.html#cb183-13" tabindex="-1"></a>)</span></code></pre></div>
+<p><img src="blm_trfo_uas_files/figure-html/unnamed-chunk-155-1.png" alt="" width="1008" /></p>
 
 </div>
 </div>

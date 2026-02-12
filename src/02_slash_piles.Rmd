@@ -674,6 +674,5 @@ pile_sum_temp %>%
 
 ```{r, warning=FALSE, message=FALSE, echo=FALSE, include=FALSE}
 remove(list = ls()[grep("_temp",ls())])
-remove(chm_rast)
 gc()
 ```

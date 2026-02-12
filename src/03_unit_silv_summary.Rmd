@@ -1207,3 +1207,160 @@ treetops_sf %>%
 # ggplot2::ggsave("../data/explt.jpg", height = 7.5, width = 10.5, dpi = "print")
 ```
 
+```{r, warning=FALSE, message=FALSE, echo=FALSE, include=FALSE}
+remove(list = ls()[grep("_temp",ls())])
+gc()
+```
+
+## Visual Crowns by Unit
+
+read in the crowns and keep only those we filtered for based on the tree top points (start of this section)
+
+```{r}
+crowns_sf <- 
+  cloud2trees:::search_dir_final_detected(dir = c2t_process_dir)[["crowns_flist"]] %>% 
+  purrr::map(function(x){
+    sf::st_read(
+      dsn = x
+      , quiet = T
+    ) %>%
+    dplyr::select(treeID) %>% 
+    dplyr::inner_join(
+      treetops_sf %>% sf::st_drop_geometry()
+      , by = "treeID"
+    )
+  }) %>%
+  dplyr::bind_rows() %>% 
+  cloud2trees::simplify_multipolygon_crowns()
+# crowns_sf %>% dplyr::glimpse()
+```
+
+function to plot using `terra` which is fast
+
+```{r}
+# function to plot ortho
+terra_plt_ortho <- function(
+  ortho
+  , crowns
+  , boundary
+  , title
+) {
+  if(terra::nlyr(ortho)==3){
+    terra::plotRGB(ortho, stretch = "lin", mar = c(0.2,0.2,2,0.2)) 
+  }else{
+    terra::plot(ortho, col = viridis::plasma(n=100), mar = c(0.2,0.2,2,3.5), axes = F) 
+  }
+  terra::plot(
+    boundary %>% 
+      sf::st_transform(terra::crs(ortho)) %>% 
+      terra::vect()
+    , add = T, border = "black", col = NA
+    , main = title
+  )
+  terra::plot(
+    crowns %>% 
+      sf::st_transform(terra::crs(ortho)) %>% 
+      terra::vect()
+    , add = T, border = "cyan", col = NA, lwd = 0.5
+  )
+}
+```
+
+plot example unit
+
+```{r,eval=T,purl=FALSE, results=F, fig.show='asis', fig.height=10.1}
+# mapping
+unt_temp <- treetops_sf %>% 
+  sf::st_drop_geometry() %>% 
+  dplyr::distinct(trtmnt_type,trtmnt_block,trtmnt_unit) %>% 
+  dplyr::arrange(trtmnt_type,trtmnt_block,trtmnt_unit)
+# map over it 
+plts_temp <- 
+  1:nrow(unt_temp) %>% 
+  .[1] %>% 
+  purrr::map(function(x){
+    unit_temp <- stand_boundary %>% 
+      dplyr::filter(
+        unit == unt_temp$trtmnt_unit[x]
+        , block == unt_temp$trtmnt_block[x]
+        , stringr::str_squish(tolower(tretmnt)) == unt_temp$trtmnt_type[x]
+      ) %>% 
+      sf::st_transform(terra::crs(rgb_rast))
+    ortho_temp <- rgb_rast %>% 
+      terra::crop(unit_temp %>% sf::st_buffer(3) %>% terra::vect(), mask = T)
+    crowns_temp <- crowns_sf %>% 
+      dplyr::inner_join(
+        unt_temp %>% dplyr::slice(x)
+        , by = dplyr::join_by(trtmnt_type,trtmnt_block,trtmnt_unit)
+      )
+    # plt
+    terra_plt_ortho(
+      ortho = ortho_temp
+      , crowns = crowns_temp
+      , boundary = unit_temp
+      , title = paste0(
+        unt_temp %>% dplyr::slice(x) %>% dplyr::pull(trtmnt_type)
+        , "| block "
+        , unt_temp %>% dplyr::slice(x) %>% dplyr::pull(trtmnt_block)
+        , " | "
+        , unt_temp %>% dplyr::slice(x) %>% dplyr::pull(trtmnt_unit)
+      )
+    )
+    
+  })
+plts_temp[[1]]
+```
+
+```{r, warning=FALSE, message=FALSE, echo=FALSE, include=FALSE}
+remove(list = ls()[grep("_temp",ls())])
+gc()
+```
+
+zoom in
+
+```{r,eval=T,purl=FALSE, results=F, fig.show='asis', fig.height=9.2}
+unit_temp <- stand_boundary %>% 
+  dplyr::slice(4) %>% 
+  sf::st_centroid() %>% 
+  # sf::st_buffer(50) %>% 
+  sf::st_buffer(sqrt(10000/4),endCapStyle = "SQUARE") ## numerator = desired plot size in m2) %>% 
+# sf::st_area(unit_temp)
+# terra::plot(stand_boundary %>% 
+#   dplyr::slice(1) %>% terra::vect(),col = NA)
+# terra::plot(unit_temp %>% terra::vect(), col = NA, border = "red", add = T)
+rgb_temp <- rgb_rast %>% 
+  terra::crop(unit_temp %>% sf::st_buffer(3) %>% terra::vect(), mask = T)
+crowns_temp <- crowns_sf %>% 
+  dplyr::inner_join(
+    treetops_sf %>% 
+      sf::st_intersection(unit_temp) %>% 
+      sf::st_drop_geometry() %>% 
+      dplyr::select(treeID)
+    , by = "treeID"
+  )
+terra_plt_ortho(
+  ortho = rgb_temp
+  , crowns = crowns_temp
+  , boundary = unit_temp
+  , title = "example UAS-detected trees"
+)
+```
+
+how about on the CHM?
+
+```{r,eval=T,purl=FALSE, results=F, fig.show='asis', fig.height=9.2}
+chm_temp <- chm_rast %>% 
+  terra::crop(unit_temp %>% sf::st_buffer(3) %>% terra::vect(), mask = T) %>% 
+  cloud2trees:::adjust_raster_resolution(
+    target_resolution = 0.25
+    , fun = max
+    , resample_method = "max"
+  )
+terra_plt_ortho(
+  ortho = chm_temp
+  , crowns = crowns_temp
+  , boundary = unit_temp
+  , title = "example UAS-detected trees on CHM (m)"
+)
+```
+

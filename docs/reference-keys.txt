@@ -37,3 +37,4 @@ metric-units
 imperial-units
 visual
 tree-distribution-by-treatment-type
+visual-crowns-by-unit
