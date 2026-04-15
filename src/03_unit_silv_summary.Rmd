@@ -1,4 +1,4 @@
-# Treatment Unit Silvicultural Summary
+# Treatment Unit Silvicultural Summary{#silv_sum}
 
 In this section, we're going to aggregate the detected trees by treatment unit to produce silvicultural summaries. Before we do that, we'll use pile predictions as a mask to remove smaller, detected "trees" that are actually piles or downed trees/debris so that we are only working with trees within units.
 
@@ -1244,41 +1244,59 @@ terra_plt_ortho <- function(
   , crowns
   , boundary
   , title
+  , add_crowns = T
 ) {
   if(terra::nlyr(ortho)==3){
-    terra::plotRGB(ortho, stretch = "lin", mar = c(0.2,0.2,2,0.2)) 
+    terra::plotRGB(
+      ortho
+      , stretch = "lin"
+      # , mar = c(b,l,t,r)
+      , mar = c(0.2,0.2,2.2,0.2)
+      , plg = list(
+        title.cex = 0.5
+      )
+      , main = title
+    ) 
   }else{
-    terra::plot(ortho, col = viridis::plasma(n=100), mar = c(0.2,0.2,2,3.5), axes = F) 
+    terra::plot(
+      ortho
+      , col = viridis::plasma(n=100)
+      # , mar = c(b,l,t,r)
+      , mar = c(0.2,0.2,2.2,3.5)
+      , axes = F
+      , plg = list(
+        # title = "CHM (m)"
+        cex = 0.8, title.cex = 0.5, shrink = 0.6
+      )
+      , main = title
+    ) 
   }
   terra::plot(
     boundary %>% 
       sf::st_transform(terra::crs(ortho)) %>% 
       terra::vect()
     , add = T, border = "black", col = NA
-    , main = title
   )
-  terra::plot(
-    crowns %>% 
-      sf::st_transform(terra::crs(ortho)) %>% 
-      terra::vect()
-    , add = T, border = "cyan", col = NA, lwd = 0.5
-  )
+  if(add_crowns){
+    terra::plot(
+      crowns %>% 
+        sf::st_transform(terra::crs(ortho)) %>% 
+        terra::vect()
+      , add = T, border = "cyan", col = NA, lwd = 0.7
+    )
+  }
 }
 ```
 
 plot example unit
 
-```{r,eval=T,purl=FALSE, results=F, fig.show='asis', fig.height=10.1}
+```{r,eval=F,purl=FALSE, results=F, fig.show='asis', fig.height=10.1}
 # mapping
 unt_temp <- treetops_sf %>% 
   sf::st_drop_geometry() %>% 
-  dplyr::distinct(trtmnt_type,trtmnt_block,trtmnt_unit) %>% 
-  dplyr::arrange(trtmnt_type,trtmnt_block,trtmnt_unit)
-# map over it 
-plts_temp <- 
-  1:nrow(unt_temp) %>% 
-  .[1] %>% 
-  purrr::map(function(x){
+  dplyr::distinct(trtmnt_block,trtmnt_type,trtmnt_unit) %>% 
+  dplyr::arrange(trtmnt_block,trtmnt_type,trtmnt_unit)
+plt_single_temp <- function(x, add = T){
     unit_temp <- stand_boundary %>% 
       dplyr::filter(
         unit == unt_temp$trtmnt_unit[x]
@@ -1298,6 +1316,7 @@ plts_temp <-
       ortho = ortho_temp
       , crowns = crowns_temp
       , boundary = unit_temp
+      , add_crowns = add
       , title = paste0(
         unt_temp %>% dplyr::slice(x) %>% dplyr::pull(trtmnt_type)
         , "| block "
@@ -1307,18 +1326,14 @@ plts_temp <-
       )
     )
     
-  })
-plts_temp[[1]]
-```
-
-```{r, warning=FALSE, message=FALSE, echo=FALSE, include=FALSE}
-remove(list = ls()[grep("_temp",ls())])
-gc()
+  }
+# map over it 
+plt_single_temp(1)
 ```
 
 zoom in
 
-```{r,eval=T,purl=FALSE, results=F, fig.show='asis', fig.height=9.2}
+```{r,eval=F,purl=FALSE, results=F, fig.show='asis', fig.height=9.2}
 unit_temp <- stand_boundary %>% 
   dplyr::slice(4) %>% 
   sf::st_centroid() %>% 
@@ -1348,7 +1363,7 @@ terra_plt_ortho(
 
 how about on the CHM?
 
-```{r,eval=T,purl=FALSE, results=F, fig.show='asis', fig.height=9.2}
+```{r,eval=F,purl=FALSE, results=F, fig.show='asis', fig.height=9.2}
 chm_temp <- chm_rast %>% 
   terra::crop(unit_temp %>% sf::st_buffer(3) %>% terra::vect(), mask = T) %>% 
   cloud2trees:::adjust_raster_resolution(
@@ -1364,3 +1379,41 @@ terra_plt_ortho(
 )
 ```
 
+let's check out the RGB by treatment block
+
+```{r,eval=F,purl=FALSE, results=F, fig.show='asis', fig.height=8, fig.width=9.5}
+# mapping
+plt_blk_temp <- function(blk, add = F, save = F) {
+  if(save){
+    grDevices::png(
+      filename = file.path("../data", paste0("plt_rgb_block_", blk, ".png"))
+      , width = 9.5
+      , height = 8
+      , units = "in"
+      , res = 300
+    )
+  }
+  # 2x2 grid layout
+  graphics::par(mfrow = c(2, 2))
+  
+  unt_temp %>% 
+    dplyr::ungroup() %>% 
+    dplyr::mutate(rownum = dplyr::row_number()) %>% 
+    dplyr::filter(trtmnt_block==blk) %>% 
+    dplyr::pull(rownum) %>% 
+    purrr::walk(\(x) plt_single_temp(x,add=add))
+  
+  # reset 
+  if(save){grDevices::dev.off()}
+  graphics::par(mfrow = c(1, 1))
+}
+# map over blks
+unique(unt_temp$trtmnt_block) %>% 
+  .[2] %>% 
+  purrr::walk(\(x) plt_blk_temp(x, save = F))
+```
+
+```{r, warning=FALSE, message=FALSE, echo=FALSE, include=FALSE}
+remove(list = ls()[grep("_temp",ls())])
+gc()
+```

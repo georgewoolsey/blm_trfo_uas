@@ -1,0 +1,211 @@
+# Tree Group Analysis
+
+Evaluate the spatial configuration of the detected trees focusing on horizontal heterogeneity and an investigation of tree clumps and openings.
+
+some relevant work includes:
+
+* *Spatial Patterns of Pinyon–Juniper Woodland Expansion in Central Nevada* ([Weisberg et al. 2007](https://doi.org/10.2111/05-224R2.1))
+* *Density-dependent tree mortality in pinyon-juniper woodlands* ([Greenwood and Weisberg 2008](https://doi.org/10.1016/j.foreco.2007.12.048))
+* *Long-Term Effectiveness of Tree Removal to Re-Establish Sagebrush Steppe Vegetation and Associated Spatial Patterns in Surface Conditions and Soil Hydrologic Properties* ([Williams et al. 2020](https://doi.org/10.3390/w12082213))
+
+```{r, warning=FALSE, message=FALSE, echo=FALSE, include=FALSE}
+# when you get a chance i am wondering if we can do a little more evaluation of the PJ site data. Specifically i was thinking about some analysis of the clump structure so maybe something like a distribution of patch sizes, opening sizes  and maybe trees per patch distribution. also there was interest in some other spatial stats type  variables but these should be good for now.
+remove(list = ls()[grep("_temp",ls())])
+gc()
+```
+
+## Group Tree Crowns
+
+While some research on tree spatial patterns use tree point locations buffered with a fixed radius (e.g. 3 m) to approximate the crown radius of a "typical" overstory tree
+(e.g. [Churchill et al. (2016)](https://scholarworks.umt.edu/ico/3)), we'll use the irregular (more realistic?) crown shapes identified from the aerial data to determine tree clump groups.
+
+Remember we are only looking at what could be considered "overstory" trees since we filtered the tree list to keep only trees that meet a certain minimum height
+
+```{r}
+crowns_sf %>% 
+  sf::st_drop_geometry() %>% 
+  dplyr::select(tree_height_m, dbh_cm) %>% 
+  summary()
+```
+
+Since a primary objective of this analysis is to evaluate how [different treatments](#silv_sum) influence forest structure, we'll treat each unit as a discrete area and exclude any trees located outside of the unit boundaries from the clump classification process. This approach assumes that trees within a unit do not form functional clusters with those in adjacent areas (even though some units share a common border and we have data extending beyond the unit boundaries). This assumption prevents data from untreated control areas or differently treated areas from influencing the results when summarized by treatment type. This intentional ignorance of edge effects means that the scale of focus of this analysis is strictly on the treatment unit.
+
+make the clump groups
+
+```{r, results=F}
+get_clumps_temp <- function(tree_list) {
+  # buffer and dissolve (arcGIS logic)
+  clump_polys <- tree_list %>%
+    dplyr::ungroup() %>% 
+    sf::st_union() %>%
+    sf::st_cast("POLYGON") %>%
+    sf::st_as_sf() %>%
+    dplyr::mutate(clump_id = dplyr::row_number())
+
+  # attach to trees
+  trees_with_clumps <- tree_list %>%
+    # get rid of columns we'll create
+    dplyr::select( -dplyr::any_of(c(
+      "hey_xxxxxxxxxx"
+      , "clump_id"
+      , "clump_n_trees"
+      , "clump_n_trees_grp"
+      , "clump_dist_m"
+    ))) %>%
+    sf::st_join(clump_polys %>% dplyr::select(clump_id), join = sf::st_intersects) %>%
+    dplyr::group_by(clump_id) %>%
+    dplyr::mutate(
+      clump_n_trees = dplyr::n()
+      , clump_n_trees_grp = dplyr::case_when(
+        clump_n_trees == 1 ~ "Individual"
+        , clump_n_trees >= 2 & clump_n_trees <= 4 ~ "2-4 trees"
+        , clump_n_trees >= 5 & clump_n_trees <= 9 ~ "5-9 trees"
+        , clump_n_trees >= 10 & clump_n_trees <= 15 ~ "10-15 trees"
+        , clump_n_trees > 15 ~ ">15 trees"
+        # , T ~ "error"
+      ) %>%
+      factor(
+        ordered = T
+        , levels = c("Individual", "2-4 trees", "5-9 trees", "10-15 trees", ">15 trees")
+      )
+    ) %>%
+    dplyr::ungroup()
+}
+# do it for all treatment units
+unt_temp <-
+  crowns_sf %>% 
+  sf::st_drop_geometry() %>% 
+  dplyr::distinct(trtmnt_block,trtmnt_type,trtmnt_unit) %>% 
+  dplyr::arrange(trtmnt_block,trtmnt_type,trtmnt_unit)
+crowns_sf <- 
+  1:nrow(unt_temp) %>% 
+  purrr::map(
+    \(x)
+    crowns_sf %>% 
+      dplyr::inner_join(
+        unt_temp %>% dplyr::slice(x)
+        , by = dplyr::join_by(trtmnt_type,trtmnt_block,trtmnt_unit)
+      ) %>% 
+      get_clumps_temp()
+  ) %>% 
+  dplyr::bind_rows()
+```
+
+let's look at what this clump definition did
+
+```{r}
+dta_temp <- crowns_sf %>% 
+  dplyr::inner_join(
+    unt_temp %>% dplyr::slice(4)
+    , by = dplyr::join_by(trtmnt_type,trtmnt_block,trtmnt_unit)
+  ) %>% 
+  dplyr::mutate(clump_id = factor(clump_id))
+# plt
+ggplot2::ggplot(data = dta_temp) + 
+  ggplot2::geom_sf(mapping = ggplot2::aes(fill = clump_id), color = "gray", alpha = 0.8) +
+  ggplot2::scale_fill_manual(
+    values = c(viridis::turbo(n=nrow(dta_temp)/2), viridis::viridis(n=nrow(dta_temp)/2)) %>% sample()
+  ) +
+  ggplot2::theme_void() +
+  ggplot2::theme(legend.position = "none")
+```
+
+where each clump is colored by a (nearly) distinct color
+
+here it with clumps colored by clump group size
+
+```{r}
+ggplot2::ggplot(data = dta_temp) + 
+  ggplot2::geom_sf(mapping = ggplot2::aes(fill = clump_n_trees_grp), color = "gray") +
+  harrypotter::scale_fill_hp_d("always", drop = F) +
+  ggplot2::labs(fill="") +
+  ggplot2::theme_void() +
+  ggplot2::theme(legend.position = "top", legend.direction = "horizontal") +
+  ggplot2::guides(fill = ggplot2::guide_legend(override.aes = list(size = 5)))
+```
+
+```{r, warning=FALSE, message=FALSE, echo=FALSE, include=FALSE}
+remove(list = ls()[grep("_temp",ls())])
+gc()
+```
+
+## Openings
+
+let's identify the openings between tree clump groups
+
+```{r}
+# create function to pass a return from get_clump_summary() and get a distance raster
+get_clump_dist_rast <- function(get_clump_summary_ans, stand_sf){
+  # get clump_dist_m
+  clump_dist_m <- min(get_clump_summary_ans$clump_dist_m, na.rm = T)
+  # rasterize the clump polygons and then calculate distance between clumps as raster
+  dist_rast <- 
+    terra::rasterize(
+        x = get_clump_summary_ans %>% terra::vect()
+        , y = get_clump_summary_ans %>% 
+          terra::vect() %>% 
+          terra::rast(res = 0.2)
+      ) %>% 
+      terra::distance() %>% 
+      # crop it to stand extent
+      terra::crop(
+        stand_sf %>% 
+          terra::vect()
+        , mask = T
+      )
+  ######### part 2
+  # now create openings vector data
+  openings_vect <- 
+    dist_rast %>% 
+      terra::classify(rcl = c(clump_dist_m/2,Inf), others = NA, include.lowest = T) %>% 
+      terra::as.polygons(na.rm = T) %>% 
+      sf::st_as_sf() %>% 
+      sf::st_cast("POLYGON") %>% 
+      dplyr::mutate(layer = dplyr::row_number()) %>% 
+      dplyr::mutate(
+        openining_area_m2 = sf::st_area(geometry) %>% as.numeric()
+        , clump_dist_m = clump_dist_m
+      )
+  
+  # return
+  return(list(dist_rast = dist_rast, openings_vect = openings_vect))
+}
+```
+
+let's test it out
+
+```{r}
+# get it
+get_clump_dist_rast_ans <- 
+  stand_boundaries$poly_name %>% 
+  unique() %>% 
+  purrr::set_names() %>% 
+  purrr::map(
+    \(x)
+    get_clump_dist_rast(
+      get_clump_summary_ans = clump_polys[[x]]
+      , stand_sf = stand_boundaries %>% dplyr::filter(poly_name==x)
+    )
+  )
+```
+
+what is in it?
+
+```{r}
+names(get_clump_dist_rast_ans[[1]])
+```
+
+just view the distance raster
+
+```{r, results=F, fig.show='asis'}
+get_clump_dist_rast_ans %>% 
+  purrr::imap(
+    \(x,nm) 
+    terra::plot(x[["dist_rast"]], axes = F, main = paste0(nm," stand: distance to Nearest Clump (m)"))
+  )
+```
+
+```{r, warning=FALSE, message=FALSE, echo=FALSE, include=FALSE}
+remove(list = ls()[grep("_temp",ls())])
+gc()
+```
