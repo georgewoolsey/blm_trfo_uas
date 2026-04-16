@@ -31,7 +31,10 @@ treetops_sf <- treetops_sf %>%
           dplyr::rename_with(.fn = ~paste0("trtmnt_", .x, recycle0 = T))
       ) %>% 
       sf::st_drop_geometry() %>% 
-      dplyr::select(treeID, tidyselect::starts_with("trtmnt_"))
+      dplyr::select(treeID, tidyselect::starts_with("trtmnt_")) %>% 
+      dplyr::group_by(treeID) %>% 
+      dplyr::slice(1) %>% 
+      dplyr::ungroup()
     , by = "treeID"
   ) %>% 
   dplyr::mutate(
@@ -1233,6 +1236,11 @@ crowns_sf <-
   dplyr::bind_rows() %>% 
   cloud2trees::simplify_multipolygon_crowns()
 # crowns_sf %>% dplyr::glimpse()
+# unique units
+unq_units_df <- treetops_sf %>% 
+  sf::st_drop_geometry() %>% 
+  dplyr::distinct(trtmnt_block,trtmnt_type,trtmnt_unit) %>% 
+  dplyr::arrange(trtmnt_block,trtmnt_type,trtmnt_unit)
 ```
 
 function to plot using `terra` which is fast
@@ -1291,24 +1299,19 @@ terra_plt_ortho <- function(
 plot example unit
 
 ```{r,eval=F,purl=FALSE, results=F, fig.show='asis', fig.height=10.1}
-# mapping
-unt_temp <- treetops_sf %>% 
-  sf::st_drop_geometry() %>% 
-  dplyr::distinct(trtmnt_block,trtmnt_type,trtmnt_unit) %>% 
-  dplyr::arrange(trtmnt_block,trtmnt_type,trtmnt_unit)
 plt_single_temp <- function(x, add = T){
     unit_temp <- stand_boundary %>% 
       dplyr::filter(
-        unit == unt_temp$trtmnt_unit[x]
-        , block == unt_temp$trtmnt_block[x]
-        , stringr::str_squish(tolower(tretmnt)) == unt_temp$trtmnt_type[x]
+        unit == unq_units_df$trtmnt_unit[x]
+        , block == unq_units_df$trtmnt_block[x]
+        , stringr::str_squish(tolower(tretmnt)) == unq_units_df$trtmnt_type[x]
       ) %>% 
       sf::st_transform(terra::crs(rgb_rast))
     ortho_temp <- rgb_rast %>% 
       terra::crop(unit_temp %>% sf::st_buffer(3) %>% terra::vect(), mask = T)
     crowns_temp <- crowns_sf %>% 
       dplyr::inner_join(
-        unt_temp %>% dplyr::slice(x)
+        unq_units_df %>% dplyr::slice(x)
         , by = dplyr::join_by(trtmnt_type,trtmnt_block,trtmnt_unit)
       )
     # plt
@@ -1318,11 +1321,11 @@ plt_single_temp <- function(x, add = T){
       , boundary = unit_temp
       , add_crowns = add
       , title = paste0(
-        unt_temp %>% dplyr::slice(x) %>% dplyr::pull(trtmnt_type)
+        unq_units_df %>% dplyr::slice(x) %>% dplyr::pull(trtmnt_type)
         , "| block "
-        , unt_temp %>% dplyr::slice(x) %>% dplyr::pull(trtmnt_block)
+        , unq_units_df %>% dplyr::slice(x) %>% dplyr::pull(trtmnt_block)
         , " | "
-        , unt_temp %>% dplyr::slice(x) %>% dplyr::pull(trtmnt_unit)
+        , unq_units_df %>% dplyr::slice(x) %>% dplyr::pull(trtmnt_unit)
       )
     )
     
@@ -1396,7 +1399,7 @@ plt_blk_temp <- function(blk, add = F, save = F) {
   # 2x2 grid layout
   graphics::par(mfrow = c(2, 2))
   
-  unt_temp %>% 
+  unq_units_df %>% 
     dplyr::ungroup() %>% 
     dplyr::mutate(rownum = dplyr::row_number()) %>% 
     dplyr::filter(trtmnt_block==blk) %>% 
@@ -1408,7 +1411,7 @@ plt_blk_temp <- function(blk, add = F, save = F) {
   graphics::par(mfrow = c(1, 1))
 }
 # map over blks
-unique(unt_temp$trtmnt_block) %>% 
+unique(unq_units_df$trtmnt_block) %>% 
   .[2] %>% 
   purrr::walk(\(x) plt_blk_temp(x, save = F))
 ```
