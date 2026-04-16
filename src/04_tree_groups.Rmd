@@ -96,7 +96,7 @@ crowns_sf <- sf::st_read(dsn = "c:/users/georg/Downloads/crowns_sf.gpkg", quiet 
 crowns_sf %>% dplyr::glimpse()
 ```
 
-```{r grp-them-crwns, results=F}
+```{r, results=F}
 get_clumps_temp <- function(tree_list) {
   # buffer and dissolve (arcGIS logic)
   clump_polys <- tree_list %>%
@@ -296,7 +296,10 @@ gc()
 
 ## Identify Openings
 
-let's identify the openings between tree clump groups where an opening begins at least 3 m away from the nearest tree and anything within 3 m of a tree is not considered part of an opening ([Churchill et al. (2016)](https://scholarworks.umt.edu/ico/3)). This distance threshold could be adjusted depending on analysis and management objectives (e.g. flame length?).
+Let's identify the gaps within a treatment unit. We'll identify openings based on their distance from the nearest tree crown where an opening is any area located at least 3 m from the nearest tree ([Churchill et al. 2016](https://scholarworks.umt.edu/ico/3)). This 3 m buffer accounts for the zone of immediate canopy influence and ensures that areas categorized as open are functionally distinct from the canopy. This threshold is flexible and can be adjusted to meet specific management or analysis objectives (e.g. flame length; wildlife corridors). 
+
+First, we'll generate a distance raster where each cell represents the distance to the nearest tree clump group (i.e. crown) within the treatment unit boundary. Areas with a distance value of 3 m or greater are classified as openings and are defined by spatial connectedness, not a specific geometric shape. As such, they may be irregularly shaped as they are allowed to wind between clumps to follow a path where trees are distant. A single opening continues as long as the flow of open space is not entirely obstructed by surrounding tree groups. Once a gap is completely surrounded by canopy, the opening is closed off and is treated as a discrete spatial feature.
+
 
 ```{r}
 # create function to pass a return from get_clump_summary() and get a distance raster
@@ -360,7 +363,7 @@ get_clump_dist_rast_temp <- function(x, clump_dist_m = 3){
 }
 ```
 
-let's test it out
+let's get the distance raster and openinings vector data
 
 ```{r}
 # get it
@@ -374,15 +377,146 @@ get_clump_dist_rast_ans <-
   )
 ```
 
+### Visualize Distance Raster
+
 let's check out the distance raster for the same example unit we looked at above
 
 ```{r, results=F, fig.show='asis'}
+# harrypotter::hp(n = length(levels(crowns_sf$clump_n_trees_grp)), option = "always") %>% scales::show_col()
+# color the grps
+hey_clump_pal <-
+  harrypotter::hp(n = length(levels(crowns_sf$clump_n_trees_grp)), house = "always") %>%
+  setNames(levels(crowns_sf$clump_n_trees_grp))
+plt_dist_rast_fn <- 
+  function(x, add_clumps = F, max_dist = NA){
+    plt_tit <- paste0(
+      unq_units_df %>% dplyr::slice(x) %>% dplyr::pull(trtmnt_type)
+      , " | block "
+      , unq_units_df %>% dplyr::slice(x) %>% dplyr::pull(trtmnt_block)
+      , " | "
+      , unq_units_df %>% dplyr::slice(x) %>% dplyr::pull(trtmnt_unit)
+    )
+    # plt unit
+    unit_temp <- stand_boundary %>% 
+      dplyr::filter(
+        unit == unq_units_df$trtmnt_unit[x]
+        , block == unq_units_df$trtmnt_block[x]
+        , stringr::str_squish(tolower(tretmnt)) == unq_units_df$trtmnt_type[x]
+      ) %>% 
+      sf::st_transform(terra::crs(chm_rast))
+    
+    plt_stand <- ggplot2::ggplot() +
+      ggplot2::geom_sf(data = unit_temp, color = "black", fill = NA) +
+      ggplot2::scale_x_continuous(expand = c(0, 0)) +
+      ggplot2::scale_y_continuous(expand = c(0, 0)) +
+      ggplot2::labs(
+        x = ""
+        , y = ""
+        , subtitle = plt_tit
+      ) +
+      ggplot2::theme_void() +
+      ggplot2::theme(
+        legend.position = "top" # c(0.5,1)
+        , legend.direction = "horizontal"
+        , legend.box = "vertical"
+        , legend.margin = ggplot2::margin(2.5,0,0,0) # trbl
+        , legend.text = ggplot2::element_text(size = 7)
+        , legend.title = ggplot2::element_text(size = 6)
+        , legend.key = ggplot2::element_rect(fill = NA, color = NA)
+        , legend.key.size = unit(0.5, "cm")
+        # , plot.title = ggtext::element_markdown(size = 10, hjust = 0.5)
+        , plot.title = ggplot2::element_text(size = 10, hjust = 0.5, face = "bold")
+        , plot.subtitle = ggplot2::element_text(size = 9, hjust = 0.5, face = "bold")
+      )
+    # add raster
+    plt_rast <- 
+      plt_stand +
+      ggplot2::geom_tile(
+        data = get_clump_dist_rast_ans[[x]][["dist_rast"]] %>% 
+          # terra::aggregate(fact = 2, fun = "max", cores = 4) %>% 
+          # terra::crop(
+          #   stand_boundaries %>% 
+          #     dplyr::filter(poly_name==x)
+          #     # dplyr::filter(poly_name=="west")
+          #   , mask = T
+          # ) %>% 
+          terra::as.data.frame(xy = T) %>% 
+          dplyr::rename(f=3)
+        , mapping = ggplot2::aes(x=x, y=y, fill = f)
+      )
+    if(!is.na(max_dist)){
+      plt_rast <- plt_rast +
+        harrypotter::scale_fill_hp(
+          "mischief"
+          , na.value = "transparent"
+          , name = "distance to\nnearest tree (m)"
+          , limits = c(0,max_dist)
+          , labels = scales::comma_format(accuracy = 1)
+        )
+    }else{
+      plt_rast <- plt_rast +
+        harrypotter::scale_fill_hp(
+          "mischief"
+          , na.value = "transparent"
+          , name = "distance to\nnearest tree (m)"
+          # , limits = c(0,max_dist)
+          , labels = scales::comma_format(accuracy = 1)
+        )
+    }
+    # add clumps
+    if(add_clumps){
+      plt_rast <- plt_rast +
+        # # openings
+        # ggplot2::geom_sf(
+        #   data = get_clump_dist_rast_ans[[nm]]$openings_vect
+        #   , mapping = ggplot2::aes(color = openining_area_m2), fill = NA
+        # ) +
+        # ggplot2::scale_color_gradient(
+        #   low = "gray77", high = "gray11"
+        #   , labels = scales::comma_format(accuracy = 1)
+        #   , name = latex2exp::TeX("opening\narea ($\\m^2$)")
+        #   , limits = c(0,openining_area_m2_max)
+        # ) +
+        # clumps
+        ggnewscale::new_scale_fill() +
+        ggplot2::geom_sf(
+          data = clump_polys %>% 
+            dplyr::inner_join(
+              unq_units_df %>% dplyr::slice(x)
+              , by = dplyr::join_by(trtmnt_type,trtmnt_block,trtmnt_unit)
+            ) %>% 
+            dplyr::select(clump_n_trees_grp)
+          , mapping = ggplot2::aes(fill = clump_n_trees_grp)
+          , color = NA
+        ) +
+        # harrypotter::scale_fill_hp_d("always", name = "clump size", drop = F) +
+        ggplot2::scale_fill_manual(values = hey_clump_pal, name = "", drop = F) +
+        # tree points
+        ggplot2::geom_sf(
+          data = 
+            treetops_sf %>% 
+            dplyr::inner_join(
+              unq_units_df %>% dplyr::slice(x)
+              , by = dplyr::join_by(trtmnt_type,trtmnt_block,trtmnt_unit)
+            )
+          , color = "gray88", shape = "."
+        )
+        # ggplot2::guides(fill = ggplot2::guide_legend(ncol = 2))
+    }
+    return(plt_rast)
+  }
+# one unit
+plt_dist_rast_fn(4, add_clumps = F)
+```
+
+```{r, include=F, eval=F}
+###########!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! terra::plot() version is fast but lacks easy customization (esp legend placement :\ )
 # harrypotter::hp(n = length(levels(crowns_sf$clump_n_trees_grp)), option = "always") %>% scales::show_col()
 plt_dist_rast_fn <- 
   function(x, add_crowns = F, add_clumps = F, add_treetops = F){
     plt <- paste0(
       unq_units_df %>% dplyr::slice(x) %>% dplyr::pull(trtmnt_type)
-      , "| block "
+      , " | block "
       , unq_units_df %>% dplyr::slice(x) %>% dplyr::pull(trtmnt_block)
       , " | "
       , unq_units_df %>% dplyr::slice(x) %>% dplyr::pull(trtmnt_unit)
@@ -449,15 +583,7 @@ plt_dist_rast_fn <-
           , axes = F
           , add = T
           , plg = list(
-            # x = "bottomright"
             x = "topright"
-             # x = 0 # Values > 1.0 place the legend in the right margin
-             # , y = 0 # 0.25 centers it in the bottom gap (0 to 0.5)
-             # , xpd = TRUE
-            # , title = "hey clump"
-            # , cex = 0.8
-            # , title.cex = 0.5
-            # , shrink = 0.6
           )
         )
     }
@@ -477,82 +603,435 @@ plt_dist_rast_fn <-
 # 1:nrow(unq_units_df) %>% 
 #   .[3] %>% 
 #   purrr::walk(plt_dist_rast_fn)
-plt_dist_rast_fn(4, add_crowns = F, add_clumps = T, add_treetops = T)
+plt_dist_rast_fn(4)
 ```
 
-let's check out the openings for the same example unit we looked at above
+now we'll overlay the tree clump groups on the distance raster for all units
 
-```{r, results=F, fig.show='asis'}
-# # get max area so that all are on the same scale
-# openining_area_m2_max <- 
-#   get_clump_dist_rast_ans %>% 
-#   purrr::map(
-#     \(x) purrr::pluck(x,"openings_vect")
-#   ) %>% 
-#   dplyr::bind_rows() %>% 
-#   sf::st_drop_geometry() %>% 
-#   dplyr::pull(openining_area_m2) %>% 
-#   max(na.rm = T)
-# plt
-get_clump_dist_rast_ans[[4]][["openings_vect"]] %>% 
-  ggplot2::ggplot() +
-  ggplot2::geom_sf(mapping = ggplot2::aes(fill = openining_area_m2)) +
-  ggplot2::scale_fill_gradient(
-    low = "gray77", high = "gray11"
-    , labels = scales::comma_format(accuracy = 1)
-    , name = latex2exp::TeX("opening\narea ($\\m^2$)")
-    # , limits = c(0,openining_area_m2_max)
-  ) +
-  # ggplot2::labs(subtitle = paste0(nm, ": pre-treatment")) +
-  ggplot2::theme_void() +
-  ggplot2::theme(
-    legend.position = "right"
-    , legend.direction = "vertical"
-    , plot.subtitle = ggplot2::element_text(size = 10, hjust = 0.5, face = "bold")
-    , legend.title= ggplot2::element_text(size=8)
-    , legend.text= ggplot2::element_text(size = 7)
-  )
-
-plt_dist_rast_fn <- 
-  function(x, add_crowns = F){
-    plt <- paste0(
-      unq_units_df %>% dplyr::slice(x) %>% dplyr::pull(trtmnt_type)
-      , "| block "
-      , unq_units_df %>% dplyr::slice(x) %>% dplyr::pull(trtmnt_block)
-      , " | "
-      , unq_units_df %>% dplyr::slice(x) %>% dplyr::pull(trtmnt_unit)
+```{r,eval=F,purl=FALSE, results=F, fig.show='asis', fig.height=9.5, fig.width=9.5}
+# mapping
+plt_blk_temp <- function(blk, add = F, save = F) {
+  # which idx
+  idx_temp <- 
+    unq_units_df %>% 
+    dplyr::ungroup() %>% 
+    dplyr::mutate(rownum = dplyr::row_number()) %>% 
+    dplyr::filter(trtmnt_block==blk) %>% 
+    dplyr::pull(rownum)
+  # max dist
+  max_d <- 
+    purrr::map(get_clump_dist_rast_ans[idx_temp], "dist_rast") %>% 
+    purrr::map(
+      \(r)
+      terra::minmax(r) %>% 
+        .[2] %>% 
+        ceiling()  
+    ) %>% 
+    purrr::compact() %>% 
+    unlist() %>% 
+    max(na.rm = T)
+  # plts
+  plts_temp <- 
+    idx_temp %>% 
+    purrr::map(\(x) plt_dist_rast_fn(x, add_clumps = add, max_dist = max_d))
+  # patchwork
+  p_temp <- 
+    patchwork::wrap_plots(
+      plts_temp
+      , ncol = 2
+      , guides = "collect"
+    ) &
+    ggplot2::theme(legend.position = "bottom")
+  
+  # save 
+  if(save){
+    ggplot2::ggsave(
+      filename = file.path("../data", paste0("plt_dist_block_", blk, ".png"))
+      , plot = p_temp
+      , width = 10
+      , height = 10
+      , dpi = 300
     )
-    terra::plot(
-      get_clump_dist_rast_ans[[x]][["dist_rast"]]
-      , col = harrypotter::hp(n=100, option = "mischief")
-      # , mar = c(b,l,t,r)
-      , mar = c(0.2,0.2,2.2,3.5)
-      , axes = F
-      , plg = list(
-        title = "distance to\nnearest tree (m)"
-        , cex = 0.8, title.cex = 0.5, shrink = 0.6
-      )
-      , main = plt
-    ) 
-    if(add_crowns){
-      terra::plot(
-        crowns_sf %>% 
-          dplyr::inner_join(
-            unq_units_df %>% dplyr::slice(x)
-            , by = dplyr::join_by(trtmnt_type,trtmnt_block,trtmnt_unit)
-          ) %>% 
-          terra::vect()
-        , add = T, border = "cyan", col = NA, lwd = 0.7
-      )
-    }
+  }else{
+    p_temp
   }
-# 1:nrow(unq_units_df) %>% 
-#   .[3] %>% 
-#   purrr::walk(plt_dist_rast_fn)
-plt_dist_rast_fn(6, add_crowns = F)
+}
+# map over blks
+unique(unq_units_df$trtmnt_block) %>% 
+  # .[1:2] %>%
+  purrr::map(\(x) plt_blk_temp(blk=x, add = T, save = F))
 ```
 
 ```{r, warning=FALSE, message=FALSE, echo=FALSE, include=FALSE}
 remove(list = ls()[grep("_temp",ls())])
 gc()
 ```
+
+### Visualize Openings
+
+let's check out the openings for the same example unit we looked at above
+
+```{r, results=F, fig.show='asis'}
+# harrypotter::hp(n = length(levels(crowns_sf$clump_n_trees_grp)), option = "always") %>% scales::show_col()
+plt_openings_vect_fn <- 
+  function(x, add_clumps = F, max_area = NA){
+    plt_tit <- paste0(
+      unq_units_df %>% dplyr::slice(x) %>% dplyr::pull(trtmnt_type)
+      , " | block "
+      , unq_units_df %>% dplyr::slice(x) %>% dplyr::pull(trtmnt_block)
+      , " | "
+      , unq_units_df %>% dplyr::slice(x) %>% dplyr::pull(trtmnt_unit)
+    )
+    # plt unit
+    unit_temp <- stand_boundary %>% 
+      dplyr::filter(
+        unit == unq_units_df$trtmnt_unit[x]
+        , block == unq_units_df$trtmnt_block[x]
+        , stringr::str_squish(tolower(tretmnt)) == unq_units_df$trtmnt_type[x]
+      ) %>% 
+      sf::st_transform(terra::crs(chm_rast))
+    
+    plt_stand <- ggplot2::ggplot() +
+      ggplot2::geom_sf(data = unit_temp, color = "black", fill = NA) +
+      ggplot2::scale_x_continuous(expand = c(0, 0)) +
+      ggplot2::scale_y_continuous(expand = c(0, 0)) +
+      ggplot2::labs(
+        x = ""
+        , y = ""
+        , subtitle = plt_tit
+      ) +
+      ggplot2::theme_void() +
+      ggplot2::theme(
+        legend.position = "top" # c(0.5,1)
+        , legend.direction = "horizontal"
+        , legend.box = "vertical"
+        , legend.margin = ggplot2::margin(2.5,0,0,0) # trbl
+        , legend.text = ggplot2::element_text(size = 7)
+        , legend.title = ggplot2::element_text(size = 6)
+        , legend.key = ggplot2::element_rect(fill = NA, color = NA)
+        , legend.key.size = unit(0.5, "cm")
+        # , plot.title = ggtext::element_markdown(size = 10, hjust = 0.5)
+        , plot.title = ggplot2::element_text(size = 10, hjust = 0.5, face = "bold")
+        , plot.subtitle = ggplot2::element_text(size = 9, hjust = 0.5, face = "bold")
+      )
+    # add open
+    plt_open <- 
+      plt_stand +
+      # openings
+      ggplot2::geom_sf(
+        data = get_clump_dist_rast_ans[[x]][["openings_vect"]]
+        , mapping = ggplot2::aes(fill = openining_area_m2), color = NA
+      )
+      # ggplot2::guides(
+      #   fill = ggplot2::guide_colorbar(
+      #     label.theme = ggplot2::element_text(
+      #       angle = 45, hjust = 1.1, vjust = 1.4, size = 8
+      #     )
+      #   )
+      # )
+      
+    if(!is.na(max_area)){
+      plt_open <- plt_open +
+        ggplot2::scale_fill_gradient(
+          low = "gray77", high = "gray11"
+          , labels = scales::comma_format(accuracy = 1)
+          , name = "opening\narea (m²)" #latex2exp::TeX("opening\narea ($\\m^2$)")
+          , limits = c(0,max_area)
+          , guide = ggplot2::guide_colorbar(
+            label.theme = ggplot2::element_text(
+              angle = 55
+              , hjust = 1
+              , vjust = 1.3
+            )
+          )
+        )
+    }else{
+      plt_open <- plt_open +
+        ggplot2::scale_fill_gradient(
+          low = "gray77", high = "gray11"
+          , labels = scales::comma_format(accuracy = 1)
+          , name = "opening\narea (m²)" #latex2exp::TeX("opening\narea ($\\m^2$)")
+          # , limits = c(0,max_area)
+          , guide = ggplot2::guide_colorbar(
+            label.theme = ggplot2::element_text(
+              angle = 55
+              , hjust = 1
+              , vjust = 1.3
+            )
+          )
+        )
+    }
+    # add clumps
+    if(add_clumps){
+      plt_open <- plt_open +
+        # clumps
+        ggnewscale::new_scale_fill() +
+        ggplot2::geom_sf(
+          data = clump_polys %>% 
+            dplyr::inner_join(
+              unq_units_df %>% dplyr::slice(x)
+              , by = dplyr::join_by(trtmnt_type,trtmnt_block,trtmnt_unit)
+            ) %>% 
+            dplyr::select(clump_n_trees_grp)
+          , mapping = ggplot2::aes(fill = clump_n_trees_grp)
+          , color = NA
+        ) +
+        # harrypotter::scale_fill_hp_d("always", name = "clump size", drop = F) +
+        ggplot2::scale_fill_manual(values = hey_clump_pal, name = "", drop = F) +
+        # tree points
+        ggplot2::geom_sf(
+          data = 
+            treetops_sf %>% 
+            dplyr::inner_join(
+              unq_units_df %>% dplyr::slice(x)
+              , by = dplyr::join_by(trtmnt_type,trtmnt_block,trtmnt_unit)
+            )
+          , color = "gray88", shape = "."
+        )
+        # ggplot2::guides(fill = ggplot2::guide_legend(ncol = 2))
+    }
+    return(plt_open)
+  }
+# one unit
+plt_openings_vect_fn(6, add_clumps = F)
+```
+
+now we'll overlay the tree clump groups on the openings data for all units
+
+```{r,eval=F,purl=FALSE, results=F, fig.show='asis', fig.height=9.5, fig.width=9.5}
+# mapping
+plt_blk_temp <- function(blk, add = F, save = F) {
+  # which idx
+  idx_temp <- 
+    unq_units_df %>% 
+    dplyr::ungroup() %>% 
+    dplyr::mutate(rownum = dplyr::row_number()) %>% 
+    dplyr::filter(trtmnt_block==blk) %>% 
+    dplyr::pull(rownum)
+  # max dist
+  max_d <-
+    purrr::map(get_clump_dist_rast_ans[idx_temp], "openings_vect") %>%
+    dplyr::bind_rows() %>% 
+    dplyr::pull(openining_area_m2) %>% 
+    max(na.rm = T) %>% 
+    ceiling()
+  # plts
+  plts_temp <- 
+    idx_temp %>% 
+    purrr::map(\(x) plt_openings_vect_fn(x, add_clumps = add, max_area = max_d))
+  # patchwork
+  p_temp <- 
+    patchwork::wrap_plots(
+      plts_temp
+      , ncol = 2
+      , guides = "collect"
+    ) &
+    ggplot2::theme(legend.position = "bottom")
+  
+  # save 
+  if(save){
+    ggplot2::ggsave(
+      filename = file.path("../data", paste0("plt_open_block_", blk, ".png"))
+      , plot = p_temp
+      , width = 10
+      , height = 10
+      , dpi = 300
+    )
+  }else{
+    p_temp
+  }
+}
+# map over blks
+unique(unq_units_df$trtmnt_block) %>% 
+  # .[1:2] %>%
+  purrr::map(\(x) plt_blk_temp(blk=x, add = T, save = T))
+```
+
+```{r, warning=FALSE, message=FALSE, echo=FALSE, include=FALSE}
+remove(list = ls()[grep("_temp",ls())])
+gc()
+```
+
+## Tree Clump Summary
+
+let's get some summary stats of the tree clump groupings by treatment type
+
+```{r}
+# create function to pass a return from st_clump_points/get_tree_clumps and create clump polygons with summary stats
+get_clump_summary <- function(get_tree_clumps_ans){
+  # get clump_dist_m
+  clump_dist_m <- min(get_tree_clumps_ans$clump_dist_m, na.rm = T)
+  # create clump polys and summary
+  clump_polys_temp <- 
+    get_tree_clumps_ans %>% 
+      dplyr::ungroup() %>% 
+      # rename the active geometry column to "geometry"
+      sf::st_set_geometry("geometry") %>% 
+      dplyr::mutate(geometry = sf::st_buffer(geometry, dist = clump_dist_m/2)) %>% 
+      dplyr::group_by(clump_id, clump_n_trees_grp, clump_n_trees_lb, clump_n_trees_ub) %>%
+      dplyr::summarise(
+        # union buffered tree points
+        geometry = sf::st_union(geometry)
+        # summary metrics
+        , n_trees = dplyr::n_distinct(treeID)
+        , mean_dbh_cm = mean(dbh_cm, na.rm = T)
+        , min_dbh_cm = min(dbh_cm, na.rm = T)
+        , max_dbh_cm = max(dbh_cm, na.rm = T)
+        , mean_tree_height_m = mean(tree_height_m, na.rm = T)
+        , min_tree_height_m = min(tree_height_m, na.rm = T)
+        , max_tree_height_m = max(tree_height_m, na.rm = T)
+        , loreys_height_m = sum(basal_area_m2*tree_height_m, na.rm = T) / sum(basal_area_m2, na.rm = T)
+        , basal_area_m2 = sum(basal_area_m2, na.rm = T)
+        , sum_dbh_cm_sq = sum(dbh_cm^2, na.rm = T)
+        , .groups = "drop_last"
+      ) %>%
+      dplyr::ungroup() %>% 
+      sf::st_make_valid() %>% 
+      dplyr::mutate(
+        clump_area_ha = sf::st_area(geometry) %>% as.numeric() %>% `/`(10000)
+        , trees_per_ha = (n_trees/clump_area_ha)
+        , basal_area_m2_per_ha = (basal_area_m2/clump_area_ha)
+        , pct_stand_basal_area = basal_area_m2/sum(basal_area_m2)
+        , pct_stand_n_trees = n_trees/sum(n_trees)
+        , qmd_cm = sqrt(sum_dbh_cm_sq/n_trees)
+      ) %>%
+      dplyr::select(-c(sum_dbh_cm_sq)) %>% 
+    # convert to imperial units
+      calc_imperial_units_fn() %>% 
+      dplyr::mutate(clump_dist_m = clump_dist_m)
+  # calculate distance between clumps
+  clump_polys_temp <- clump_polys_temp %>% 
+    dplyr::mutate(
+      nearest = sf::st_nearest_feature(clump_polys_temp)
+      , distance_nearest_clump_m = sf::st_distance(
+          clump_polys_temp
+          , clump_polys_temp[nearest,]
+          , by_element=TRUE
+        ) %>% 
+        as.numeric()
+    ) %>% 
+    dplyr::select(-c(nearest))
+  # return
+  return(clump_polys_temp)
+}
+
+# create a function to summarize by number of tree clump grouping
+get_clump_n_trees_grp_summary = function(get_tree_clumps_ans, get_clump_summary_ans, stand_sf){
+  # get area of harvest unit
+  #...will use this area in the area calculations such that...
+  #...TPA = trees in a certain group size across the whole stand area
+  harvest_area_ha <- stand_sf %>%
+    sf::st_union() %>% 
+    sf::st_as_sf() %>% 
+    dplyr::mutate(harvest_area_ha = sf::st_area(.) %>% as.numeric() %>% `/`(10000)) %>% 
+    dplyr::pull(harvest_area_ha) %>% 
+    .[1]
+  # collapse and calculate silv metrics
+  dta <- get_tree_clumps_ans %>% 
+    sf::st_drop_geometry() %>% 
+    dplyr::mutate(stand_area_ha = harvest_area_ha) %>% 
+    dplyr::group_by(stand_area_ha,clump_n_trees_grp, clump_n_trees_lb, clump_n_trees_ub) %>%
+    dplyr::summarise(
+      # summary metrics
+      n_trees = dplyr::n_distinct(treeID)
+      , mean_dbh_cm = mean(dbh_cm, na.rm = T)
+      , mean_tree_height_m = mean(tree_height_m, na.rm = T)
+      , loreys_height_m = sum(basal_area_m2*tree_height_m, na.rm = T) / sum(basal_area_m2, na.rm = T)
+      , basal_area_m2 = sum(basal_area_m2, na.rm = T)
+      , sum_dbh_cm_sq = sum(dbh_cm^2, na.rm = T)
+      , .groups = "drop_last"
+    ) %>%
+    dplyr::ungroup() %>% 
+    # attach clump area
+    dplyr::left_join(
+      get_clump_summary_ans %>% 
+        sf::st_drop_geometry() %>% 
+        dplyr::group_by(clump_n_trees_grp) %>%
+        dplyr::summarise(
+          clump_area_ha = sum(clump_area_ha)
+          , stand_n_clumps = dplyr::n()
+          , .groups = "drop_last"
+        ) %>% 
+        dplyr::ungroup()
+      , by = dplyr::join_by(clump_n_trees_grp)
+    ) %>% 
+    dplyr::mutate(
+      trees_per_ha = (n_trees/stand_area_ha) # (n_trees/clump_area_ha) ... this was not right
+      , basal_area_m2_per_ha = (basal_area_m2/stand_area_ha) # (basal_area_m2/clump_area_ha) ... this was not right
+      , qmd_cm = sqrt(sum_dbh_cm_sq/n_trees)
+      # stand calcs
+      , stand_trees_per_ha = sum(n_trees)/stand_area_ha
+      , stand_basal_area_m2 = sum(basal_area_m2)
+      , stand_basal_area_m2_per_ha = sum(basal_area_m2)/stand_area_ha
+      , pct_stand_basal_area = basal_area_m2/stand_basal_area_m2
+      , pct_stand_n_trees = n_trees/sum(n_trees)
+      , stand_qmd_cm = sqrt(sum(get_tree_clumps_ans$dbh_cm^2, na.rm = T)/sum(n_trees))
+    ) %>%
+    dplyr::select(-c(sum_dbh_cm_sq)) %>% 
+    # convert to imperial units
+    calc_imperial_units_fn()
+  # return
+  return(dta)
+}
+
+
+# call it
+clump_n_trees_grp_summary2 <- 
+  stand_boundaries$poly_name %>% 
+  unique() %>% 
+  purrr::set_names() %>% 
+  purrr::map(
+    \(x)
+    get_clump_n_trees_grp_summary(
+      get_tree_clumps_ans = treetops_clustered_new[[x]]
+      , get_clump_summary_ans = clump_polys_new[[x]]
+      , stand_sf = stand_boundaries %>% dplyr::filter(poly_name==x)
+    ) 
+  )
+# table it
+clump_n_trees_grp_summary2 %>% 
+  purrr::imap(
+   \(x,nm)  
+    x %>% 
+      dplyr::select(
+        clump_n_trees_grp, n_trees
+        , mean_dbh_in
+        , qmd_in
+        , mean_tree_height_ft
+        , loreys_height_ft
+        , trees_per_ac
+        , basal_area_ft2_per_ac, pct_stand_basal_area, pct_stand_n_trees
+      ) %>% 
+      dplyr::mutate(
+        dplyr::across(
+          .cols = c(pct_stand_basal_area, pct_stand_n_trees) 
+          , .fns = ~ scales::percent(.x, accuracy = 1)
+        )
+        , stand = nm
+      )
+  ) %>% 
+  dplyr::bind_rows() %>% 
+  dplyr::relocate(stand) %>% 
+  kableExtra::kbl(
+    digits = 1
+    , escape = F
+    , caption = paste0("Overstory tree clump summary: post-treatment")
+    , col.names = c(
+      "stand"
+      , "", "trees"
+      , "mean<br>DBH (in)"
+      , "QMD (in)"
+      , "mean<br>Ht. (ft)"
+      , "Loreys<br>Ht. (ft)"
+      , "TPA"
+      , "BA<br>ft<sup>2</sup> ac<sup>-1</sup>"
+      , "Pct<br>stand BA"
+      , "Pct<br>stand trees"
+      )
+  ) %>% 
+  kableExtra::kable_styling() %>% 
+  kableExtra::collapse_rows(columns = 1, valign = "top")
+```
+
+
+## Openings Summary

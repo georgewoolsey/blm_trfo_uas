@@ -26,6 +26,7 @@ library(latex2exp)
 library(mapview) # interactive html maps
 library(kableExtra) # tables
 library(patchwork) # combine plots
+library(ggnewscale) # ggnewscale
 
 # spatial analysis
 library(terra) # raster

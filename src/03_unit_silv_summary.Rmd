@@ -1263,7 +1263,7 @@ terra_plt_ortho <- function(
       , plg = list(
         title.cex = 0.5
       )
-      , main = title
+      , main = title, cex.main=0.7
     ) 
   }else{
     terra::plot(
@@ -1276,7 +1276,7 @@ terra_plt_ortho <- function(
         # title = "CHM (m)"
         cex = 0.8, title.cex = 0.5, shrink = 0.6
       )
-      , main = title
+      , main = title, cex.main=0.7
     ) 
   }
   terra::plot(
@@ -1322,7 +1322,7 @@ plt_single_temp <- function(x, add = T){
       , add_crowns = add
       , title = paste0(
         unq_units_df %>% dplyr::slice(x) %>% dplyr::pull(trtmnt_type)
-        , "| block "
+        , " | block "
         , unq_units_df %>% dplyr::slice(x) %>% dplyr::pull(trtmnt_block)
         , " | "
         , unq_units_df %>% dplyr::slice(x) %>% dplyr::pull(trtmnt_unit)
@@ -1412,7 +1412,7 @@ plt_blk_temp <- function(blk, add = F, save = F) {
 }
 # map over blks
 unique(unq_units_df$trtmnt_block) %>% 
-  .[2] %>% 
+  # .[2] %>% 
   purrr::walk(\(x) plt_blk_temp(x, save = F))
 ```
 
