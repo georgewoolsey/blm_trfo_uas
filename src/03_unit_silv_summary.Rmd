@@ -1384,7 +1384,7 @@ terra_plt_ortho(
 
 let's check out the RGB by treatment block
 
-```{r,eval=F,purl=FALSE, results=F, fig.show='asis', fig.height=8, fig.width=9.5}
+```{r rgb-plt-all-xxx, eval=F,purl=FALSE, results=F, fig.show='asis', fig.height=8, fig.width=9.5}
 # mapping
 plt_blk_temp <- function(blk, add = F, save = F) {
   if(save){
@@ -1412,8 +1412,8 @@ plt_blk_temp <- function(blk, add = F, save = F) {
 }
 # map over blks
 unique(unq_units_df$trtmnt_block) %>% 
-  # .[2] %>% 
-  purrr::walk(\(x) plt_blk_temp(x, save = F))
+  .[2] %>%
+  purrr::map(\(x) plt_blk_temp(x, add=T, save = F))
 ```
 
 ```{r, warning=FALSE, message=FALSE, echo=FALSE, include=FALSE}

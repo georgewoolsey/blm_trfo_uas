@@ -9,6 +9,8 @@ tab:unnamed-chunk-132
 tab:unnamed-chunk-133
 tab:unnamed-chunk-144
 tab:unnamed-chunk-145
+tab:unnamed-chunk-177
+tab:unnamed-chunk-184
 introduction
 objective
 processing
@@ -28,7 +30,7 @@ slash-piles
 slash-pile-detection-workflow
 candidate-pile-review
 slash-pile-summary-statistics
-treatment-unit-silvicultural-summary
+silv_sum
 remove-slash-piles
 function-to-calculate-silviclutural-metrics
 treatment-unit-summaries
@@ -38,3 +40,10 @@ imperial-units
 visual
 tree-distribution-by-treatment-type
 visual-crowns-by-unit
+tree-group-analysis
+group-tree-crowns
+identify-openings
+visualize-distance-raster
+visualize-openings
+tree-clump-summary
+openings-summary
