@@ -6359,7 +6359,7 @@ uniform- low
 <span id="cb179-42"><a href="silv_sum.html#cb179-42" tabindex="-1"></a>      crowns <span class="sc">%&gt;%</span> </span>
 <span id="cb179-43"><a href="silv_sum.html#cb179-43" tabindex="-1"></a>        sf<span class="sc">::</span><span class="fu">st_transform</span>(terra<span class="sc">::</span><span class="fu">crs</span>(ortho)) <span class="sc">%&gt;%</span> </span>
 <span id="cb179-44"><a href="silv_sum.html#cb179-44" tabindex="-1"></a>        terra<span class="sc">::</span><span class="fu">vect</span>()</span>
-<span id="cb179-45"><a href="silv_sum.html#cb179-45" tabindex="-1"></a>      , <span class="at">add =</span> T, <span class="at">border =</span> <span class="st">&quot;cyan&quot;</span>, <span class="at">col =</span> <span class="cn">NA</span>, <span class="at">lwd =</span> <span class="fl">0.7</span></span>
+<span id="cb179-45"><a href="silv_sum.html#cb179-45" tabindex="-1"></a>      , <span class="at">add =</span> T, <span class="at">border =</span> <span class="st">&quot;cyan&quot;</span>, <span class="at">col =</span> <span class="cn">NA</span>, <span class="at">lwd =</span> <span class="fl">0.6</span></span>
 <span id="cb179-46"><a href="silv_sum.html#cb179-46" tabindex="-1"></a>    )</span>
 <span id="cb179-47"><a href="silv_sum.html#cb179-47" tabindex="-1"></a>  }</span>
 <span id="cb179-48"><a href="silv_sum.html#cb179-48" tabindex="-1"></a>}</span></code></pre></div>
@@ -6468,9 +6468,8 @@ uniform- low
 <span id="cb183-25"><a href="silv_sum.html#cb183-25" tabindex="-1"></a>}</span>
 <span id="cb183-26"><a href="silv_sum.html#cb183-26" tabindex="-1"></a><span class="co"># map over blks</span></span>
 <span id="cb183-27"><a href="silv_sum.html#cb183-27" tabindex="-1"></a><span class="fu">unique</span>(unq_units_df<span class="sc">$</span>trtmnt_block) <span class="sc">%&gt;%</span> </span>
-<span id="cb183-28"><a href="silv_sum.html#cb183-28" tabindex="-1"></a>  .[<span class="dv">2</span>] <span class="sc">%&gt;%</span></span>
+<span id="cb183-28"><a href="silv_sum.html#cb183-28" tabindex="-1"></a>  .[<span class="dv">1</span><span class="sc">:</span><span class="dv">2</span>] <span class="sc">%&gt;%</span></span>
 <span id="cb183-29"><a href="silv_sum.html#cb183-29" tabindex="-1"></a>  purrr<span class="sc">::</span><span class="fu">map</span>(\(x) <span class="fu">plt_blk_temp</span>(x, <span class="at">add=</span>T, <span class="at">save =</span> F))</span></code></pre></div>
-<p><img src="blm_trfo_uas_files/figure-html/rgb-plt-all-xxx-1.png" alt="" width="912" /></p>
 
 </div>
 </div>

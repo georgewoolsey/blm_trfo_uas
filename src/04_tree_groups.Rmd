@@ -608,7 +608,7 @@ plt_dist_rast_fn(4)
 
 now we'll overlay the tree clump groups on the distance raster for all units
 
-```{r,eval=F,purl=FALSE, results=F, fig.show='asis', fig.height=9.5, fig.width=9.5}
+```{r,eval=T,purl=FALSE, results=F, fig.show='asis', fig.height=9.5, fig.width=9.5}
 # mapping
 plt_blk_temp <- function(blk, add = F, save = F) {
   # which idx
@@ -798,7 +798,7 @@ plt_openings_vect_fn(6, add_clumps = F)
 
 now we'll overlay the tree clump groups on the openings data for all units
 
-```{r,eval=F,purl=FALSE, results=F, fig.show='asis', fig.height=9.5, fig.width=9.5}
+```{r,eval=T,purl=FALSE, results=F, fig.show='asis', fig.height=9.5, fig.width=9.5}
 # mapping
 plt_blk_temp <- function(blk, add = F, save = F) {
   # which idx
@@ -844,7 +844,7 @@ plt_blk_temp <- function(blk, add = F, save = F) {
 # map over blks
 unique(unq_units_df$trtmnt_block) %>% 
   # .[1:2] %>%
-  purrr::map(\(x) plt_blk_temp(blk=x, add = T, save = T))
+  purrr::map(\(x) plt_blk_temp(blk=x, add = T, save = F))
 ```
 
 ```{r, warning=FALSE, message=FALSE, echo=FALSE, include=FALSE}
