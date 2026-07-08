@@ -1,0 +1,1271 @@
+# Individual Tree Accuracy Evaluation
+
+In this section, we'll mask the point cloud detected trees using the slash pile detections to get our final UAS point cloud-derived forest inventory tree list. Then we'll bring in field-measured data to evaluate our tree detection accuracy. This accuracy evaluation will yield detection accuracy metric including precision, recall (i.e. detection rate), and F-score (overall accuracy or balanced accuracy). Precision is a measure of the proportion of trees that estimated by the UAS method that were actually trees. Recall is a measure of the proportion of field-measured trees that the UAS method correctly identified. The F-score balances precision and recall to create an overall accuracy measure. All of these metrics range between 0 and 1 with values close to one indicating higher tree detection accuracies. In open canopy ponderosa pine forests, tree detection rates generally range from 65-85% (Creasey et al. 2021; Swayze and Tinkham 2023; Tinkham and Woolsey 2024) with higher proportions of larger trees (e.g. 75-95%) being detected compared to smaller tree detection rates (55-75%). As far as I know there has not been a detailed accuracy evaluation of tree detection methods from aerial point cloud data in Pinyon-Juniper forests.
+
+```{r, warning=FALSE, message=FALSE, echo=FALSE, include=FALSE}
+remove(list = ls()[grep("_temp",ls())])
+remove(treetops_sf)
+gc()
+```
+
+## Remove Slash Piles from Predictions
+
+read back in the tree point data and attach to treatment units
+
+```{r}
+treetops_sf <- sf::st_read(dsn = treetops_fnm, quiet = TRUE)
+# attach to treatment unit
+treetops_sf <- treetops_sf %>% 
+  dplyr::inner_join(
+    treetops_sf %>% 
+      sf::st_transform(sf::st_crs(stand_boundary)) %>% 
+      sf::st_intersection(
+        stand_boundary %>%
+          dplyr::select(unit,block,tretmnt,unit_area_ha) %>% 
+          dplyr::rename(type = tretmnt) %>% 
+          dplyr::mutate(
+            type =
+              tolower(type) %>% 
+              stringr::str_squish()
+          ) %>% 
+          dplyr::rename_with(.fn = ~paste0("trtmnt_", .x, recycle0 = T))
+      ) %>% 
+      sf::st_drop_geometry() %>% 
+      dplyr::select(treeID, tidyselect::starts_with("trtmnt_")) %>% 
+      dplyr::group_by(treeID) %>% 
+      dplyr::slice(1) %>% 
+      dplyr::ungroup()
+    , by = "treeID"
+  ) %>% 
+  dplyr::mutate(
+    is_in_trtmnt_unit = ifelse(is.na(trtmnt_type) | trtmnt_type=="control",F,T)
+    , dplyr::across(c(trtmnt_type,trtmnt_block,trtmnt_unit),ordered)
+  )
+# treetops_sf %>% dplyr::glimpse()
+```
+
+use our slash pile mask to remove detected "trees" that are likely not trees. if a tree top point falls within the boundary of a detected pile footprint, it will be removed
+
+```{r}
+# save nrow
+nrow_temp <- nrow(treetops_sf)
+treetops_sf <- 
+  sf::st_filter(
+    treetops_sf
+    , piles_workflow_ans %>% 
+      dplyr::filter(is_in_trtmnt_unit, inrange_th_votes>=5) %>% 
+      sf::st_union()
+    , .predicate = sf::st_disjoint
+  )
+```
+
+what proportion of "trees" were removed?
+
+```{r}
+# nrow_temp
+# nrow(treetops_sf)
+scales::percent((nrow_temp-nrow(treetops_sf))/nrow_temp, accuracy = 0.1)
+```
+
+```{r, warning=FALSE, message=FALSE, echo=FALSE, include=FALSE}
+remove(list = ls()[grep("_temp",ls())])
+remove(piles_workflow_ans)
+gc()
+```
+
+## Reference Field Data
+
+Field-measured data is frequently cited as the gold standard for validating remote sensing methods, but it may be more appropriate to frame field data as the status-quo baseline against which new methodologies are compared. Field inventories carry well-documented challenges, including measurement error, subjective assessments, and data transcription errors ([Elzinga et al. 2005]( https://doi.org/10.1093/wjaf/20.2.134); [Westfall and Woodall 2007](https://doi.org/10.1016/j.foreco.2007.07.014); [Luoma et al. 2017](https://doi.org/10.3390/f8020038); [Wang et al. 2019](https://doi.org/10.1016/j.isprsjprs.2018.11.008); [Sparks et al. 2024](https://doi.org/10.1093/forsci/fxae015)). This means that a comparison of the remote sensing forest measurement method against field data evaluates alignment with current operational practices rather than absolute environmental reality. Here are the notes I got along with the field inventory data:
+
+> Attached is a csv of the PJ data from the Dawson Creek site. I added the plot center locations and calculated locations of each measured tree from the original distance and azimuth information. Below is a list of notes (and unfortunately some weird things) about it.
+
+> *	There are 65 rows (out of 1603) with any missing data. The missing parts are usually in a location-related column with several in a tree metric column.
+> *	There are 43 DRC (diameter at root collar) observations with two separate values separated by a comma. 
+> *	There are 8 circumstances where there are potential duplicate trees - where plot, distance, and azimuth are identical, but tree information is different. 
+> *	In the metadata crown length is described as "length from first longest side of the adult tree canopy, in m" and crown width is described as "width from second longest side of the adult tree canopy, in m". However, crown width is frequently greater than the length value and after some looking the length value doesn't seem to equal height-cbh either.
+> *	The plot column includes unit, treatment type, and plot ID whereas the tree_id column includes that information as well as a per-plot ID of each tree.
+
+> The multiple DRC values are due to multiple stems splitting at ground level. I think we should treat these as one tree, as they're recorded in the data. To combine the two stem values into a single DRC, we could either take the larger of the two or sum them.
+
+> The location duplication issue is due to two trees (or more likely stems from the same individual that split below ground) growing very close together. We should continue to treat them as separate trees, as shown in the data.
+
+> Height, cbh, length and width are all in meters. DRC is in cm.
+
+Chojnacky & Rogers ([1999](https://doi.org/10.1093/wjaf/14.1.14)) provide information on converting DRC to DBH if needed
+
+let's get to it and load in the field-measured "truth" data
+
+```{r}
+validation_trees <-
+  readr::read_csv("../data/pj_trees_george.csv", show_col_types = F, progress = F) %>% 
+  dplyr::rename_with(tolower) %>% 
+  dplyr::rename_with(stringr::str_squish) %>% 
+  dplyr::rename_with(make.names) %>% 
+  dplyr::rename_with(~stringr::str_replace_all(.x, "\\.{2,}", ".")) %>% 
+  dplyr::rename_with(~stringr::str_remove(.x, "\\.$")) %>% 
+  dplyr::rename_with(~stringr::str_replace_all(.x, "\\.", "_")) %>% 
+  dplyr::mutate(
+    dplyr::across(
+      -c(plot,tree_id,species,unit,treatment_code,drc)
+      , as.numeric
+    )
+    , dplyr::across(
+      c(species,unit,treatment_code)
+      , ~ stringr::str_trim(.x) %>% toupper()
+    )
+  ) %>% 
+  # clean the DRC
+  dplyr::mutate(
+    drc = stringr::str_remove_all(drc, " ")
+     # split by comma
+    , drc_list = stringr::str_split(drc, ",") %>% 
+      purrr::map(as.numeric)
+    , drc_count = purrr::map_dbl(drc_list, length)
+    , drc_max_cm = purrr::map_dbl(drc_list, max)
+    , drc_sum_cm = purrr::map_dbl(drc_list, sum)
+  ) %>% 
+  # dplyr::filter(stringr::str_detect(drc,",")) %>% dplyr::select(tidyselect::starts_with("drc")) %>% View()
+  dplyr::select(-drc_list) %>% 
+  # rename
+  dplyr::rename_with(
+    .cols = c(height,cbh,crown_width,crown_length)
+    , .fn = ~paste0(.x,"_m",recycle0 = T)
+  ) %>% 
+  dplyr::rename_with(
+    .cols = c(drc)
+    , .fn = ~paste0(.x,"_cm",recycle0 = T)
+  ) %>% 
+  dplyr::mutate(
+    # Chojnacky & Rogers ([1999](https://doi.org/10.1093/wjaf/14.1.14))
+    dbh_cm = dplyr::case_when(
+      # the correct code for Juniperus scopulorum is JUSC2...
+      species %in% c("JUOS","JUSC","JUSC2") ~ -6.8180 + 1.0222*drc_max_cm + 1.8879*ifelse(drc_count==1,1,0)
+      , species == "PIED" ~ -6.8180 + 1.0222*drc_max_cm + 1.8879*ifelse(drc_count==1,1,0) + 1.8971 -0.03998*drc_max_cm
+      , species == "QUGA" ~ -6.8180 + 1.0222*drc_max_cm + 1.8879*ifelse(drc_count==1,1,0) + 3.1100 -0.0689*drc_max_cm
+      , T ~ NA
+    )
+  )
+# huh?  
+validation_trees %>% dplyr::glimpse()
+# validation_trees$species %>% table()
+# validation_trees %>% dplyr::count(plot,tree_id) %>% dplyr::filter(n!=1) %>% nrow()
+```
+
+let's quickly look at the field measurements
+
+```{r, echo=T}
+validation_trees %>% 
+  dplyr::select(height_m, drc_max_cm, dbh_cm, cbh_m, crown_length_m, crown_width_m) %>% 
+  summary() %>% 
+  knitr::kable(format = "markdown")
+```
+
+it looks like the Chojnacky & Rogers ([1999](https://doi.org/10.1093/wjaf/14.1.14)) DRC-to-DBH conversion worked well. Those crown and CBH measurements are suspect.
+
+what is the distribution of the field-measured tree size values
+
+```{r}
+validation_trees %>% 
+  sf::st_drop_geometry() %>% 
+  dplyr::select(height_m,dbh_cm,cbh_m) %>% 
+  tidyr::pivot_longer(
+    cols = dplyr::everything()
+    , names_to = "metric"
+    , values_to = "value"
+    , values_drop_na = T
+  ) %>% 
+  dplyr::mutate(
+    tree_metric = metric %>% 
+      stringr::str_extract("(height|dbh|cbh)") %>% 
+      factor(
+        ordered = T
+        , levels = c(
+          "height"
+          , "dbh"
+          , "cbh"
+        )
+        , labels = c(
+          "Height (m)"
+          , "DBH (cm)"
+          , "CBH (m)"
+        )
+      )
+  ) %>% 
+  # dplyr::glimpse()
+# plot dist
+  ggplot2::ggplot(mapping = ggplot2::aes(x = value)) +
+  ggplot2::geom_density(
+    mapping = ggplot2::aes(y=ggplot2::after_stat(scaled))
+    , alpha = 0.8
+    , fill = "brown", color = "brown"
+  ) +
+  ggplot2::facet_grid(
+    cols = dplyr::vars(tree_metric)
+    , scales = "free_x", axes = "all_x"
+  ) +
+  ggplot2::scale_y_continuous(NULL,breaks=NULL) +
+  ggplot2::scale_x_continuous(breaks=scales::breaks_extended(n=8)) +
+  ggplot2::labs(
+    x=""
+  ) +
+  ggplot2::theme_light() +
+  ggplot2::theme(
+    legend.position = "top"
+    , strip.text.x = ggplot2::element_text(color = "black", face = "bold")
+    , panel.grid.major.y = ggplot2::element_blank()
+    , panel.grid.minor.y = ggplot2::element_blank()
+  )
+```
+
+what is the distribution of tree species?
+
+```{r}
+# wut
+validation_trees %>% 
+  dplyr::count(species) %>% 
+  dplyr::ungroup() %>% 
+  dplyr::mutate(
+    pct = scales::percent(n/sum(n), accuracy = 0.1)
+    , n = scales::comma(n)
+  ) %>% 
+  kableExtra::kbl(
+    caption = "field-measured species distribution"
+    , col.names = c("species symbol","n", "%")
+  ) %>% 
+  kableExtra::kable_styling()
+```
+
+Utah juniper (*Juniperus osteosperma*, JUOS) and pinyon pine (*Pinus edulis*, PIED)
+
+ok, let's verify those notes we got with the data and look for missing coordinates
+
+```{r}
+validation_trees %>% 
+  dplyr::filter(
+    is.na(tree_x) | is.na(tree_y)
+    | as.character(tree_x)=="" | as.character(tree_y)==""
+  ) %>%
+  nrow() %>% 
+  stringr::str_c(" trees are missing location data")
+```
+
+we'll exclude these trees from the accuracy evaluation since we need location data to perform a spatial instance segmentation analysis
+
+let's check out how many trees are missing height measurement data which we will use for matching with our UAS predicted trees
+
+```{r}
+validation_trees %>% 
+  dplyr::filter(
+    is.na(height_m)
+  ) %>%
+  nrow() %>% 
+  stringr::str_c(" trees are missing height data")
+```
+
+we'll exclude these as well and implement the exclusions using a spatial join with the treatment unit boundaries. we'll also set a minimimum tree height threshold to define what is considered a "tree"
+
+```{r}
+min_tree_ht_m <- 2
+# drop missings and spatial it
+validation_trees <- 
+  validation_trees %>% 
+  dplyr::filter(
+    !is.na(tree_x)
+    , !is.na(tree_y)
+    , !is.na(height_m)
+    , height_m>=min_tree_ht_m
+  ) %>%  
+  # guessing this is WGS 84
+  sf::st_as_sf(coords = c("tree_x", "tree_y"), crs = 4326, remove = F) %>% 
+  sf::st_transform(sf::st_crs(stand_boundary))
+# attach to treatment unit
+validation_trees <-
+  validation_trees %>% 
+  dplyr::inner_join(
+     validation_trees %>% 
+      sf::st_intersection(
+        stand_boundary %>%
+          dplyr::select(unit,block,tretmnt,unit_area_ha) %>% 
+          dplyr::rename(type = tretmnt) %>% 
+          dplyr::mutate(
+            type =
+              tolower(type) %>% 
+              stringr::str_squish()
+          ) %>% 
+          dplyr::rename_with(.fn = ~paste0("trtmnt_", .x, recycle0 = T))
+      ) %>% 
+      sf::st_drop_geometry() %>% 
+      dplyr::select(plot,tree_id, tidyselect::starts_with("trtmnt_")) %>% 
+      dplyr::group_by(plot,tree_id) %>% 
+      dplyr::slice(1) %>% 
+      dplyr::ungroup()
+    , by = dplyr::join_by(plot,tree_id)
+  ) %>% 
+  dplyr::mutate(
+    is_in_trtmnt_unit = ifelse(is.na(trtmnt_type) | trtmnt_type=="control",F,T)
+    # , dplyr::across(c(trtmnt_type,trtmnt_block,trtmnt_unit),ordered)
+  )
+```
+
+we used a minimum tree height of `r min_tree_ht_m` m for validation which we'll also apply to our UAS-detected trees
+
+let's plot the field trees on the study unit boundaries
+
+```{r}
+mapview::mapview(
+  stand_boundary %>% dplyr::select(type,block,unit)
+  # , color = "blue"
+  , lwd = 1
+  , zcol = "type"
+  , col.regions = RColorBrewer::brewer.pal(n=length(unique(stand_boundary$type)),name="Dark2")
+  , alpha.regions = 0.5
+  , label = F
+  , legend = T
+  , popup = T
+  , layer.name = "study boundary"
+  , leaflet.options = list(maxZoom = 16)
+) +
+mapview::mapview(
+  validation_trees %>% dplyr::select(tree_x,tree_y,height_m,dbh_cm)
+  , zcol = "height_m"
+  , col.regions = viridis::plasma(n=100)
+  , cex = 3
+  , layer.name = "field tree ht. (m)"
+)
+```
+
+neat. 
+
+we'll have to get plot center locations as a data set so we can intersect our UAS-detected trees with the plot boundaries. a 10 m radius was used to define the circular plots (`r scales::comma(pi*10^2,accuracy = 0.01,suffix=" square meters")`)
+
+```{r}
+# validation_trees$distance %>% summary()
+validation_plots <-
+  validation_trees %>%
+  sf::st_drop_geometry() %>% 
+  dplyr::count(plot,plot_center_x,plot_center_y,trtmnt_type,trtmnt_block,trtmnt_unit) %>% 
+  dplyr::ungroup() %>% 
+  dplyr::rename(n_trees = n) %>% 
+  dplyr::mutate(
+    plot_radius_m = 10
+    , plot_area_m2 = pi*plot_radius_m^2
+    , trees_per_ha = n_trees/(plot_area_m2/10000)
+  ) %>% 
+  # dplyr::group_by(plot) %>% dplyr::filter(dplyr::n()>1)
+  # guessing this is WGS 84
+  sf::st_as_sf(coords = c("plot_center_x", "plot_center_y"), crs = 4326, remove = F) %>% 
+  sf::st_transform(sf::st_crs(stand_boundary))
+# validation_plots %>% dplyr::glimpse()
+```
+
+we aggregated the field-measured plot data. let's look at the TPH to make sure it aligns with expectations
+
+```{r}
+validation_plots %>% 
+  dplyr::ungroup() %>% 
+  sf::st_drop_geometry() %>% 
+  dplyr::mutate(
+    trtmnt_type = ordered(trtmnt_type)
+    , my_fct = forcats::fct_cross(trtmnt_type,trtmnt_block,trtmnt_unit)
+  ) %>% 
+  dplyr::arrange(desc(trtmnt_type),trees_per_ha) %>% 
+  dplyr::mutate(my_fct = forcats::fct_reorder(my_fct, trees_per_ha)) %>% 
+  ggplot2::ggplot(mapping = ggplot2::aes(x=trees_per_ha,y=my_fct,fill=trtmnt_type)) +
+  ggplot2::geom_point(mapping = ggplot2::aes(color=trtmnt_type), color = "gray") +
+  ggplot2::geom_boxplot(width = 0.5, alpha = 0.8, outliers = F) +
+  ggplot2::facet_grid(
+    rows = dplyr::vars(trtmnt_type)
+    , scales = "free_y"
+    , switch = "y"
+    , axes = "all_x"
+  ) +
+  ggplot2::scale_fill_brewer(palette = "Dark2") +
+  ggplot2::scale_color_brewer(palette = "Dark2") +
+  ggplot2::scale_x_continuous(labels = scales::comma) +
+  ggplot2::theme_light() +
+  ggplot2::labs(x = latex2exp::TeX("trees $ha^{-1}$"), y = "", subtitle = "field plot TPH measurements") +
+  ggplot2::theme(
+    legend.position = "none"
+    , axis.text.y = ggplot2::element_text(size = 7)
+    , axis.text.x = ggplot2::element_text(size = 8)
+    , strip.text = ggplot2::element_text(size = 10, color = "black", face = "bold")
+    , strip.placement = "outside"
+  )
+```
+
+appears to be in-line with expectations but note the variability within the units and across the units by treatment type
+
+finally, let's check out an example individual plot (white) and tree locations (blue) on the RGB
+
+```{r}
+plt_temp <- validation_plots %>% 
+  dplyr::slice_max(n = 22, order_by = n_trees) %>% 
+  dplyr::slice_sample(n=1) %>% 
+  dplyr::pull(plot)
+# rgb
+rgb_rast %>% 
+   terra::crop(
+    validation_plots %>% 
+      dplyr::filter(plot==plt_temp) %>% 
+      sf::st_buffer(11) %>% 
+      sf::st_bbox() %>% 
+      sf::st_as_sfc() %>% 
+      sf::st_transform(terra::crs(rgb_rast)) %>% 
+      terra::vect()
+    , mask=T
+  ) %>% 
+  terra::plotRGB()
+# add plot
+validation_plots %>% 
+  dplyr::filter(plot==plt_temp) %>% 
+  sf::st_buffer(.$plot_radius_m) %>% 
+  sf::st_transform(terra::crs(rgb_rast)) %>% 
+  terra::vect() %>% 
+  terra::plot(add = T, col = NA, border = "white", lwd = 1.3)
+# add plot
+validation_plots %>% 
+  dplyr::filter(plot==plt_temp) %>% 
+  sf::st_transform(terra::crs(rgb_rast)) %>% 
+  terra::vect() %>% 
+  terra::plot(add = T, col = "white", pch = 18, cex = 2)
+# add trees
+validation_trees %>% 
+  dplyr::filter(plot==plt_temp) %>% 
+  sf::st_transform(terra::crs(rgb_rast)) %>% 
+  terra::vect() %>% 
+  terra::plot(add = T, col = "cyan", cex = 1.5)
+```
+
+interesting. do you have any thoughts?
+
+```{r, warning=FALSE, message=FALSE, echo=FALSE, include=FALSE}
+remove(list = ls()[grep("_temp",ls())])
+gc()
+```
+
+## Detection Accuracy {#detect_metrics_form}
+
+we'll make a function that uses the following input data parameters to match predicted trees with validation/reference trees:
+
+* `pred_data`: predicted data point locations as `sf` data
+* `ref_data`: reference/validation/ground truth data point locations as `sf` data
+* `max_dist_m`: radius of search for matching
+* `max_height_error_m`: maximum allowable difference in height for to be considered correct match
+
+for work in ponderosa pine forests, we generally set the `max_dist_m` to a 3 m radius to account for tree lean and slight horizontal misalignment in GPS data collection with 3 m representing the crown radius of a mature tree. we also typically set the `max_height_error_m` to 2 m for ponderosa pine evaluation but will need to reduce here to account for shorter trees
+
+information used to inform the definition of "typical" crown width can be found in:
+
+* [Gill et al. 2000](https://doi.org/10.1016/S0378-1127(99)00113-9)
+* [Bechtold 2003](https://doi.org/10.1093/sjaf/27.4.269)
+* [Bechtold 2004](https://doi.org/10.1093/wjaf/19.4.245)
+* [Purves et al. 2007](https://doi.org/10.1371/journal.pone.0000870)
+
+Then, we'll aggregate the instance matching results to evaluate omission rate (false negative rate or miss rate), commission rate (false positive rate), precision, recall (detection rate), and the F-score metric. As a reminder, true positive (TP) instances correctly match ground truth instances with a prediction, commission predictions do not match a ground truth instance (false positive; FP), and omissions are ground truth instances for which no predictions match (false negative; FN)
+
+$$\textrm{omission rate} = \frac{FN}{TP+FN}$$
+
+$$\textrm{commission rate} = \frac{FP}{TP+FP}$$
+
+$$\textrm{precision} = \frac{TP}{TP+FP}$$
+
+$$\textrm{recall} = \frac{TP}{TP+FN}$$
+
+$$
+\textrm{F-score} = 2 \times \frac{\bigl(precision \times recall \bigr)}{\bigl(precision + recall \bigr)}
+$$
+
+
+```{r}
+###############################################################
+###############################################################
+###############################################################
+###############################################################
+# check df function
+###############################################################
+###############################################################
+###############################################################
+###############################################################
+validate_df_fn <- function(data, required_cols = c("tree_height_m"), check_numeric = F) {
+  # check data
+  if(!inherits(data,"sf") && !inherits(data,"sfc")){stop("all input data requires POINT sf data")}
+  if(
+    !all( sf::st_is(data, c("POINT")) )
+  ){
+    stop("all input data requires POINT sf data")
+  }
+  # names
+  # uses base::setdiff and base::names
+  missing_cols <- setdiff(required_cols, names(data))
+  
+  if(length(missing_cols) > 0){
+    stop("all input data requires columns: ", paste(missing_cols, collapse = ", "))
+  }
+  
+  # numeric
+  if(check_numeric){
+    non_numeric <- data %>%
+      sf::st_drop_geometry() %>% 
+      dplyr::select(dplyr::all_of(required_cols)) %>%
+      dplyr::summarise(dplyr::across(dplyr::everything(), ~ !is.numeric(.x))) %>%
+      tidyr::pivot_longer(dplyr::everything()) %>%
+      dplyr::filter(value == TRUE)
+
+    if (nrow(non_numeric) > 0) {
+      stop("columns must be numeric: ", paste(non_numeric$name, collapse = ", "))
+    }
+  }
+  
+  # is.na() catches both NA and NaN; is.infinite() catches Inf
+  invalid_dta <- data %>%
+    sf::st_drop_geometry() %>% 
+    dplyr::summarise(
+      dplyr::across(
+        dplyr::all_of(required_cols)
+        , ~ sum(is.na(.x) | is.infinite(.x))
+      )
+    ) %>%
+    tidyr::pivot_longer(
+      cols = dplyr::everything()
+      , names_to = "column"
+      , values_to = "count"
+    ) %>%
+    dplyr::filter(count > 0)
+
+  if (nrow(invalid_dta) > 0) {
+    bad_cols <- paste(invalid_dta$column, collapse = ", ")
+    stop("invalid values (NA, NaN, or Inf) found in: ", bad_cols)
+  }
+  return(TRUE)
+}
+###############################################################
+###############################################################
+###############################################################
+###############################################################
+# match function
+###############################################################
+###############################################################
+###############################################################
+###############################################################
+reference_prediction_match <- function(
+  pred_data
+  , ref_data
+  , max_dist_m
+  , max_height_error_m
+) {
+  #######################################################################
+  # threshold checks
+  #######################################################################
+  if(
+    any(is.na(max_dist_m)) || 
+    any(is.null(max_dist_m)) || 
+    !inherits(as.numeric(max_dist_m),"numeric")
+  ){
+    stop("`max_dist_m` must be numeric and not missing")
+  }else{max_dist_m <- as.numeric(max_dist_m)[1]}
+  if(
+    any(is.na(max_height_error_m)) || 
+    any(is.null(max_height_error_m)) || 
+    !inherits(as.numeric(max_height_error_m),"numeric")
+  ){
+    stop("`max_height_error_m` must be numeric and not missing")
+  }else{max_height_error_m <- as.numeric(max_height_error_m)[1]}
+  #######################################################################
+  # data checks
+  #######################################################################
+  validate_df_fn(data = pred_data, required_cols = c("tree_height_m"), check_numeric = T)
+  validate_df_fn(data = ref_data, required_cols = c("tree_height_m"), check_numeric = T)
+  if(nrow(pred_data)==0 | nrow(ref_data)==0){
+    warning("no data so...?????")
+    return(NULL)
+  }
+  # proj
+  if(!identical(
+    sf::st_crs(pred_data, parameters = T)[["epsg"]]
+    , sf::st_crs(ref_data, parameters = T)[["epsg"]]
+  )){stop("data must have same projection. see `sf::st_crs()`")}
+  # sort to start with largest
+  pred_data <- pred_data %>% 
+    dplyr::arrange(desc(tree_height_m)) %>% 
+    dplyr::mutate(pred_match_idx = dplyr::row_number())
+  ref_data <- ref_data %>% 
+    dplyr::arrange(desc(tree_height_m)) %>% 
+    dplyr::mutate(ref_match_idx = dplyr::row_number())
+  #######################################################################
+  # build a 2D kd-tree
+  #######################################################################
+    # Use the X and Y coordinates of the predicted to build the tree.
+    pred_coords_temp <- 
+      pred_data %>% 
+      dplyr::mutate(
+        X = sf::st_coordinates(.)[,1] %>% as.numeric()
+        , Y = sf::st_coordinates(.)[,2] %>% as.numeric()
+      ) %>% 
+      dplyr::select(X,Y) %>% 
+      sf::st_drop_geometry()
+    # Use the X and Y coordinates of the reference to build the tree.
+    ref_coords_temp <- 
+      ref_data %>% 
+      dplyr::mutate(
+        X = sf::st_coordinates(.)[,1] %>% as.numeric()
+        , Y = sf::st_coordinates(.)[,2] %>% as.numeric()
+      ) %>% 
+      dplyr::select(X,Y) %>% 
+      sf::st_drop_geometry()
+    
+    # perform a fixed-radius search using RANN::nn2
+    nn_ans_temp <- RANN::nn2(
+      # the point cloud xy data (builds the kd-tree on this)
+      data = pred_coords_temp
+      # the seed point xy data (number of columns must be the same as data)
+      , query = ref_coords_temp
+      # maximum number of neighbors to find per query
+      , k = min(nrow(pred_coords_temp),nrow(ref_coords_temp))
+      # the search radius (rcyl)
+      , radius = max_dist_m
+      , searchtype = "radius"
+    )
+    # huh?
+    # nn_ans_temp %>% class()
+    # nn_ans_temp %>% names()
+    # nn_ans_temp$nn.idx %>% nrow()
+    # nrow(ref_coords_temp)
+    # nn_ans_temp$nn.idx %>% ncol()
+    # nrow(pred_coords_temp)
+    # nn_ans_temp$nn.dists %>% nrow()
+    # nrow(ref_coords_temp)
+    # nn_ans_temp$nn.dists %>% ncol()
+    # nrow(pred_coords_temp)
+    # nn_ans_temp$nn.dists[1:11,] %>% dplyr::as_tibble() %>% dplyr::glimpse()
+  #######################################################################  
+  # iterate through the kd-tree to make matches
+  #######################################################################
+    if(nrow(ref_coords_temp)!=nrow(ref_data)){stop("bad kd-tree")}
+    # add pred match tracker
+    ref_data$pred_match_idx <- 0
+    ref_data$pred_match_height_diff_m <- as.numeric(NA)
+    ref_data$pred_tree_height_m <- as.numeric(NA)
+    ref_data$pred_match_dist_m <- as.numeric(NA)
+    for(i in 1:nrow(ref_coords_temp)){
+      # get indices of points in the current cylinder (0 means no point found)
+      nn_idx_pts <- nn_ans_temp$nn.idx[i, ]
+      cyl_pts <- nn_idx_pts[nn_idx_pts > 0] 
+      # remove already matched
+      cyl_pts <- cyl_pts[!(cyl_pts %in% ref_data$pred_match_idx)] 
+      # if available matches
+      if(dplyr::coalesce(length(cyl_pts),0) >= 1) {
+        # get heights
+        # ref_data %>% dplyr::select(field_tree_id, tree_height_m) %>% dplyr::glimpse()
+        # ref_data$tree_height_m[i]
+        # pred_data$tree_height_m[cyl_pts]
+        ht_diffs <- abs(ref_data$tree_height_m[i]-pred_data$tree_height_m[cyl_pts])
+        # get the minimum value among elements below the threshold
+        min_val <- min(ht_diffs[ht_diffs <= max_height_error_m], na.rm = T)
+        # if not none within threshold
+        if(!is.infinite(min_val)){
+          # the index of that value in the original full vector
+          cyl_idx <- which(ht_diffs == min_val)[1] # if multiple matches, takes the nearest
+          match_idx <- cyl_pts[cyl_idx]
+          # distance
+          nn_dist_idx <- which(nn_idx_pts == match_idx)
+          nn_dist <- nn_ans_temp$nn.dists[i,nn_dist_idx]
+          # update match
+          ref_data$pred_match_height_diff_m[i] <- min_val
+          ref_data$pred_tree_height_m[i] <- pred_data$tree_height_m[match_idx]
+          ref_data$pred_match_idx[i] <- match_idx
+          ref_data$pred_match_dist_m[i] <- nn_dist
+          
+        }
+      }
+    }
+  #######################################################################
+  # add ref id to pred and return
+  #######################################################################
+  # pred_data %>% dplyr::glimpse()
+  # ref_data %>% dplyr::glimpse()
+  pred_data <- pred_data %>% 
+    # get rid of columns we'll create
+    dplyr::select( -dplyr::any_of(c(
+      "hey_xxxxxxxxxx"
+      , "pred_match_height_diff_m"
+      , "pred_match_dist_m"
+      , "ref_tree_height_m"
+      , "ref_match_idx"
+    ))) %>% 
+    dplyr::left_join(
+      ref_data %>% 
+        sf::st_drop_geometry() %>% 
+        dplyr::select(ref_match_idx, pred_match_idx, pred_match_height_diff_m, pred_match_dist_m, tree_height_m) %>% 
+        dplyr::rename(ref_tree_height_m=tree_height_m)
+      , by = "pred_match_idx"
+    )
+  return(list(
+    ref_data = ref_data
+    , pred_data = pred_data
+  ))
+}
+###############################################################
+###############################################################
+###############################################################
+###############################################################
+# combine match to classify reference/predictions
+###############################################################
+###############################################################
+###############################################################
+###############################################################
+ground_truth_prediction_match <- function(
+  reference_prediction_match_ans
+  , comp_cols = c("tree_height_m")
+) {
+  # check for comparison cols
+  comp_cols <- 
+    comp_cols %>% 
+    # remove whitespace
+    stringr::str_trim() %>% 
+    # keep only those with a value
+    stringr::str_subset(".")
+  if(inherits(comp_cols, "character") && length(comp_cols) > 0){
+    validate_df_fn(data = reference_prediction_match_ans$ref_data, required_cols = comp_cols, check_numeric = T)
+    validate_df_fn(data = reference_prediction_match_ans$pred_data, required_cols = comp_cols, check_numeric = T)
+  }
+  # tp matches
+  return_df <-
+    reference_prediction_match_ans$ref_data %>%
+    dplyr::filter(pred_match_idx!=0 & !is.na(pred_match_idx)) %>% 
+    dplyr::select(dplyr::all_of(c(
+      "ref_match_idx"
+      , "pred_match_idx"
+      , "pred_match_dist_m"
+      # , "pred_tree_height_m"
+      # , "tree_height_m"
+      , comp_cols
+    ))) %>% 
+    dplyr::rename_with(
+      .cols = dplyr::all_of(comp_cols)
+      , .fn = ~paste0("ref_", .x, recycle0 = T)
+    ) %>% 
+    sf::st_set_geometry("ref_geometry") %>% 
+    # add on pred geom
+    dplyr::inner_join(
+      reference_prediction_match_ans$pred_data %>% 
+        dplyr::select(dplyr::all_of(c(
+          "ref_match_idx"
+          , comp_cols
+        ))) %>% 
+        dplyr::rename_with(
+          .cols = dplyr::all_of(comp_cols)
+          , .fn = ~paste0("pred_", .x, recycle0 = T)
+        ) %>% 
+        dplyr::mutate(pred_geometry = sf::st_geometry(.)) %>%
+        sf::st_drop_geometry()
+      , by = "ref_match_idx"
+    ) %>% 
+    dplyr::mutate(match_grp = "true positive")
+  
+  # add omissions
+  return_df <-
+    return_df %>% 
+    dplyr::bind_rows(
+      reference_prediction_match_ans$ref_data %>%
+        dplyr::filter(pred_match_idx==0 | is.na(pred_match_idx)) %>% 
+        dplyr::select(dplyr::all_of(c(
+          "ref_match_idx"
+          , "pred_match_idx"
+          , "pred_match_dist_m"
+          # , "pred_tree_height_m"
+          # , "tree_height_m"
+          , comp_cols
+        ))) %>% 
+        dplyr::rename_with(
+          .cols = dplyr::all_of(comp_cols)
+          , .fn = ~paste0("ref_", .x, recycle0 = T)
+        ) %>% 
+        sf::st_set_geometry("ref_geometry") %>% 
+        dplyr::mutate(match_grp = "omission")
+    )
+    
+  # add commissions
+  return_df <-
+    return_df %>% 
+    dplyr::bind_rows(
+      reference_prediction_match_ans$pred_data %>%
+        dplyr::filter(ref_match_idx==0 | is.na(ref_match_idx)) %>% 
+        dplyr::select(dplyr::all_of(c(
+          "ref_match_idx"
+          , "pred_match_idx"
+          , "pred_match_dist_m"
+          # , "pred_tree_height_m"
+          # , "tree_height_m"
+          , comp_cols
+        ))) %>% 
+        dplyr::rename_with(
+          .cols = dplyr::all_of(comp_cols)
+          , .fn = ~paste0("pred_", .x, recycle0 = T)
+        ) %>% 
+        dplyr::mutate(pred_geometry = sf::st_geometry(.)) %>%
+        sf::st_drop_geometry() %>% 
+        dplyr::mutate(match_grp = "commission")
+    )
+  
+  # make match_grp factor
+  return_df <- return_df %>% 
+    dplyr::mutate(
+      match_grp = factor(
+        match_grp
+        , ordered = T
+        , levels = c(
+          "true positive"
+          , "commission"
+          , "omission"
+        )
+      ) %>% forcats::fct_rev()
+    )
+  
+  
+  if(inherits(comp_cols, "character") && length(comp_cols) > 0){
+    return_df <- 
+      return_df %>% 
+      dplyr::mutate(
+        # 'diff_' columns are calculated as the predicted value minus the actual value
+        dplyr::across(
+          .cols = paste0(
+            "ref_"
+            , comp_cols # c("tree_height_m", "dbh_cm")
+            , recycle0 = T
+          )
+          , .fns = ~ base::get(stringr::str_replace(dplyr::cur_column(), "^ref_", "pred_")) - .x
+          , .names = "diff_{stringr::str_remove(.col, '^ref_')}"
+        )
+        # 'pct_diff_' columns are calculated as the actual value minus the predicted value divided by the actual value
+        , dplyr::across(
+          .cols = paste0(
+            "ref_"
+            , comp_cols # c("tree_height_m", "dbh_cm")
+            , recycle0 = T
+          )
+          , .fns = ~ (.x-base::get(stringr::str_replace(dplyr::cur_column(), "^ref_", "pred_")))/.x
+          , .names = "pct_diff_{stringr::str_remove(.col, '^ref_')}"
+        )
+      ) 
+  }
+  # return
+  if(nrow(return_df)==0){
+    warning("no records found for ground truth to predition matching")
+    return(NULL)
+  }else{
+    return(return_df)
+  }
+  
+}
+```
+
+take that thing for a spin for a single plot. 
+
+To account for tree lean and potential slight spatial misalignment between the UAS point clouds and the ground-based field coordinates along the unit boundary, UAS-predicted trees located outside the boundary but within half the horizontal matching threshold were permitted to qualify as true positives, though unmatched exterior trees were excluded from false positive counts. 
+
+```{r, include=F, eval=F}
+plt_temp <- validation_plots %>% 
+  dplyr::slice(11) %>% 
+  dplyr::pull(plot)
+# rgb
+rgb_rast %>% 
+   terra::crop(
+    validation_plots %>% 
+      dplyr::filter(plot==plt_temp) %>% 
+      sf::st_buffer(15) %>% 
+      sf::st_bbox() %>% 
+      sf::st_as_sfc() %>% 
+      sf::st_transform(terra::crs(rgb_rast)) %>% 
+      terra::vect()
+    , mask=T
+  ) %>% 
+  terra::plotRGB()
+# add plot
+validation_plots %>% 
+  dplyr::filter(plot==plt_temp) %>% 
+  sf::st_buffer(.$plot_radius_m) %>% 
+  sf::st_transform(terra::crs(rgb_rast)) %>% 
+  terra::vect() %>% 
+  terra::plot(add = T, col = NA, border = "white", lwd = 1.3)
+# add trees
+validation_trees %>% 
+  dplyr::filter(plot==plt_temp) %>% 
+  sf::st_transform(terra::crs(rgb_rast)) %>% 
+  terra::vect() %>% 
+  terra::plot(add = T, col = "cyan", cex = 1.5)
+
+treetops_sf %>% 
+  sf::st_intersection(
+    validation_plots %>% 
+      dplyr::slice(11) %>% 
+      dplyr::mutate(plot_radius_m = plot_radius_m+1) %>% # 1 = 0.5*max_dist_m where max_dist_m=allowable search distance for TP match
+      sf::st_transform(sf::st_crs(treetops_sf)) %>% 
+      sf::st_buffer(.$plot_radius_m) %>% 
+      dplyr::select(plot_area_m2)
+  ) %>% 
+  dplyr::left_join(
+    treetops_sf %>% 
+      # clip to study boundary
+      sf::st_intersection(
+        validation_plots %>% 
+          dplyr::slice(11) %>% 
+          sf::st_transform(sf::st_crs(treetops_sf)) %>% 
+          sf::st_buffer(.$plot_radius_m) %>% 
+          dplyr::mutate(is_in_stand = T)
+      ) %>% 
+      sf::st_drop_geometry() %>% 
+      dplyr::select(treeID, is_in_stand)
+    , by = "treeID"
+  ) %>% 
+  dplyr::mutate(
+    is_in_stand = dplyr::coalesce(is_in_stand,F)
+  ) %>% 
+  dplyr::filter(tree_height_m>=min_tree_ht_m) %>% 
+  # dplyr::glimpse()
+  sf::st_transform(terra::crs(rgb_rast)) %>% 
+  terra::vect() %>% 
+  terra::plot(add = T, col = "magenta", cex = 1.5)
+```
+
+
+```{r}
+reference_prediction_match_ans_temp <- reference_prediction_match(
+  pred_data = 
+    treetops_sf %>% 
+      dplyr::filter(tree_height_m>=min_tree_ht_m) %>% 
+      sf::st_intersection(
+        validation_plots %>% 
+          dplyr::slice(11) %>% 
+          dplyr::mutate(plot_radius_m = plot_radius_m+1) %>% # 1 = 0.5*max_dist_m where max_dist_m=allowable search distance for TP match
+          sf::st_transform(sf::st_crs(treetops_sf)) %>% 
+          sf::st_buffer(.$plot_radius_m) %>% 
+          dplyr::select(plot_area_m2)
+      ) %>% 
+      dplyr::left_join(
+        treetops_sf %>% 
+          # clip to study boundary
+          sf::st_intersection(
+            validation_plots %>% 
+              dplyr::slice(11) %>% 
+              sf::st_transform(sf::st_crs(treetops_sf)) %>% 
+              sf::st_buffer(.$plot_radius_m) %>% 
+              dplyr::mutate(is_in_stand = T)
+          ) %>% 
+          sf::st_drop_geometry() %>% 
+          dplyr::select(treeID, is_in_stand)
+        , by = "treeID"
+      ) %>% 
+      dplyr::mutate(
+        is_in_stand = dplyr::coalesce(is_in_stand,F)
+      )
+  , ref_data = 
+    validation_trees %>% 
+      dplyr::inner_join(
+        validation_plots %>% dplyr::slice(11) %>% sf::st_drop_geometry() %>% dplyr::select(plot)
+        , by = "plot"
+      ) %>% 
+      dplyr::rename(tree_height_m=height_m, dbh_cm=dbh_cm)
+  , max_dist_m = 2 # round(median(validation_trees$crown_width_m)/2)
+  , max_height_error_m = 1.5 # round(sd(validation_trees$height_m)*1.1,1)
+)
+# # wha?
+# reference_prediction_match_ans_temp$ref_data %>% dplyr::glimpse()
+# reference_prediction_match_ans_temp$pred_data %>% dplyr::glimpse()
+```
+
+the `ground_truth_prediction_match()` uses the output from `reference_prediction_match()` and creates a nice, clean data frame with the instances classified as TP, FP, or FN for use in aggregating to calculate detection accuracy metrics. Optionally, users can set the foundation for quantification accuracy assessment via the `comp_cols` argument (see the `diff_*` and `pct_diff_*` columns in the output)
+
+```{r}
+gt_temp <- ground_truth_prediction_match(
+  reference_prediction_match_ans = reference_prediction_match_ans_temp
+  , comp_cols = c("tree_height_m", "dbh_cm")
+)
+# huh?
+gt_temp %>% dplyr::glimpse()
+```
+
+this is neat, we have the geometry of both the reference and prediction trees as well as the difference between the metric columns we gave the function via the `comp_cols` argument
+
+let's use the different geometries to plot the instance matching classification
+
+now, i need one more palette that fits in the theme and has 3 distinct colors that still look on-theme given the palettes currently used. feel free to use gray as one of the colors and the other two should be somewhat distinct and easy to see when plotted over a RGB imagery of a forest. here are the palettes currently in use: `pal1 <- c("#660012FF","#E59950FF")`; 2) `pal2 <- c("maroon4")`; 3) `pal3 <- c("#f7c5a5ff","#f2704dff","#cb1b4fff")`; 4) `pal4 <- c("#357ba2ff","#414081ff","#26172aff")`; 5) `pal5 <- c("darkslategray4","darkslategray")`. suggest a few different options for me to choose from
+
+```{r}
+# custom palette
+pal_match_grp = c(
+  "omission"= "plum3" # viridis::cividis(3)[1]
+  , "commission"= "gray77"
+  , "true positive"= "darkgoldenrod2" # viridis::cividis(3)[3]
+)
+# scales::show_col(pal_match_grp)
+# plt
+ggplot2::ggplot() +
+  ggplot2::geom_sf(
+    data = gt_temp %>% dplyr::filter(match_grp %in% c("true positive","omission"))
+    , mapping = ggplot2::aes(geometry = ref_geometry, color = match_grp)
+    , size = 3, alpha = 0.8
+  ) +
+  ggplot2::geom_sf(
+    data = gt_temp %>% dplyr::filter(match_grp=="commission")
+    , mapping = ggplot2::aes(geometry = pred_geometry, color = match_grp)
+    , size = 3, alpha = 0.8
+  ) +
+  ggplot2::scale_color_manual(values = pal_match_grp) +
+  ggplot2::theme_void() +
+  ggplot2::theme(legend.position = "top", legend.title = ggplot2::element_blank()) 
+```
+
+### Example: Detection Accuracy
+
+let's make a function to calculate the [detection accuracy metrics](#detect_metrics_form) based on aggregated TP, FP, and FN counts
+
+```{r}
+###############################################################
+###############################################################
+###############################################################
+###############################################################
+# first function takes df with cols tp_n, fp_n, and fn_n to calculate rates
+###############################################################
+###############################################################
+###############################################################
+###############################################################
+confusion_matrix_scores_fn <- function(df) {
+  df %>% 
+  dplyr::mutate(
+    omission_rate = dplyr::case_when(
+      dplyr::coalesce(tp_n,0) == 0 & dplyr::coalesce(fn_n,0) == 0 ~ 0 # if there are no actual trees, there is nothing to miss
+      , dplyr::coalesce(tp_n,0) == 0 & dplyr::coalesce(fn_n,0) > 0 ~ 1 # every single actual tree was missed
+      , dplyr::coalesce(fn_n,0) == 0 & dplyr::coalesce(tp_n,0) > 0 ~ 0
+      , T ~ fn_n/(tp_n+fn_n)
+    ) # False Negative Rate or Miss Rate
+    , commission_rate = dplyr::case_when(
+      dplyr::coalesce(tp_n,0) == 0 & dplyr::coalesce(fp_n,0) == 0 ~ 0 # if no predictions are made, the model could not have made any commission errors
+      , dplyr::coalesce(fp_n,0) == 0 & dplyr::coalesce(tp_n,0) > 0 ~ 0
+      , T ~ fp_n/(tp_n+fp_n)
+    ) # False Positive Rate
+    , precision = dplyr::case_when(
+      dplyr::coalesce(tp_n,0) == 0 & dplyr::coalesce(fp_n,0) == 0 ~ 1 # if no predictions are made, the model made zero incorrect positive claims
+      , dplyr::coalesce(tp_n,0) == 0 & dplyr::coalesce(fp_n,0) > 0 ~ 0
+      , T ~ tp_n/(tp_n+fp_n)
+    )
+    , recall = dplyr::case_when(
+      dplyr::coalesce(tp_n,0) == 0 & dplyr::coalesce(fn_n,0) == 0 ~ 1 # if there are no actual trees, there is nothing to miss
+      , dplyr::coalesce(tp_n,0) == 0 & dplyr::coalesce(fn_n,0) > 0 ~ 0 # every single actual tree was missed
+      , T ~ tp_n/(tp_n+fn_n)
+    )
+    , f_score = dplyr::case_when(
+      dplyr::coalesce(precision,0) == 0 | dplyr::coalesce(recall,0) == 0 ~ 0
+      , T ~ 2 * ( (precision*recall)/(precision+recall) )
+    )    
+  ) 
+}
+###############################################################
+###############################################################
+###############################################################
+###############################################################
+# aggregate results from ground_truth_prediction_match()
+###############################################################
+###############################################################
+###############################################################
+###############################################################
+agg_ground_truth_match <- function(ground_truth_prediction_match_ans) {
+  if(nrow(ground_truth_prediction_match_ans)==0){return(NULL)}
+  if( !(names(ground_truth_prediction_match_ans) %>% stringr::str_equal("match_grp") %>% any()) ){stop("ground_truth_prediction_match_ans must contain `match_grp` column")}
+  
+  # check for difference columns (contains "_diff") and calc rmse for only those to return a single line df with colums for each diff_rmse
+    if(
+      (ground_truth_prediction_match_ans %>% 
+        sf::st_drop_geometry() %>% 
+        dplyr::select(tidyselect::starts_with("diff_") | tidyselect::starts_with("pct_diff_")) %>% 
+        ncol() )>0
+    ){
+      # get rmse and mean difference/error for all columns with "_diff" but not "pct_diff"
+      # get mape for all columns with "pct_diff" but not "diff_"
+      rmse_df <- 
+        ground_truth_prediction_match_ans %>% 
+        sf::st_drop_geometry() %>% 
+        dplyr::ungroup() %>% 
+        dplyr::select(
+          tidyselect::starts_with("diff_")
+          | tidyselect::starts_with("pct_diff_")
+        ) %>%
+        tidyr::pivot_longer(dplyr::everything(), values_drop_na = T) %>% 
+        dplyr::group_by(name) %>% 
+        dplyr::summarise(
+          sq = sum(value^2, na.rm = T)
+          , mean = mean(value, na.rm = T)
+          , sumabs = sum(abs(value), na.rm = T)
+          , nomiss = sum(!is.na(value))
+        ) %>% 
+        dplyr::ungroup() %>% 
+        dplyr::mutate(
+          rmse = dplyr::case_when(
+            dplyr::coalesce(nomiss,0)==0 ~ as.numeric(NA)
+            , T ~ sqrt(sq/nomiss)
+          )
+          , mape = dplyr::case_when(
+            dplyr::coalesce(nomiss,0)==0 ~ as.numeric(NA)
+            , T ~ sumabs/nomiss
+          )
+        ) %>% 
+        # NA nonsense values
+        dplyr::mutate(
+          mape = dplyr::case_when(
+            stringr::str_starts(name, "pct_diff_") ~ mape
+            , T ~ as.numeric(NA)
+          )
+          , rmse = dplyr::case_when(
+            stringr::str_starts(name, "pct_diff_") ~ as.numeric(NA)
+            , T ~ rmse
+          )
+          , mean = dplyr::case_when(
+            stringr::str_starts(name, "pct_diff_") ~ as.numeric(NA)
+            , T ~ mean
+          )
+        ) %>% 
+        dplyr::select(name,rmse,mean,mape) %>% 
+        tidyr::pivot_wider(
+          names_from = name
+          , values_from = c(rmse,mean,mape)
+          , names_glue = "{name}_{.value}"
+        ) %>% 
+        # remove columns with NA in all rows
+        dplyr::select( dplyr::where( ~!all(is.na(.x)) ) )
+      
+      if(
+        dplyr::coalesce(nrow(rmse_df),0)==0
+        || dplyr::coalesce(ncol(rmse_df),0)==0
+      ){
+        # empty df
+        rmse_df <- dplyr::tibble()
+      }
+    }else{
+      # empty df
+      rmse_df <- dplyr::tibble()
+    }
+  
+  # count by match group
+    agg <-
+      ground_truth_prediction_match_ans %>% 
+      sf::st_drop_geometry() %>% 
+      dplyr::ungroup() %>% 
+      dplyr::count(match_grp) %>% 
+      dplyr::mutate(
+        match_grp = dplyr::recode_values(
+          match_grp
+          , "true positive"~"tp"
+          , "commission"~"fp"
+          , "omission"~"fn"
+        )
+      )
+    # true positive, false positive, false negative rates
+    return_df <- dplyr::tibble(match_grp = c("tp","fp","fn")) %>% 
+      dplyr::left_join(agg, by = "match_grp") %>% 
+      dplyr::mutate(dplyr::across(.cols = c(n), .fn = ~dplyr::coalesce(.x,0))) %>% 
+      tidyr::pivot_wider(
+        names_from = match_grp
+        , values_from = c(n)
+        , names_glue = "{match_grp}_{.value}"
+      )
+    # rates, precision, recall, f-score
+    return_df <- confusion_matrix_scores_fn(return_df)
+    # add rmse
+    if(nrow(rmse_df)>0){
+      return_df <- return_df %>% dplyr::bind_cols(rmse_df)
+    }
+  # return
+  return(return_df)
+}
+```
+
+test it out on the example data (but without the `diff_*` and `pct_diff_*` columns which we'll review next)
+
+```{r}
+gt_temp %>% 
+  # remove FP that were outside boundary since we included them to allow for edge reference trees to be matched
+  dplyr::left_join(
+    reference_prediction_match_ans_temp$pred_data %>% 
+      sf::st_drop_geometry() %>% 
+      dplyr::select(pred_match_idx, is_in_stand)
+    , by = "pred_match_idx"
+  ) %>% 
+  dplyr::filter(
+    !(!is_in_stand & match_grp=="commission")
+  ) %>% 
+  # remove diff cols
+  dplyr::select(
+    -tidyselect::starts_with("diff_")
+    , -tidyselect::starts_with("pct_diff_")
+  ) %>% 
+  agg_ground_truth_match() %>% 
+  dplyr::mutate(dplyr::across(dplyr::where(is.numeric),~round(.x,3))) %>% 
+  knitr::kable(format = "markdown")
+```
+
+### Quantification Accuracy Metrics{#quant_metrics_form}
+
+Quantification accuracy metrics such as RMSE, MAPE, and Mean Error of tree form measurements (e.g. height, diameter) are calculated by aggregating the differences between the estimated tree attributes and the field reference values for instances classified as True Positives. These metrics tell us about the method's ability to accurately quantify the form of the trees it successfully identified.
+
+to prepare our results for analysis, we will develop a function that aggregates the tree-level data into a single record for each metric-error measurement combination. this function will calculate detection performance metrics such as F-score, precision, and recall (using the `confusion_matrix_scores_fn()` we defined above), as well as quantification accuracy metrics including Root Mean Squared Error (RMSE), Mean Error (ME), and Mean Absolute Percentage Error (MAPE) to assess the accuracy of our tree form measurements. this could be a valuable function for any future analysis comparing predictions to reference data.
+
+here are the quantification accuracy metric formulas:
+
+$$
+\textrm{RMSE} = \sqrt{ \frac{  \sum_{i=1}^{N} (y_{i} - \hat{y_{i}})^{2}}{N}}
+$$
+
+
+$$
+\textrm{ME} = \frac{  \sum_{i=1}^{N} (\hat{y_{i}} - y_{i})}{N}
+$$
+
+
+$$
+\textrm{MAPE} = \frac{1}{N} \sum_{i=1}^{N} \left| \frac{y_{i} - \hat{y_{i}}}{y_{i}} \right|
+$$
+
+Where $N$ is equal to the total number of correctly matched trees, $y_i$ is the ground truth measured value and $\hat{y_i}$ is the predicted value of $i$
+
+There is a lot going on in our `agg_ground_truth_match()` function but it's application is straightforward enough:
+
+* The minimum required input is a data frame of the raw instance matches with a column named `match_grp` which is string/factor with the levels "true positive", "commission", and "omission" as returned by the `ground_truth_prediction_match()` function
+* Optionally, if the data contain columns with the prefix "diff_" the mean error (ME) is calculated for those columns with the return having the suffix "_mean" and the RMSE is calculated for those columns with the return having the suffix "_rmse"
+  - interpretation of the ME is enhanced if these "diff_" columns are calculated as the predicted value minus the actual value (e.g. `pred_diameter_m - gt_diameter_m`) 
+* Optionally, if the data contain columns with the prefix "pct_diff_" the mean absolute percent error (MAPE) is calculated for those columns with the return having the suffix "_mape"
+  - these "pct_diff_" columns are calculated as the actual value minus the predicted value divided by the actual value (e.g. `(gt_diameter_m - pred_diameter_m)/gt_diameter_m`) 
+### Example: Quantification Accuracy
+
+we already demonstrated minimum use of the `agg_ground_truth_match()` function to get detection accuracy metrics, now we'll demonstrate the quantification accuracy metrics by keeping the `diff_*` and `pct_diff_*` columns calculated with the `ground_truth_prediction_match()` function
+
+```{r}
+gt_temp %>% 
+  # remove FP that were outside boundary since we included them to allow for edge reference trees to be matched
+  dplyr::left_join(
+    reference_prediction_match_ans_temp$pred_data %>% 
+      sf::st_drop_geometry() %>% 
+      dplyr::select(pred_match_idx, is_in_stand)
+    , by = "pred_match_idx"
+  ) %>% 
+  dplyr::filter(
+    !(!is_in_stand & match_grp=="commission")
+  ) %>% 
+  agg_ground_truth_match() %>% 
+  dplyr::select(tidyselect::ends_with("_rmse"),tidyselect::ends_with("_mean"),tidyselect::ends_with("_mape")) %>% 
+  dplyr::mutate(dplyr::across(dplyr::where(is.numeric),~round(.x,3))) %>% 
+  knitr::kable("markdown")
+  
+
+```
+
+nice, that could be useful for evaluation
+
+```{r, warning=FALSE, message=FALSE}
+remove(list = ls()[grep("_temp",ls())])
+gc()
+```
+
+
+```{r, warning=FALSE, message=FALSE, echo=FALSE, include=FALSE}
+remove(list = ls()[grep("_temp",ls())])
+gc()
+```
