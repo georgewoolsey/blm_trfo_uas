@@ -224,17 +224,17 @@ for tree detection, we'll aggregate the CHM to a lower resolution (i.e. coarser)
 # adjust the resolution of a raster to be in exactly the target resolution
 ###___________________________________________###
 if(
-  !file.exists( file.path(c2t_process_dir, "chm_0.20m.tif") )
+  !file.exists( file.path(c2t_process_dir, "chm_0.21m.tif") )
 ){
   agg_chm_rast <- cloud2trees:::adjust_raster_resolution(
     cloud2raster_ans$chm_rast
-    , target_resolution = 0.20
+    , target_resolution = 0.21
     , fun = max
     , resample_method = "max"
-    , ofile = file.path(c2t_process_dir, "chm_0.20m.tif")
+    , ofile = file.path(c2t_process_dir, "chm_0.21m.tif")
   )
 }else{
-  agg_chm_rast <- terra::rast( file.path(c2t_process_dir, "chm_0.20m.tif") )
+  agg_chm_rast <- terra::rast( file.path(c2t_process_dir, "chm_0.21m.tif") )
 }
 # what chm?
 agg_chm_rast
@@ -640,8 +640,34 @@ plt_rgb_rast_itd_crowns(sample_nmbr = 1, rgb_rast = pj_rgb_rast, itd_crowns = it
 this is only moderately helpful as the tree density in tree clumps is difficult to infer from the 2D aerial imagery alone. let's move forward with the default linear function in the `raster2trees()` function
 
 ```{r}
-my_ws_fn <- cloud2trees::itd_ws_functions()[["lin_fn"]]
+# michellis-menton growth function
+my_ws_fn <- 
+  function(x){
+    dplyr::case_when(
+      is.na(x) ~ 0.5
+      , (0.5 + ((6 - 0.5) * x)/(7.39224 + x)) < 0.5 ~ 0.5
+      , (0.5 + ((6 - 0.5) * x)/(7.39224 + x)) > 6 ~ 6
+      , TRUE ~ (0.5 + ((6 - 0.5) * x)/(7.39224 + x))
+    )
+  }
+  # cloud2trees::itd_ws_functions()[["lin_fn"]]
 ```
+
+```{r, include=F, eval=F}
+terra::res(agg_chm_rast)
+terra::plot(agg_chm_rast)
+# cloud2trees::itd_ws_functions()[["lin_fn"]]
+ggplot2::ggplot() +
+  ggplot2::geom_function(mapping=ggplot2::aes(color = "lin_fn"),fun=cloud2trees::itd_ws_functions()[["lin_fn"]], lwd=1.2) +
+  ggplot2::geom_function(mapping=ggplot2::aes(color = "log_fn"),fun=cloud2trees::itd_ws_functions()[["log_fn"]], lwd=1.2) +
+  ggplot2::geom_function(mapping=ggplot2::aes(color = "exp_fn"),fun=cloud2trees::itd_ws_functions()[["exp_fn"]], lwd=1.2) +
+  ggplot2::geom_function(mapping=ggplot2::aes(color = "my_ws_fn"),fun=my_ws_fn, lwd=1.2) +
+  ggplot2::xlim(-5,45) +
+  ggplot2::ylim(-1,8) +
+  ggplot2::labs(x = "CHM (m)", y = "ws (m)", color = "ws function") +
+  ggplot2::theme_light()
+```
+
 
 ```{r, warning=FALSE, message=FALSE, echo=FALSE, include=FALSE}
 remove(list = ls()[grep("_temp",ls())])
@@ -658,6 +684,7 @@ Now, perform individual tree detection using `raster2trees()` on the aggregated 
 # cloud2trees::raster2trees
 ##############################################################
 search_temp <- cloud2trees:::search_dir_final_detected(dir = c2t_process_dir)
+# search_temp
 if(
   is.null(search_temp$crowns_flist)
   || is.null(search_temp$ttops_flist)
@@ -852,24 +879,25 @@ cbh_fnm <- file.path(c2t_process_dir, "cbh_data.csv")
 # if we don't already have the data, run it
 if(!file.exists( cbh_fnm )){
   # sample proportion
-  sample_prop_temp <- 0.10
+  sample_prop_temp <- as.character(NA)
+  sample_n_temp <- 7777
   # time it
   st_temp <- Sys.time()
   # run it
   trees_cbh_ans <- cloud2trees::trees_cbh(
     trees_poly = c2t_process_dir
     , norm_las = file.path(c2t_output_dir, "point_cloud_processing_temp", "02_normalize")
-    , tree_sample_prop = sample_prop_temp
+    , tree_sample_n = sample_n_temp
     , which_cbh = "lowest"
     , estimate_missing_cbh = TRUE
     , min_vhp_n = 3
     , voxel_grain_size_m = 1
     , dist_btwn_bins_m = 1
     , min_fuel_layer_ht_m = 0.5
-    , lad_pct_gap = 25
-    , lad_pct_base = 25
+    , lad_pct_gap = 20
+    , lad_pct_base = 20
     , num_jump_steps = 1
-    , min_lad_pct = 10
+    , min_lad_pct = 8
     , frst_layer_min_ht_m = 0.5
     , force_same_crs = T
   )
@@ -882,7 +910,7 @@ if(!file.exists( cbh_fnm )){
   readr::read_csv(c2t_tracking_fnm, progress = F, show_col_types = F) %>% 
     dplyr::mutate(
       timer_trees_cbh_mins = mins_temp
-      , sttng_cbh_tree_sample_n = as.character(NA)
+      , sttng_cbh_tree_sample_n = sample_n_temp
       , sttng_cbh_tree_sample_prop = sample_prop_temp
     ) %>% 
     write.csv(
@@ -902,7 +930,7 @@ processing_data_temp <- readr::read_csv(c2t_tracking_fnm, progress = F, show_col
 
 CBH extraction took a total of **`r scales::comma(processing_data_temp$timer_trees_cbh_mins, accuracy = 0.1)`** minutes (**`r scales::comma(processing_data_temp$timer_trees_cbh_mins/60, accuracy = 0.1)`** hours)
 
-We attempted to extract CBH from `r scales::percent(processing_data_temp$sttng_cbh_tree_sample_prop)` of our tree list (`r scales::comma((nrow(trees_cbh_ans)*processing_data_temp$sttng_cbh_tree_sample_prop), accuracy = 1)` trees), let's see our success rate
+We attempted to extract CBH from `r scales::percent(processing_data_temp$sttng_cbh_tree_sample_n/nrow(trees_cbh_ans), accuracy=0.1)` of our tree list (`r scales::comma(processing_data_temp$sttng_cbh_tree_sample_n, accuracy = 1)` trees), let's see our success rate
 
 ```{r}
 trees_cbh_ans %>% 
@@ -958,6 +986,7 @@ treetops_sf <-
   # add on cbh
   dplyr::left_join(
     trees_cbh_ans %>% 
+      sf::st_drop_geometry() %>% 
       dplyr::select(treeID, is_training_cbh, tree_cbh_m)
     , by = "treeID"
   )
@@ -991,7 +1020,7 @@ if(!file.exists( dbh_fnm )){
   # run it
   trees_dbh_ans <- cloud2trees::trees_dbh(
     tree_list = treetops_sf
-    , boundary_buffer = 2
+    , boundary_buffer = 1
     , outfolder = c2t_process_dir
   )
   # timer
@@ -1279,14 +1308,15 @@ hmd_fnm <- file.path(c2t_process_dir, "hmd_data.csv")
 # if we don't already have the data, run it
 if(!file.exists( hmd_fnm )){
   # sample proportion
-  sample_prop_temp <- (1/3)
+  sample_prop_temp <- as.character(NA)
+  sample_n_temp <- 999
   # time it
   st_temp <- Sys.time()
   # run it
   trees_hmd_ans <- cloud2trees::trees_hmd(
     trees_poly = c2t_process_dir
     , norm_las = file.path(c2t_output_dir, "point_cloud_processing_temp", "02_normalize")
-    , tree_sample_prop = sample_prop_temp
+    , tree_sample_n = sample_n_temp
     , force_same_crs = T
     , estimate_missing_hmd = T
   )
@@ -1299,7 +1329,7 @@ if(!file.exists( hmd_fnm )){
   readr::read_csv(c2t_tracking_fnm, progress = F, show_col_types = F) %>% 
     dplyr::mutate(
       timer_trees_hmd_mins = mins_temp
-      , sttng_hmd_tree_sample_n = as.character(NA)
+      , sttng_hmd_tree_sample_n = sample_n_temp
       , sttng_hmd_tree_sample_prop = sample_prop_temp
     ) %>% 
     write.csv(
@@ -1319,7 +1349,7 @@ processing_data_temp <- readr::read_csv(c2t_tracking_fnm, progress = F, show_col
 
 HMD extraction took a total of **`r scales::comma(processing_data_temp$timer_trees_hmd_mins, accuracy = 0.1)`** minutes at processing rate of **`r scales::comma((processing_data_temp$timer_trees_hmd_mins/(nrow(trees_hmd_ans)/1000))*60, accuracy = 0.01)`** seconds per 1,000 trees
 
-We attempted to extract HMD from `r scales::percent(processing_data_temp$sttng_hmd_tree_sample_prop)` of our tree list, let's see our success rate
+We attempted to extract HMD from `r scales::percent(processing_data_temp$sttng_hmd_tree_sample_n/nrow(trees_hmd_ans),accuracy=0.1)` of our tree list, let's see our success rate
 
 ```{r}
 trees_hmd_ans %>% 

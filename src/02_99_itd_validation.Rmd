@@ -13,6 +13,7 @@ gc()
 read back in the tree point data and attach to treatment units
 
 ```{r}
+# treetops_fnm
 treetops_sf <- sf::st_read(dsn = treetops_fnm, quiet = TRUE)
 # attach to treatment unit
 treetops_sf <- treetops_sf %>% 
@@ -1121,7 +1122,7 @@ this is neat, we have the geometry of both the reference and prediction trees as
 
 let's use the different geometries to plot the instance matching classification
 
-now, i need one more palette that fits in the theme and has 3 distinct colors that still look on-theme given the palettes currently used. feel free to use gray as one of the colors and the other two should be somewhat distinct and easy to see when plotted over a RGB imagery of a forest. here are the palettes currently in use: `pal1 <- c("#660012FF","#E59950FF")`; 2) `pal2 <- c("maroon4")`; 3) `pal3 <- c("#f7c5a5ff","#f2704dff","#cb1b4fff")`; 4) `pal4 <- c("#357ba2ff","#414081ff","#26172aff")`; 5) `pal5 <- c("darkslategray4","darkslategray")`. suggest a few different options for me to choose from
+now, i need one more palette that fits in the theme and has 3 distinct colors that still look on-theme given the palettes currently used. feel free to use gray as one of the colors and the other two should be somewhat distinct and easy to see when plotted over a RGB imagery of a forest. here are the palettes currently in use: `pal1 <- c("#660012FF","#E59950FF")`; 2) `pal2 <- c("brown")`; 3) `pal3 <- c("#f7c5a5ff","#f2704dff","#cb1b4fff")`; 4) `pal4 <- c("#357ba2ff","#414081ff","#26172aff")`; 5) `pal5 <- c("darkslategray4","darkslategray")`. suggest a few different options for me to choose from
 
 ```{r}
 # custom palette
@@ -1600,8 +1601,25 @@ ggplot2::ggplot(
     panel.grid.minor = ggplot2::element_blank()
   )
 
-# names(vws_functions)
-
+names(vws_functions)
+vws_functions[["concave_down_05"]]
+# function(x){ 
+#   dplyr::case_when(
+#     is.na(x) ~ 0.5
+#     , (0.5 + ((6 - 0.5) * x)/(7.39224 + x)) < 0.5 ~ 0.5
+#     , (0.5 + ((6 - 0.5) * x)/(7.39224 + x)) > 6 ~ 6
+#     , TRUE ~ (0.5 + ((6 - 0.5) * x)/(7.39224 + x))
+#   )
+# }
+vws_functions[["concave_down_06"]]
+# function(x){ 
+#   dplyr::case_when(
+#     is.na(x) ~ 0.5
+#     , (0.5 + ((6 - 0.5) * x)/(8.89655 + x)) < 0.5 ~ 0.5
+#     , (0.5 + ((6 - 0.5) * x)/(8.89655 + x)) > 6 ~ 6
+#     , TRUE ~ (0.5 + ((6 - 0.5) * x)/(8.89655 + x))
+#   )
+# }
 
 #### set up CHM for raster2trees
 agg_chm_rast <- terra::rast( file.path(c2t_process_dir, "chm_0.20m.tif") )
@@ -1741,17 +1759,28 @@ testtest_fn <- function(nm) {
   return(ans)
 }
 
-testtest_ans <- 
-  names(vws_functions) %>%
-  # .[2:3] %>% 
-  purrr::set_names() %>% 
-  purrr::map(testtest_fn)
-testtest_ans %>% 
+# testtest_ans <- 
+#   names(vws_functions) %>%
+#   # .[2:3] %>% 
+#   purrr::set_names() %>% 
+#   purrr::map(testtest_fn)
+# testtest_ans %>% 
+#   purrr::compact() %>% 
+#   purrr::list_rbind(names_to = "vws_function_nm") %>% 
+#   dplyr::glimpse()
+
+readr::write_csv(file.path("../data/testtest", paste0(nm,".csv")))
+
+p_temp <- 
+  testtest_ans %>% 
   purrr::compact() %>% 
   purrr::list_rbind(names_to = "vws_function_nm") %>% 
-  dplyr::glimpse()
+  ggplot(aes(x=recall,y=precision,color=f_score,label=vws_function_nm)) +
+  geom_point() +
+  scale_color_viridis_c()
+p_temp
+plotly::ggplotly(p_temp)
 ```
-
 
 ```{r, warning=FALSE, message=FALSE, echo=FALSE, include=FALSE}
 remove(list = ls()[grep("_temp",ls())])
@@ -1868,6 +1897,11 @@ ground_truth_prediction_match_ans <-
   purrr::list_rbind(names_to = "plot")
 ```
 
+```{r, warning=FALSE, message=FALSE, echo=FALSE, include=FALSE}
+remove(list = ls()[grep("_temp",ls())])
+gc()
+```
+
 now we have a single data set with all predicted trees and all reference trees within any field plot classified using the instance segmentation matching approach defined above
 
 ```{r}
@@ -1876,12 +1910,863 @@ ground_truth_prediction_match_ans %>% dplyr::glimpse()
 
 we can use this data to get study-wide detection and quantification accuracy metrics
 
+## Detection Accuracy Results
+
+first, we'll check out the site-wide detection accuracy results
+
 ```{r}
-ground_truth_prediction_match_ans %>% 
+agg_ground_truth_match_ans <-
+  ground_truth_prediction_match_ans %>% 
   sf::st_drop_geometry() %>% 
   agg_ground_truth_match() %>% 
-  dplyr::glimpse()
+  dplyr::bind_cols(
+    ground_truth_prediction_match_ans %>% 
+      sf::st_drop_geometry() %>% 
+      dplyr::summarise(plots_n = dplyr::n_distinct(plot))
+  ) %>% 
+  dplyr::relocate(plots_n)
+# table
+agg_ground_truth_match_ans %>% 
+  dplyr::select(
+    tidyselect::ends_with("_n")
+    , precision, recall, f_score
+  ) %>% 
+  dplyr::mutate(
+    dplyr::across(
+      tidyselect::ends_with("_n")
+      , ~scales::comma(.x,accuracy=1)
+    )
+    , dplyr::across(
+      dplyr::where(is.numeric)
+      , ~scales::percent(.x,accuracy=1)
+    )
+  ) %>% 
+  dplyr::mutate(data = "site-wide") %>% 
+  dplyr::relocate(data) %>% 
+  kableExtra::kbl(
+    caption = "Site-Wide Detection Accuracy"
+    , col.names = c(
+      "data", "# plots"
+      , "TP predictions", "FP predictions", "FN predictions"
+      , "Precision", "Recall", "F-score"
+    )
+    , escape = F
+    # , digits = 2
+  ) %>% 
+  kableExtra::kable_styling()
 ```
 
+looks pretty good for a first check 
 
-### Detection Accuracy Results
+what if we look at the detection accuracy results by treatment type?
+
+```{r}
+agg_ground_truth_match_by_type_ans <- 
+  validation_plots$trtmnt_type %>% 
+  unique() %>% 
+  purrr::map(function(x){
+    which_dta <- 
+      ground_truth_prediction_match_ans %>% 
+      sf::st_drop_geometry() %>% 
+      dplyr::inner_join(
+        validation_plots %>% 
+          sf::st_drop_geometry() %>% 
+          dplyr::filter(trtmnt_type==x) %>% 
+          dplyr::select(plot,trtmnt_type)
+        , by = "plot"
+      )
+    which_dta %>% 
+      dplyr::group_by(trtmnt_type) %>% 
+      dplyr::summarise(plots_n = dplyr::n_distinct(plot)) %>% 
+      dplyr::ungroup() %>% 
+      dplyr::bind_cols(
+        agg_ground_truth_match(which_dta)
+      )
+  }) %>% 
+  purrr::list_rbind() %>% 
+  dplyr::mutate(trtmnt_type = ordered(trtmnt_type))
+
+# table
+agg_ground_truth_match_by_type_ans %>% 
+  dplyr::select(
+    trtmnt_type
+    , tidyselect::ends_with("_n")
+    , precision, recall, f_score
+  ) %>% 
+  dplyr::mutate(
+    dplyr::across(
+      tidyselect::ends_with("_n")
+      , ~scales::comma(.x,accuracy=1)
+    )
+    , dplyr::across(
+      dplyr::where(is.numeric)
+      , ~scales::percent(.x,accuracy=0.1)
+    )
+  ) %>% 
+  dplyr::arrange(trtmnt_type) %>% 
+  kableExtra::kbl(
+    caption = "Detection Accuracy by Treatment Type"
+    , col.names = c(
+      "treatment", "# plots"
+      , "TP predictions", "FP predictions", "FN predictions"
+      , "Precision", "Recall", "F-score"
+    )
+    , escape = F
+    # , digits = 2
+  ) %>% 
+  kableExtra::kable_styling()
+```
+
+interesting to see the variation in detection accuracy across the different treatment types. the more aggressive treatments (i.e. treatments that removed more trees and left fewer residual trees) have a smaller margin for error with respect to tree detection accuracy since each tree carries more weight. however, the more open stand conditions created by the more aggressive treatments should make it easier to detect each individual if they are spaced with openings between individuals. at the same time the units with a high proportion of slash piles might result in increased commission rate (i.e. higher number of false positive tree predictions) even though we applied a slash pile mask. an additional data check may be needed for the remaining trees to check whether or not they are "green" while it is not clear if only live or both dead and live trees were sampled during the field inventory. and many, many more questions...
+
+let's see the relationship between tree detection (recall rate) and tree height within each flight. we'll look at true positive and omissions (FN) and use the field-measured tree height to quantify the proportion of trees within a height bin that were detected by the UAS method
+
+```{r}
+# make ggplot2::cut_* bins pretty
+make_bins_pretty <- function(bin_factor, suffix = "") {
+  # convert factor to character and remove brackets and parens
+  clean_labels <- bin_factor %>%
+    as.character() %>%
+    stringr::str_replace_all(c("\\[" = "", "\\(" = "", "\\]" = "", "\\)" = "")) %>%
+    stringr::str_replace(",", "-")
+  
+  # suffix
+  if(stringr::str_squish(suffix) != "" && inherits(suffix,"character")){
+    clean_labels <- stringr::str_c(clean_labels, " ", suffix) %>% stringr::str_squish()
+  }
+  
+  # reorder based on the original factor levels 
+  forcats::fct_reorder(factor(clean_labels), as.numeric(bin_factor))
+}
+
+ground_truth_prediction_match_ans %>%
+  sf::st_drop_geometry() %>% 
+  dplyr::filter(match_grp %in% c("true positive","omission")) %>% 
+  # dplyr::glimpse()
+  # metric cuts/bins
+  dplyr::mutate(
+    tree_height_m_bin = ggplot2::cut_width(ref_tree_height_m, width = 3, boundary = 0, closed = "left") %>% 
+      make_bins_pretty(suffix = "m") %>% 
+      forcats::fct_relabel(~ stringr::str_replace(.x, "^0-", paste0(min_tree_ht_m,"-")) )
+    , is_detected = match_grp %in% c("true positive")
+    , is_detected = as.numeric(is_detected)
+  ) %>% 
+  dplyr::count(match_grp, tree_height_m_bin) %>% 
+  dplyr::group_by(tree_height_m_bin) %>% 
+  dplyr::mutate(pct = n/sum(n,na.rm = T)) %>% 
+  dplyr::ungroup() %>% 
+  dplyr::mutate(
+    lab = ifelse(
+      pct>0.095
+      , paste0(
+        scales::percent(pct,accuracy=1) 
+        ,"\n("
+        , scales::comma(n,accuracy=1) 
+        , ")"
+      )
+      , ""
+    )
+  ) %>% 
+  dplyr::ungroup() %>% 
+  # dplyr::glimpse()
+  ggplot2::ggplot(
+    mapping = ggplot2::aes(y = pct, x = tree_height_m_bin)
+  ) +
+  ggplot2::geom_col(
+    mapping = ggplot2::aes(fill = match_grp)
+    , width = 0.6
+    , color = NA, alpha = 0.9
+  ) +
+  ggplot2::geom_text(
+    mapping = ggplot2::aes(label = lab, group = match_grp, fontface = "bold", color = match_grp)
+    # , color = "black"
+    , size = 2.5
+    , position = ggplot2::position_stack(vjust = 0.5)
+  ) +
+  ggplot2::scale_fill_manual(values = pal_match_grp) +
+  ggplot2::scale_color_manual(values = c("white","black"), guide = "none") +
+  ggplot2::scale_x_discrete(drop = F) +
+  ggplot2::scale_y_continuous(
+    breaks = seq(0,1,by=0.2)
+    , labels = scales::percent
+    , expand = ggplot2::expansion(mult = c(0,0.02))
+  ) +
+  ggplot2::labs(
+    x = "tree height", y = "", fill = ""
+    , subtitle = "Recall rate by tree height bin"
+  ) +
+  ggplot2::theme_light()+
+  ggplot2::theme(
+    legend.position = "top"
+    , strip.text = ggplot2::element_text(size = 11, color = "black", face = "bold")
+    , axis.text.x = ggplot2::element_text(size = 8, angle = 45, hjust = 1, vjust = 1)
+    , axis.text.y = ggplot2::element_blank()
+    , axis.ticks.y = ggplot2::element_blank()
+  )
+```
+
+the trend of increasing detection rate with tree height demonstrated with this data aligns well with prior work using aerial point cloud data for single-tree forest inventories
+
+let's look at the commission rate (commission error) by tree height using the UAS-detected tree heights to determine if our ITD variable window function could be improved
+
+```{r, fig.height=10}
+ground_truth_prediction_match_ans %>%
+  sf::st_drop_geometry() %>% 
+  dplyr::filter(match_grp %in% c("true positive","commission")) %>% 
+  # dplyr::glimpse()
+  # metric cuts/bins
+  dplyr::mutate(
+    tree_height_m_bin = ggplot2::cut_width(pred_tree_height_m, width = 3, boundary = 0, closed = "left") %>% 
+      make_bins_pretty(suffix = "m") %>% 
+      forcats::fct_relabel(~ stringr::str_replace(.x, "^0-", paste0(min_tree_ht_m,"-")) )
+    , is_detected = match_grp %in% c("true positive")
+    , is_detected = as.numeric(is_detected)
+  ) %>% 
+  dplyr::count(match_grp, tree_height_m_bin) %>% 
+  dplyr::group_by(tree_height_m_bin) %>% 
+  dplyr::mutate(pct = n/sum(n,na.rm = T)) %>% 
+  dplyr::ungroup() %>% 
+  dplyr::mutate(
+    lab = ifelse(
+      pct>0.095
+      , paste0(
+        scales::percent(pct,accuracy=1) 
+        ,"\n("
+        , scales::comma(n,accuracy=1) 
+        , ")"
+      )
+      , ""
+    )
+    , match_grp = forcats::fct_rev(match_grp)
+  ) %>% 
+  dplyr::ungroup() %>% 
+  # dplyr::glimpse()
+  ggplot2::ggplot(
+    mapping = ggplot2::aes(y = pct, x = tree_height_m_bin)
+  ) +
+  ggplot2::geom_col(
+    mapping = ggplot2::aes(fill = match_grp)
+    , width = 0.6
+    , color = NA, alpha = 0.9
+  ) +
+  ggplot2::geom_text(
+    mapping = ggplot2::aes(label = lab, group = match_grp, fontface = "bold", color = match_grp)
+    , color = "black"
+    , size = 2.5
+    , position = ggplot2::position_stack(vjust = 0.5)
+  ) +
+  ggplot2::scale_fill_manual(values = pal_match_grp) +
+  # ggplot2::scale_color_manual(values = c("black","white"), guide = "none") +
+  ggplot2::scale_x_discrete(drop = F) +
+  ggplot2::scale_y_continuous(
+    breaks = seq(0,1,by=0.2)
+    , labels = scales::percent
+    , expand = ggplot2::expansion(mult = c(0,0.02))
+  ) +
+  ggplot2::labs(
+    x = "tree height", y = "", fill = ""
+    , subtitle = "Commission rate by tree height bin"
+  ) +
+  ggplot2::theme_light()+
+  ggplot2::theme(
+    legend.position = "top"
+    , strip.text = ggplot2::element_text(size = 11, color = "black", face = "bold")
+    , axis.text.x = ggplot2::element_text(size = 8, angle = 45, hjust = 1, vjust = 1)
+    , axis.text.y = ggplot2::element_blank()
+    , axis.ticks.y = ggplot2::element_blank()
+  )
+```
+
+the commission error (percentage shown in the gray bar) is highest for the small trees which suggests we could potentially improve our ITD window function to decrease the number of trees detected in this height range. However, going back to the detection rate above, this same height range also had the lowest detection rate which would suggest we increase the number of trees identified in this height range. This conflict suggests that the trees in this height range are likely difficult to detect for the study area using the data and ITD methods used in this study. For example, they may be subordinate to directly adjacent taller trees with the crowns interlocking, so they are often grouped with the taller tree during the CHM-based ITD.
+
+## Quantification Accuracy Results{#quant_acc}
+
+let's table the tree-level aggregated measurement error
+
+```{r}
+agg_ground_truth_match_ans %>% 
+  dplyr::mutate(
+    ref_trees = tp_n+fn_n
+    , det_trees = tp_n+fp_n
+  ) %>% 
+  dplyr::select(
+    # detection
+    ref_trees
+    , det_trees
+    , tp_n
+    , omission_rate,commission_rate,recall,precision,f_score
+    # quantification
+    , tidyselect::ends_with("_mean")
+    , tidyselect::ends_with("_rmse")
+    , tidyselect::ends_with("_mape")
+  ) %>% 
+  # second select to arrange tree_metric
+  dplyr::select(
+    # detection
+    ref_trees
+    , det_trees
+    , tp_n
+    , omission_rate,commission_rate,recall,precision,f_score
+    # quantification
+    # , c(tidyselect::contains("volume") & !tidyselect::contains("paraboloid"))
+    , tidyselect::contains("area")
+    , tidyselect::contains("height")
+    , tidyselect::contains("diameter")
+    , tidyselect::contains("dbh")
+  ) %>% 
+  # names()
+  dplyr::mutate(
+    dplyr::across(
+      .cols = c(
+        f_score, recall, precision, tidyselect::ends_with("_mape")
+        , tidyselect::ends_with("_rate")
+      )
+      , .fn = ~ scales::percent(.x, accuracy = 1)
+    )
+    , dplyr::across(
+      .cols = c(tidyselect::ends_with("_mean"))
+      , .fn = ~ scales::comma(.x, accuracy = 0.01)
+    )
+    , dplyr::across(
+      .cols = c(tidyselect::ends_with("_rmse"))
+      , .fn = ~ scales::comma(.x, accuracy = 0.01)
+    )
+  ) %>% 
+  dplyr::select(
+    !tidyselect::contains("_area_")
+    & !tidyselect::contains("diff_diameter_")
+    & !tidyselect::ends_with("_trees")
+    # & !tidyselect::ends_with("_n")
+    & !tidyselect::ends_with("_rate")
+  ) %>% 
+  dplyr::select(
+    -c(
+      recall,precision,f_score
+    )
+  ) %>% 
+  dplyr::mutate(data = "site-wide") %>% 
+  dplyr::relocate(data) %>% 
+  # ncol()
+  # dplyr::glimpse()
+  kableExtra::kbl(
+    caption = "Quantification Accuracy"
+    , col.names = c(
+      "data"
+      , "TP predictions"
+      , rep(c("ME","RMSE","MAPE"), times = 2)
+    )
+    , escape = F
+    # , digits = 2
+  ) %>% 
+  kableExtra::kable_styling(font_size = 11.5) %>% 
+  kableExtra::add_header_above(c(
+    " "=2
+    # , "Detection" = 3
+    # , "Area" = 3
+    , "Height (m)" = 3
+    , "DBH (cm)" = 3
+  )) %>% 
+  kableExtra::column_spec(seq(2,8,by=3), border_right = TRUE, include_thead = TRUE) 
+```
+
+UAS-measured heights are highly accurate but those DBH measurements do not align very well. perhaps this is due to the fact that DBH wasn't actually measured in the field. instead, DRC (diameter at root crown) was measured and then we converted DRC to DBH using the Chojnacky & Rogers ([1999](https://doi.org/10.1093/wjaf/14.1.14)) model...therefore, it's probably best not to view these DBH metrics as measurements of "error" but as measurements of "comparison"
+
+and plot predicted versus reference values for correct predictions (TP)
+
+```{r}
+####################################
+# area scatter
+####################################
+dta_temp <-
+  ground_truth_prediction_match_ans %>% 
+  dplyr::filter(match_grp=="true positive") %>% 
+  sf::st_drop_geometry() %>% 
+  dplyr::bind_rows() %>% 
+  dplyr::bind_cols(
+    agg_ground_truth_match_ans %>% 
+      dplyr::select(tidyselect::ends_with("_rmse") , tidyselect::ends_with("_mape"), tidyselect::ends_with("_mean") )
+  ) %>% 
+  dplyr::glimpse()
+# plt fn temp
+plt_fn_temp <- function(
+    dta
+    , which_col = "dbh_cm"
+    , title_lab = "DBH"
+    , x_lab = "reference DBH (cm)" # latex2exp::TeX("reference area ($m^2$)")
+    , y_lab = "predicted DBH (cm)" # latex2exp::TeX("predicted area ($m^2$)")
+){
+    d <- dta
+    # construct the formula: "y_var ~ x_var"
+    y_var <- paste0("pred_",which_col)
+    x_var <- paste0("ref_",which_col)
+    formula_obj <- stats::as.formula(
+      paste( 
+        y_var
+        , "~"
+        , x_var 
+      )
+    )
+    lm_temp <- lm(
+      formula = formula_obj
+      , data = d
+    )
+    # summary(lm_temp)
+    # scales::percent(summary(lm_temp)$r.squared, accuracy = 0.1)
+    lmf_temp <- paste0(
+      "y = "
+      , scales::number(summary(lm_temp)$coefficients[2,1], accuracy = 0.01) #slope
+      , "x"
+      , ifelse(summary(lm_temp)$coefficients[1,1]<0," - ", " + ")
+      , scales::number(abs(summary(lm_temp)$coefficients[1,1]), accuracy = 0.01) #intercept
+    )
+    # scale limits
+    max_val <- max( 
+      max(dta_temp[[y_var]],na.rm=T)
+      , max(dta_temp[[x_var]],na.rm=T)
+    )
+    
+    # plot
+    d %>% 
+      ggplot2::ggplot(mapping = ggplot2::aes(y = .data[[y_var]], x = .data[[x_var]])) +
+      ggplot2::geom_abline(color = "gray33", lwd = 1) +
+      ggplot2::geom_point(color = "brown", alpha = 0.7, size = 0.9) +
+      ggplot2::geom_smooth(lwd = 0.8, method = "lm", se=F, color = "gray", linetype = "dashed") +
+      ggplot2::annotate(
+        "text", 
+        x = -Inf, y = Inf # Top Left
+        , label = 
+          # paste0(
+          #   "R^2 == "
+          #   , scales::number((summary(lm_temp)$r.squared)*100, accuracy = 0.1)
+          #   , "*'%'"
+          # )
+          paste0(
+            "RMSE = "
+            , d %>% 
+              dplyr::slice(1) %>% 
+              dplyr::select(dplyr::all_of(paste0("diff_",which_col, "_rmse"))) %>% 
+              dplyr::pull(1) %>% 
+              unique() %>% 
+              # scales::number(accuracy = 0.1, suffix = " (m²)")
+              scales::number(
+                accuracy = ifelse(which_col=="dbh_cm",0.1,0.01)
+                , suffix = ifelse(which_col=="dbh_cm"," (cm)"," (m)") 
+              )
+            , "\nMAPE = "
+            , d %>% 
+              dplyr::select(dplyr::all_of(paste0("pct_diff_",which_col, "_mape"))) %>% 
+              dplyr::pull(1) %>% 
+              unique() %>% 
+              scales::percent(accuracy = 0.1)
+            , "\nME = "
+            , d %>% 
+              dplyr::select(dplyr::all_of(paste0("diff_",which_col, "_mean"))) %>% 
+              dplyr::pull(1) %>% 
+              unique() %>% 
+              scales::number(
+                accuracy = ifelse(which_col=="dbh_cm",0.1,0.01)
+                , suffix = ifelse(which_col=="dbh_cm"," (cm)"," (m)") 
+              )
+            , "\n"
+            , lmf_temp
+            , "\n R² = "
+            # , scales::number((summary(lm_temp)$r.squared)*100, accuracy = 0.1, suffix = "%")
+            , scales::number((summary(lm_temp)$r.squared), accuracy = 0.01)
+          )
+        , hjust = -0.1, vjust = 1.1
+        , parse = F
+        , size = 3
+      ) +
+      # ggplot2::facet_wrap(
+      #   facets = dplyr::vars(dataset_factor), scales = "free", axis.labels = "all"
+      #   # , labeller = ggplot2::labeller(class = ggplot2::label_wrap_gen(width = 10))
+      # ) +
+      ggplot2::scale_x_continuous(limits = c(0, max_val ), expand = ggplot2::expansion(mult = c(0,0.1))) +
+      ggplot2::scale_y_continuous(limits = c(0, max_val ), expand = ggplot2::expansion(mult = c(0,0.1))) +
+      ggplot2::labs(
+        x = x_lab
+        , y = y_lab
+        # , color = "image-field\ndiameter diff."
+        # , subtitle = latex2exp::TeX("bulk volume ($m^3$) comparison")
+        # , subtitle = paste("Predicted", title_lab,"versus Reference", title_lab)
+      ) +
+      ggplot2::theme_light() +
+      ggplot2::theme(
+        strip.text = ggplot2::element_text(size = 10, face = "bold", color = "black")
+      ) 
+  }
+# get the plottttttttttttttttttt
+dbh_plt_temp <-
+  plt_fn_temp(dta_temp, which_col = "dbh_cm", title_lab = "DBH", x_lab = "reference DBH (cm)", y_lab = "predicted DBH (cm)")
+# dbh_plt_temp
+
+# get the plottttttttttttttttttt
+ht_plt_temp <-
+  plt_fn_temp(dta_temp, which_col = "tree_height_m", title_lab = "Height", x_lab = "reference Height (m)", y_lab = "predicted Height (m)")
+ht_plt_temp
+```
+
+**DBH: predicted vs reference**
+
+```{r}
+dbh_plt_temp
+```
+
+yikes. see comments on DBH above
+
+**height: predicted vs reference**
+
+```{r}
+ht_plt_temp
+```
+
+UAS-predicted height is highly accurate compared to field-measured values, a finding supported by many prior studies. 
+
+```{r, warning=FALSE, message=FALSE, echo=FALSE, include=FALSE}
+remove(list = ls()[grep("_temp",ls())])
+gc()
+```
+
+full distribution of predicted and reference values irrespective of correct or incorrect prediction match
+
+```{r}
+ground_truth_prediction_match_ans %>%
+  sf::st_drop_geometry() %>%
+  dplyr::select(
+    ref_tree_height_m, pred_tree_height_m
+    , ref_dbh_cm, pred_dbh_cm
+  ) %>% 
+  tidyr::pivot_longer(
+    cols = dplyr::everything()
+    , names_to = "metric"
+    , values_to = "value"
+    , values_drop_na = T
+  ) %>% 
+  dplyr::mutate(
+    which_data = dplyr::case_when(
+        stringr::str_starts(metric,"field_") | stringr::str_starts(metric,"ref_") ~ "field"
+        , stringr::str_starts(metric,"pred_") ~ "prediction"
+        , T ~ "error"
+      ) %>% 
+      ordered()
+    , tree_metric = metric %>% 
+      stringr::str_remove("(_rmse|_rrmse|_mean|_mape)$") %>% 
+      stringr::str_extract("(height|dbh)") %>% 
+      factor(
+        ordered = T
+        , levels = c(
+          "height"
+          , "dbh"
+        )
+        , labels = c(
+          "Height (m)"
+          , "DBH (cm)"
+        )
+      )
+  ) %>% 
+  # dplyr::glimpse()
+# plot dist
+  ggplot2::ggplot(mapping = ggplot2::aes(x = value, color = which_data, fill = which_data)) +
+  ggplot2::geom_density(mapping = ggplot2::aes(y=ggplot2::after_stat(scaled)), alpha = 0.7) +
+  ggplot2::facet_grid(
+    cols = dplyr::vars(tree_metric)
+    , scales = "free_x", axes = "all_x"
+    , switch = "y"
+  ) +
+  harrypotter::scale_color_hp_d(option = "hermionegranger") +
+  harrypotter::scale_fill_hp_d(option = "hermionegranger") +
+  ggplot2::scale_y_continuous(NULL,breaks=NULL) +
+  ggplot2::scale_x_continuous(breaks=scales::breaks_extended(n=6)) +
+  ggplot2::labs(
+    color="",fill="",x=""
+    # , subtitle = "comparison of height and DBH distributions"
+  ) +
+  ggplot2::theme_light() +
+  ggplot2::theme(
+    legend.position = "top"
+    , strip.text.x = ggplot2::element_text(size = 9, color = "black", face = "bold")
+    # , axis.text.x = ggplot2::element_text(size = 6)
+    , panel.grid.major.y = ggplot2::element_blank()
+    , panel.grid.minor.y = ggplot2::element_blank()
+  )
+```
+
+let's shift our focus to relative error (MAPE) while providing absolute context (RMSE and ME) as text or secondary metrics to look into the penalty we face due to inaccuracies in DBH for small stems. for example, a 3 cm error on a 6 cm small tree is a 50% relative error while that same 3 cm error on a 30 cm merchantable tree is a minor 10% error.
+
+let's look into the DBH prediction error over the range of tree sizes and use LOESS smoothing to highlight the trend in relative prediction error
+
+```{r}
+# Data trends (dashed) are visualized using a LOESS (locally weighted scatterplot smoothing) regression. 
+# A span of 1.0 was utilized to include 100% of the observations in each local neighborhood, 
+# and the local polynomial degree was restricted to 1 (local linear regression) to prevent overfitting and boundary inflation at the data extremes.
+
+# The dashed line represents a locally estimated scatterplot smoothing (LOESS) trend line
+# , calculated with a smoothing parameter (span) of 1.0 and a local linear polynomial fit (degree = 1).
+ground_truth_prediction_match_ans %>%
+  dplyr::mutate(
+    # swap the error calc
+    pct_diff_dbh_cm = (pred_dbh_cm-ref_dbh_cm)/ref_dbh_cm
+  ) %>%
+  sf::st_drop_geometry() %>%
+  dplyr::filter(match_grp %in% c("true positive")) %>% 
+  # dplyr::glimpse()
+  ggplot2::ggplot(
+    mapping = ggplot2::aes(y = pct_diff_dbh_cm, x = ref_dbh_cm)
+  ) +
+  ggplot2::geom_hline(yintercept = 0, color = "gray33", lwd = 1) +
+  ggplot2::geom_point(color = "brown", alpha = 0.7, size = 0.7) +
+  ggplot2::geom_smooth(
+    method = "loess", se=F
+    , span = 1 # 0.75 = default
+    , method.args = list(degree = 1)
+    , lwd = 1, color = "gray", linetype = "dashed"
+  ) +
+  ggplot2::annotate(
+    "text"
+    , x = Inf
+    # , y = 0.045
+    , y = Inf
+    , label = "prediction > reference"
+    , hjust = 1.1
+    , vjust = 1.2
+    , parse = F
+    , size = 2.5
+  ) +
+  ggplot2::annotate(
+    "text"
+    , x = Inf
+    # , y = -0.04
+    , y = -Inf
+    , label = "prediction < reference"
+    , hjust = 1.1
+    , vjust = -0.4
+    , parse = F
+    , size = 2.5
+  ) +
+  ggplot2::scale_x_continuous(breaks = scales::breaks_extended(n=8)) +
+  ggplot2::scale_y_continuous(
+    limits = c(-1,1)
+    # breaks = seq(-1,1,by=0.2)
+    , breaks = scales::breaks_extended(n = 8)
+    , labels = scales::percent
+  ) +
+  ggplot2::labs(
+    x = "field reference DBH (cm)", y = "relative DBH error"
+    , subtitle = "relative DBH error (%) by reference tree DBH"
+  ) +
+  ggplot2::theme_light()
+```
+
+that's neat
+
+do it for height too
+
+```{r}
+# Data trends (dashed) are visualized using a LOESS (locally weighted scatterplot smoothing) regression. 
+# A span of 1.0 was utilized to include 100% of the observations in each local neighborhood, 
+# and the local polynomial degree was restricted to 1 (local linear regression) to prevent overfitting and boundary inflation at the data extremes.
+
+# The dashed line represents a locally estimated scatterplot smoothing (LOESS) trend line
+# , calculated with a smoothing parameter (span) of 1.0 and a local linear polynomial fit (degree = 1).
+ground_truth_prediction_match_ans %>%
+  dplyr::mutate(
+    # swap the error calc
+    pct_diff_tree_height_m = (pred_tree_height_m-ref_tree_height_m)/ref_tree_height_m
+  ) %>%
+  sf::st_drop_geometry() %>%
+  dplyr::filter(match_grp %in% c("true positive")) %>% 
+  # dplyr::glimpse()
+  ggplot2::ggplot(
+    mapping = ggplot2::aes(y = pct_diff_tree_height_m, x = ref_tree_height_m)
+  ) +
+  ggplot2::geom_hline(yintercept = 0, color = "gray33", lwd = 1) +
+  ggplot2::geom_point(color = "brown", alpha = 0.7, size = 0.7) +
+  ggplot2::geom_smooth(
+    method = "loess", se=F
+    , span = 1 # 0.75 = default
+    , method.args = list(degree = 1)
+    , lwd = 1, color = "gray", linetype = "dashed"
+  ) +
+  ggplot2::annotate(
+    "text"
+    , x = Inf
+    # , y = 0.045
+    , y = Inf
+    , label = "prediction > reference"
+    , hjust = 1.1
+    , vjust = 1.2
+    , parse = F
+    , size = 2.5
+  ) +
+  ggplot2::annotate(
+    "text"
+    , x = Inf
+    # , y = -0.04
+    , y = -Inf
+    , label = "prediction < reference"
+    , hjust = 1.1
+    , vjust = -0.4
+    , parse = F
+    , size = 2.5
+  ) +
+  ggplot2::scale_x_continuous(breaks = scales::breaks_extended(n=8)) +
+  ggplot2::scale_y_continuous(
+    limits = c(-1,1)
+    # breaks = seq(-1,1,by=0.2)
+    , breaks = scales::breaks_extended(n = 8)
+    , labels = scales::percent
+  ) +
+  ggplot2::labs(
+    x = "field reference height (m)", y = "relative height error"
+    , subtitle = "relative height error (%) by reference tree height"
+  ) +
+  ggplot2::theme_light()
+```
+
+that is also neat
+
+## Stand-Level Accuracy Results{#stand_acc}
+
+In addition to the tree-level accuracy metrics (e.g. height RMSE and MAPE), we can also calculate stand-level accuracy metrics by aggregating estimates from the reference (ground truth) and predicted trees irrespective of whether or not they were matched (i.e. true positive) during instance matching. 
+
+*for this data, "stand-level" refers to the combined area covered by all field plots*
+
+```{r}
+pred_stand_temp <-
+  treetops_sf %>% 
+  sf::st_intersection(
+    validation_plots %>% 
+      sf::st_buffer(.$plot_radius_m) %>% 
+      sf::st_union() %>% 
+      sf::st_transform(terra::crs(treetops_sf)) %>% 
+      sf::st_as_sf() %>% 
+      dplyr::mutate(area_m2 = sf::st_area(.) %>% as.numeric())
+  ) %>% 
+  sf::st_drop_geometry() %>% 
+  dplyr::group_by(area_m2) %>% 
+  dplyr::summarise(
+    n_trees = dplyr::n()
+    , basal_area_m2 = sum(basal_area_m2)
+  ) %>% 
+  dplyr::ungroup() %>% 
+  dplyr::mutate(
+    area_ha = (area_m2/10000)
+    , basal_area_m2_per_ha = basal_area_m2/area_ha
+    , trees_per_ha = n_trees/area_ha
+  ) %>% 
+  dplyr::select(-area_m2)
+# dplyr::glimpse(pred_stand_temp)
+ref_stand_temp <-
+  validation_trees %>% 
+  sf::st_transform(terra::crs(treetops_sf)) %>% 
+  sf::st_intersection(
+    validation_plots %>% 
+      sf::st_buffer(.$plot_radius_m) %>% 
+      sf::st_union() %>% 
+      sf::st_transform(terra::crs(treetops_sf)) %>% 
+      sf::st_as_sf() %>% 
+      dplyr::mutate(area_m2 = sf::st_area(.) %>% as.numeric())
+  ) %>% 
+  sf::st_drop_geometry() %>% 
+  dplyr::mutate(basal_area_m2 = pi * dbh_cm^2 / (4*10000)) %>% 
+  dplyr::group_by(area_m2) %>% 
+  dplyr::summarise(
+    n_trees = dplyr::n()
+    , basal_area_m2 = sum(basal_area_m2)
+  ) %>% 
+  dplyr::ungroup() %>% 
+  dplyr::mutate(
+    area_ha = (area_m2/10000)
+    , basal_area_m2_per_ha = basal_area_m2/area_ha
+    , trees_per_ha = n_trees/area_ha
+  ) %>% 
+  dplyr::select(-area_m2)
+# dplyr::glimpse(ref_stand_temp)
+stand_temp <- 
+  dplyr::inner_join(
+    ref_stand_temp %>% dplyr::rename_with(.cols = -c(area_ha), ~paste0("ref_",.x,recycle0 = T))
+    , pred_stand_temp %>% dplyr::rename_with(.cols = -c(area_ha), ~paste0("pred_",.x,recycle0 = T))
+    , by = "area_ha"
+  ) %>% 
+  # comps not done in agg_ground_truth_match()
+  dplyr::mutate(
+    # 'diff_' columns are calculated as the predicted value minus the actual value
+    diff_trees_per_ha = pred_trees_per_ha-ref_trees_per_ha
+    , diff_basal_area_m2 = pred_basal_area_m2-ref_basal_area_m2
+    , diff_basal_area_m2_per_ha = pred_basal_area_m2_per_ha-ref_basal_area_m2_per_ha
+    # 'abs_diff_' columns are calculated as the predicted value minus the actual value
+    , abs_diff_trees_per_ha = abs(diff_trees_per_ha)
+    , abs_diff_basal_area_m2 = abs(diff_basal_area_m2)
+    , abs_diff_basal_area_m2_per_ha = abs(diff_basal_area_m2_per_ha)
+    # 'pct_diff_' columns are calculated as the predicted value minus the actual value divided by the actual value
+    , pct_diff_trees_per_ha = (pred_trees_per_ha-ref_trees_per_ha)/ref_trees_per_ha
+    , pct_diff_basal_area_m2 = (pred_basal_area_m2-ref_basal_area_m2)/ref_basal_area_m2
+    , pct_diff_basal_area_m2_per_ha = (pred_basal_area_m2_per_ha-ref_basal_area_m2_per_ha)/ref_basal_area_m2_per_ha
+  )
+```
+
+let's table the stand-level measurement error
+
+```{r}
+stand_temp %>% 
+  dplyr::select(
+    area_ha
+    # detection
+    , ref_n_trees
+    , pred_n_trees
+    # quantification
+    , tidyselect::ends_with("_basal_area_m2_per_ha")
+    , tidyselect::ends_with("_trees_per_ha")
+  ) %>% 
+  dplyr::select(!tidyselect::starts_with("abs_diff_")) %>% 
+  dplyr::mutate(
+    dplyr::across(
+      .cols = c(
+        tidyselect::starts_with("pct_diff_")
+        , tidyselect::ends_with("_rate")
+      )
+      , .fn = ~ scales::percent(.x, accuracy = .1)
+    )
+    , dplyr::across(
+      .cols = c(tidyselect::ends_with("_trees"))
+      , .fn = ~ scales::comma(.x, accuracy = 1)
+    )
+    , dplyr::across(
+      .cols = dplyr::where(is.numeric)
+      , .fn = ~ scales::comma(.x, accuracy = 0.1)
+    )
+    # # one column for diff/pct
+    , diff_basal_area_m2_per_ha = paste0(diff_basal_area_m2_per_ha, "<br>(", pct_diff_basal_area_m2_per_ha, ")")
+    , diff_trees_per_ha = paste0(diff_trees_per_ha, "<br>(", pct_diff_trees_per_ha, ")")
+  ) %>% 
+  dplyr::select(
+    !tidyselect::starts_with("pct_diff_")
+  ) %>% 
+  # dplyr::glimpse()
+  
+  kableExtra::kbl(
+    caption = "Stand-Level Accuracy"
+    , col.names = c(
+      "field-measured area (ha)"
+      , "reference", "predicted"
+      , rep(c("reference","predicted","difference"), times = 2)
+    )
+    , escape = F
+    # , digits = 2
+  ) %>% 
+  kableExtra::kable_styling(font_size = 11.5) %>% 
+  kableExtra::add_header_above(
+    c(
+      " "=1
+      , "# Trees" = 2
+      # , "Area" = 3
+      , "Basal Area<br />m<sup>2</sup> ha<sup>-1</sup>" = 3
+      , "Trees<br />ha<sup>-1</sup>" = 3
+    )
+    , escape = F
+  ) %>% 
+  kableExtra::column_spec( c(1,seq(3,9,by=3) ), border_right = TRUE, include_thead = TRUE) %>% 
+  kableExtra::collapse_rows(columns = c(1), valign = "top")
+```
+
+neat

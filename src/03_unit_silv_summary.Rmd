@@ -2,13 +2,7 @@
 
 In this section, we're going to aggregate the detected trees by treatment unit to produce silvicultural summaries. Before we do that, we'll use pile predictions as a mask to remove smaller, detected "trees" that are actually piles or downed trees/debris so that we are only working with trees within units.
 
-nice. now we'll keep only trees that are at least 2 m in height since we included trees as small as 1.37 m in our [tree detection](#trees)
-
-```{r}
-treetops_sf <- treetops_sf %>% dplyr::filter(tree_height_m>=2)
-```
-
-using our cleaned trees data, how many trees per treatment unit?
+using our cleaned UAS-detected trees data, how many trees per treatment unit?
 
 ```{r}
 treetops_sf %>% 
