@@ -1221,7 +1221,7 @@ terra_plt_ortho <- function(
 
 plot example unit
 
-```{r,eval=T,purl=FALSE, results=F, fig.show='asis', fig.height=10.1}
+```{r,eval=F,purl=FALSE, results=F, fig.show='asis', fig.height=10.1}
 plt_single_temp <- function(x, add = T){
     unit_temp <- stand_boundary %>% 
       dplyr::filter(
@@ -1259,7 +1259,7 @@ plt_single_temp(1)
 
 zoom in
 
-```{r,eval=T,purl=FALSE, results=F, fig.show='asis', fig.height=9.2}
+```{r,eval=F,purl=FALSE, results=F, fig.show='asis', fig.height=9.2}
 unit_temp <- stand_boundary %>% 
   dplyr::slice(4) %>% 
   sf::st_centroid() %>% 
@@ -1289,7 +1289,7 @@ terra_plt_ortho(
 
 how about on the CHM?
 
-```{r,eval=T,purl=FALSE, results=F, fig.show='asis', fig.height=9.2}
+```{r,eval=F,purl=FALSE, results=F, fig.show='asis', fig.height=9.2}
 chm_temp <- chm_rast %>% 
   terra::crop(unit_temp %>% sf::st_buffer(3) %>% terra::vect(), mask = T) %>% 
   cloud2trees:::adjust_raster_resolution(
