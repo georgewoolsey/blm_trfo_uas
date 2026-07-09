@@ -51,6 +51,10 @@
 <link href="libs/anchor-sections-1.1.0/anchor-sections.css" rel="stylesheet" />
 <link href="libs/anchor-sections-1.1.0/anchor-sections-hash.css" rel="stylesheet" />
 <script src="libs/anchor-sections-1.1.0/anchor-sections.js"></script>
+<script src="libs/kePrint-0.0.1/kePrint.js"></script>
+<link href="libs/lightable-0.0.1/lightable.css" rel="stylesheet" />
+<link href="libs/bsTable-3.3.7/bootstrapTable.min.css" rel="stylesheet" />
+<script src="libs/bsTable-3.3.7/bootstrapTable.js"></script>
 <link href="libs/htmltools-fill-0.5.9/fill.css" rel="stylesheet" />
 <script src="libs/htmlwidgets-1.6.4/htmlwidgets.js"></script>
 <link href="libs/leaflet-1.3.1/leaflet.css" rel="stylesheet" />
@@ -59,16 +63,12 @@
 <script src="libs/proj4-2.6.2/proj4.min.js"></script>
 <script src="libs/Proj4Leaflet-1.0.1/proj4leaflet.js"></script>
 <link href="libs/rstudio_leaflet-1.3.1/rstudio_leaflet.css" rel="stylesheet" />
-<script src="libs/leaflet-binding-2.2.2/leaflet.js"></script>
-<script src="libs/leaflet-providers-2.0.0/leaflet-providers_2.0.0.js"></script>
-<script src="libs/leaflet-providers-plugin-2.2.2/leaflet-providers-plugin.js"></script>
+<script src="libs/leaflet-binding-2.2.3/leaflet.js"></script>
+<script src="libs/leaflet-providers-3.0.0/leaflet-providers.js"></script>
+<script src="libs/leaflet-providers-plugin-2.2.3/leaflet-providers-plugin.js"></script>
 <script src="libs/clipboard-0.0.1/setClipboardText.js"></script>
 <link href="libs/mapviewCSS-0.0.1/mapview-popup.css" rel="stylesheet" />
 <link href="libs/mapviewCSS-0.0.1/mapview.css" rel="stylesheet" />
-<script src="libs/kePrint-0.0.1/kePrint.js"></script>
-<link href="libs/lightable-0.0.1/lightable.css" rel="stylesheet" />
-<link href="libs/bsTable-3.3.7/bootstrapTable.min.css" rel="stylesheet" />
-<script src="libs/bsTable-3.3.7/bootstrapTable.js"></script>
 <script type="text/javascript">
 
 // toggle visibility of R source blocks in R Markdown output
@@ -202,28 +202,30 @@ code span.wa { color: #60a0b0; font-weight: bold; font-style: italic; } /* Warni
 <li class="chapter" data-level="3.2" data-path="slash-piles.html"><a href="slash-piles.html#candidate-pile-review"><i class="fa fa-check"></i><b>3.2</b> Candidate Pile Review</a></li>
 <li class="chapter" data-level="3.3" data-path="slash-piles.html"><a href="slash-piles.html#slash-pile-summary-statistics"><i class="fa fa-check"></i><b>3.3</b> Slash Pile Summary Statistics</a></li>
 </ul></li>
-<li class="chapter" data-level="4" data-path="silv_sum.html"><a href="silv_sum.html"><i class="fa fa-check"></i><b>4</b> Treatment Unit Silvicultural Summary</a>
+<li class="chapter" data-level="4" data-path="individual-tree-accuracy-evaluation.html"><a href="individual-tree-accuracy-evaluation.html"><i class="fa fa-check"></i><b>4</b> Individual Tree Accuracy Evaluation</a>
 <ul>
-<li class="chapter" data-level="4.1" data-path="silv_sum.html"><a href="silv_sum.html#remove-slash-piles"><i class="fa fa-check"></i><b>4.1</b> Remove Slash Piles</a></li>
-<li class="chapter" data-level="4.2" data-path="silv_sum.html"><a href="silv_sum.html#function-to-calculate-silviclutural-metrics"><i class="fa fa-check"></i><b>4.2</b> Function to Calculate Silviclutural Metrics</a></li>
-<li class="chapter" data-level="4.3" data-path="silv_sum.html"><a href="silv_sum.html#treatment-unit-summaries"><i class="fa fa-check"></i><b>4.3</b> Treatment Unit Summaries</a>
+<li class="chapter" data-level="4.1" data-path="individual-tree-accuracy-evaluation.html"><a href="individual-tree-accuracy-evaluation.html#remove-slash-piles-from-predictions"><i class="fa fa-check"></i><b>4.1</b> Remove Slash Piles from Predictions</a></li>
+<li class="chapter" data-level="4.2" data-path="individual-tree-accuracy-evaluation.html"><a href="individual-tree-accuracy-evaluation.html#reference-field-data"><i class="fa fa-check"></i><b>4.2</b> Reference Field Data</a></li>
+<li class="chapter" data-level="4.3" data-path="individual-tree-accuracy-evaluation.html"><a href="individual-tree-accuracy-evaluation.html#detect_metrics_form"><i class="fa fa-check"></i><b>4.3</b> Detection Accuracy Overview</a>
 <ul>
-<li class="chapter" data-level="4.3.1" data-path="silv_sum.html"><a href="silv_sum.html#tabular"><i class="fa fa-check"></i><b>4.3.1</b> Tabular</a></li>
-<li class="chapter" data-level="4.3.2" data-path="silv_sum.html"><a href="silv_sum.html#visual"><i class="fa fa-check"></i><b>4.3.2</b> Visual</a></li>
+<li class="chapter" data-level="4.3.1" data-path="individual-tree-accuracy-evaluation.html"><a href="individual-tree-accuracy-evaluation.html#example-detection-accuracy"><i class="fa fa-check"></i><b>4.3.1</b> Example: Detection Accuracy</a></li>
 </ul></li>
-<li class="chapter" data-level="4.4" data-path="silv_sum.html"><a href="silv_sum.html#tree-distribution-by-treatment-type"><i class="fa fa-check"></i><b>4.4</b> Tree Distribution by Treatment Type</a></li>
-<li class="chapter" data-level="4.5" data-path="silv_sum.html"><a href="silv_sum.html#visual-crowns-by-unit"><i class="fa fa-check"></i><b>4.5</b> Visual Crowns by Unit</a></li>
+<li class="chapter" data-level="4.4" data-path="individual-tree-accuracy-evaluation.html"><a href="individual-tree-accuracy-evaluation.html#quant_metrics_form"><i class="fa fa-check"></i><b>4.4</b> Quantification Accuracy Overview</a></li>
+<li class="chapter" data-level="4.5" data-path="individual-tree-accuracy-evaluation.html"><a href="individual-tree-accuracy-evaluation.html#implement-accuracy-evaluation"><i class="fa fa-check"></i><b>4.5</b> Implement Accuracy Evaluation</a></li>
+<li class="chapter" data-level="4.6" data-path="individual-tree-accuracy-evaluation.html"><a href="individual-tree-accuracy-evaluation.html#detection-accuracy-results"><i class="fa fa-check"></i><b>4.6</b> Detection Accuracy Results</a></li>
+<li class="chapter" data-level="4.7" data-path="individual-tree-accuracy-evaluation.html"><a href="individual-tree-accuracy-evaluation.html#quant_acc"><i class="fa fa-check"></i><b>4.7</b> Quantification Accuracy Results</a></li>
+<li class="chapter" data-level="4.8" data-path="individual-tree-accuracy-evaluation.html"><a href="individual-tree-accuracy-evaluation.html#stand_acc"><i class="fa fa-check"></i><b>4.8</b> Stand-Level Accuracy Results</a></li>
 </ul></li>
-<li class="chapter" data-level="5" data-path="tree-group-analysis.html"><a href="tree-group-analysis.html"><i class="fa fa-check"></i><b>5</b> Tree Group Analysis</a>
+<li class="chapter" data-level="5" data-path="silv_sum.html"><a href="silv_sum.html"><i class="fa fa-check"></i><b>5</b> Treatment Unit Silvicultural Summary</a>
 <ul>
-<li class="chapter" data-level="5.1" data-path="tree-group-analysis.html"><a href="tree-group-analysis.html#group-tree-crowns"><i class="fa fa-check"></i><b>5.1</b> Group Tree Crowns</a></li>
-<li class="chapter" data-level="5.2" data-path="tree-group-analysis.html"><a href="tree-group-analysis.html#identify-openings"><i class="fa fa-check"></i><b>5.2</b> Identify Openings</a>
+<li class="chapter" data-level="5.1" data-path="silv_sum.html"><a href="silv_sum.html#function-to-calculate-silviclutural-metrics"><i class="fa fa-check"></i><b>5.1</b> Function to Calculate Silviclutural Metrics</a></li>
+<li class="chapter" data-level="5.2" data-path="silv_sum.html"><a href="silv_sum.html#treatment-unit-summaries"><i class="fa fa-check"></i><b>5.2</b> Treatment Unit Summaries</a>
 <ul>
-<li class="chapter" data-level="5.2.1" data-path="tree-group-analysis.html"><a href="tree-group-analysis.html#visualize-distance-raster"><i class="fa fa-check"></i><b>5.2.1</b> Visualize Distance Raster</a></li>
-<li class="chapter" data-level="5.2.2" data-path="tree-group-analysis.html"><a href="tree-group-analysis.html#visualize-openings"><i class="fa fa-check"></i><b>5.2.2</b> Visualize Openings</a></li>
+<li class="chapter" data-level="5.2.1" data-path="silv_sum.html"><a href="silv_sum.html#tabular"><i class="fa fa-check"></i><b>5.2.1</b> Tabular</a></li>
+<li class="chapter" data-level="5.2.2" data-path="silv_sum.html"><a href="silv_sum.html#visual"><i class="fa fa-check"></i><b>5.2.2</b> Visual</a></li>
 </ul></li>
-<li class="chapter" data-level="5.3" data-path="tree-group-analysis.html"><a href="tree-group-analysis.html#tree-clump-summary"><i class="fa fa-check"></i><b>5.3</b> Tree Clump Summary</a></li>
-<li class="chapter" data-level="5.4" data-path="tree-group-analysis.html"><a href="tree-group-analysis.html#openings-summary"><i class="fa fa-check"></i><b>5.4</b> Openings Summary</a></li>
+<li class="chapter" data-level="5.3" data-path="silv_sum.html"><a href="silv_sum.html#tree-distribution-by-treatment-type"><i class="fa fa-check"></i><b>5.3</b> Tree Distribution by Treatment Type</a></li>
+<li class="chapter" data-level="5.4" data-path="silv_sum.html"><a href="silv_sum.html#visual-crowns-by-unit"><i class="fa fa-check"></i><b>5.4</b> Visual Crowns by Unit</a></li>
 </ul></li>
 </ul>
 
@@ -308,6 +310,20 @@ gitbook.start({
 });
 </script>
 
+<!-- dynamically load mathjax for compatibility with self-contained -->
+<script>
+  (function () {
+    var script = document.createElement("script");
+    script.type = "text/javascript";
+    var src = "true";
+    if (src === "" || src === "true") src = "https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.9/latest.js?config=TeX-MML-AM_CHTML";
+    if (location.protocol !== "file:")
+      if (/^https?:/.test(src))
+        src = src.replace(/^https?:/, '');
+    script.src = src;
+    document.getElementsByTagName("head")[0].appendChild(script);
+  })();
+</script>
 </body>
 
 </html>

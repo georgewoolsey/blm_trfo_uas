@@ -368,7 +368,7 @@ validation_plots <-
 
 we aggregated the field-measured plot data. let's look at the TPH to make sure it aligns with expectations
 
-```{r}
+```{r, fig.height=9}
 validation_plots %>% 
   dplyr::ungroup() %>% 
   sf::st_drop_geometry() %>% 
