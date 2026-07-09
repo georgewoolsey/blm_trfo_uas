@@ -76,7 +76,6 @@ treetops_sf <- treetops_sf %>% dplyr::filter(tree_height_m>=min_tree_ht_m)
 
 ```{r, warning=FALSE, message=FALSE, echo=FALSE, include=FALSE}
 remove(list = ls()[grep("_temp",ls())])
-remove(piles_workflow_ans)
 gc()
 ```
 
@@ -1612,7 +1611,6 @@ ground_truth_prediction_match_ans %>%
 ```{r, include=F, eval=FALSE}
 # test a bunch of different variable window sizes within `lidR::lmf()` 
 # that cover a range of possibilities and function shapes including linear, concave up, and concave down
-
 # empty list
 vws_functions <- list()
 min_ws_temp <- 0.5
@@ -1731,7 +1729,131 @@ ggplot2::ggplot(
 # names(vws_functions)
 
 
+#### set up CHM for raster2trees
+agg_chm_rast <- terra::rast( file.path(c2t_process_dir, "chm_0.20m.tif") )
+chm_rast_test <- 
+  agg_chm_rast %>% 
+  terra::crop(
+    validation_plots %>% 
+      sf::st_buffer(.$plot_radius_m) %>% 
+      sf::st_union() %>% 
+      sf::st_buffer(8) %>% 
+      sf::st_transform(terra::crs(agg_chm_rast)) %>% 
+      terra::vect()
+    , mask = T
+    , filename = "../data/chm_rast_test.tif"
+  )
+# chm_rast_test %>% terra::plot()
 
+testtest_fn <- function(nm) {
+  xxx_raster2trees_ans <- cloud2trees::raster2trees(
+      chm_rast = chm_rast_test
+      , outfolder = tempdir()
+      , ws = vws_functions[[nm]]
+      , min_height = 1.37
+      , min_crown_area = 0.5
+    )
+  # xxx_raster2trees_ans %>% names()
+  xxx_treetops_sf <- xxx_raster2trees_ans %>% 
+    sf::st_drop_geometry() %>% 
+    sf::st_as_sf(coords = c("tree_x", "tree_y"), crs = sf::st_crs(xxx_raster2trees_ans)) %>% 
+    dplyr::mutate(dbh_cm = mean(validation_trees$dbh_cm,na.rm=T))
+  # xxx_treetops_sf %>% mapview::mapview(zcol="tree_height_m", layer.name="trees")
+  # nrow(xxx_treetops_sf)
+  xxx_treetops_sf <- 
+    sf::st_filter(
+      xxx_treetops_sf
+      , piles_workflow_ans %>% 
+        dplyr::filter(is_in_trtmnt_unit, inrange_th_votes>=5) %>% 
+        sf::st_union()
+      , .predicate = sf::st_disjoint
+    )
+  # nrow(xxx_treetops_sf)
+  
+  ################### map it
+  xxx_gt_pred_match_map_ans <- validation_trees$plot %>% 
+    unique() %>% 
+    purrr::set_names() %>% 
+    purrr::map(function(plt_id) {
+      # reference_prediction_match
+      rp_match_ans_temp <- reference_prediction_match(
+        pred_data = 
+          xxx_treetops_sf %>% 
+            dplyr::filter(tree_height_m>=min_tree_ht_m) %>% 
+            sf::st_intersection(
+              validation_plots %>% 
+                dplyr::filter(plot==plt_id) %>%  
+                dplyr::mutate(plot_radius_m = plot_radius_m+1) %>% 
+                sf::st_transform(sf::st_crs(xxx_treetops_sf)) %>% 
+                sf::st_buffer(.$plot_radius_m) %>% 
+                dplyr::select(plot_area_m2)
+            ) %>% 
+            dplyr::left_join(
+              xxx_treetops_sf %>% 
+                # clip to study boundary
+                sf::st_intersection(
+                  validation_plots %>% 
+                    dplyr::filter(plot==plt_id) %>%  
+                    sf::st_transform(sf::st_crs(xxx_treetops_sf)) %>% 
+                    sf::st_buffer(.$plot_radius_m) %>% 
+                    dplyr::mutate(is_in_stand = T)
+                ) %>% 
+                sf::st_drop_geometry() %>% 
+                dplyr::select(treeID, is_in_stand)
+              , by = "treeID"
+            ) %>% 
+            dplyr::mutate(
+              is_in_stand = dplyr::coalesce(is_in_stand,F)
+            )
+        , ref_data = 
+          validation_trees %>% 
+            dplyr::filter(plot==plt_id) %>%
+            dplyr::rename(tree_height_m=height_m, dbh_cm=dbh_cm, tree_cbh_m=cbh_m) %>% 
+            sf::st_transform(sf::st_crs(xxx_treetops_sf))
+        , max_dist_m = 2 # round(median(validation_trees$crown_width_m)/2)
+        , max_height_error_m = 1.5 # round(sd(validation_trees$height_m)*1.1,1)
+      )
+      # # wha?
+      # rp_match_ans_temp$ref_data %>% dplyr::glimpse()
+      # rp_match_ans_temp$pred_data %>% dplyr::glimpse()
+      
+      gt_temp <- ground_truth_prediction_match(
+        reference_prediction_match_ans = rp_match_ans_temp
+        , comp_cols = c("tree_height_m", "dbh_cm") #, "tree_cbh_m")
+      )
+      
+      if(!is.null(rp_match_ans_temp$pred_data) && nrow(rp_match_ans_temp$pred_data)>0){
+        gt_temp <- gt_temp %>% 
+          # remove FP that were outside boundary since we included them to allow for edge reference trees to be matched
+          dplyr::left_join(
+            rp_match_ans_temp$pred_data %>% 
+              sf::st_drop_geometry() %>% 
+              dplyr::select(pred_match_idx, is_in_stand)
+            , by = "pred_match_idx"
+          ) %>% 
+          dplyr::filter(
+            !(!is_in_stand & match_grp=="commission")
+          ) 
+      }
+      # gt_temp %>% agg_ground_truth_match() %>% dplyr::glimpse()
+      return(gt_temp)
+  })
+  xxx_ground_truth_prediction_match_ans <- 
+    xxx_gt_pred_match_map_ans %>%
+    purrr::compact() %>% 
+    purrr::list_rbind(names_to = "plot")
+  ans <- xxx_ground_truth_prediction_match_ans %>% 
+    sf::st_drop_geometry() %>% 
+    agg_ground_truth_match()
+  ans %>% readr::write_csv(file.path("../data/testtest", paste0(nm,".csv")))
+  return(ans)
+}
+
+testtest_ans <- 
+  names(vws_functions) %>%
+  .[1:2] %>% 
+  purrr::set_names() %>% 
+  purrr::map(testtest_fn)
 ```
 
 

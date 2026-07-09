@@ -224,17 +224,17 @@ for tree detection, we'll aggregate the CHM to a lower resolution (i.e. coarser)
 # adjust the resolution of a raster to be in exactly the target resolution
 ###___________________________________________###
 if(
-  !file.exists( file.path(c2t_process_dir, "chm_0.25m.tif") )
+  !file.exists( file.path(c2t_process_dir, "chm_0.20m.tif") )
 ){
   agg_chm_rast <- cloud2trees:::adjust_raster_resolution(
     cloud2raster_ans$chm_rast
-    , target_resolution = 0.25
+    , target_resolution = 0.20
     , fun = max
     , resample_method = "max"
-    , ofile = file.path(c2t_process_dir, "chm_0.25m.tif")
+    , ofile = file.path(c2t_process_dir, "chm_0.20m.tif")
   )
 }else{
-  agg_chm_rast <- terra::rast( file.path(c2t_process_dir, "chm_0.25m.tif") )
+  agg_chm_rast <- terra::rast( file.path(c2t_process_dir, "chm_0.20m.tif") )
 }
 # what chm?
 agg_chm_rast
