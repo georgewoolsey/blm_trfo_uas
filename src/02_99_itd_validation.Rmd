@@ -1610,7 +1610,128 @@ ground_truth_prediction_match_ans %>%
 
 
 ```{r, include=F, eval=FALSE}
-ok, i want to test a bunch of different variable window sizes within `lidR::lmf()` defined as functions. 
+# test a bunch of different variable window sizes within `lidR::lmf()` 
+# that cover a range of possibilities and function shapes including linear, concave up, and concave down
+
+# empty list
+vws_functions <- list()
+min_ws_temp <- 0.5
+max_ws_temp <- 6.0
+
+n_temp <- 40
+# end points for the line
+linear_targets <- base::seq(from = max_ws_temp, to = max_ws_temp*2*10, length.out = n_temp)
+
+for (i in 1:n_temp) {
+  target_height <- linear_targets[i]
+  slope <- (max_ws_temp - min_ws_temp) / target_height
+  
+  # Pad names with a zero (01 to 60) for clean sorting
+  func_name <- base::paste0("linear_", base::sprintf("%02d", i))
+  
+  v_min  <- base::as.numeric(min_ws_temp)
+  v_max  <- base::as.numeric(max_ws_temp)
+  v_slope <- base::as.numeric(slope)
+  
+  func_body <- base::substitute(
+    dplyr::case_when(
+      base::is.na(x) ~ v_min,
+      (v_min + v_slope * x) < v_min ~ v_min,
+      (v_min + v_slope * x) > v_max ~ v_max,
+      TRUE ~ (v_min + v_slope * x)
+    ),
+    list(v_min = v_min, v_max = v_max, v_slope = v_slope)
+  )
+  
+  vws_functions[[func_name]] <- base::as.function(c(base::alist(x = ), func_body))
+}
+vws_functions[1]
+vws_functions[[1]]
+class(vws_functions[[1]])
+vws_functions[[1]](1.5)
+vws_functions[[1]](0)
+vws_functions[[1]](18)
+
+vws_functions[[40]](1.5)
+vws_functions[[40]](0)
+vws_functions[[40]](18)
+
+# --- Concave Down / Saturating Functions (30 unique variations) ---
+# total potential growth (or distance) between the floor and the ceiling is: 6.0-0.5=5.5
+# the halfway point of growth is exactly half of that distance: 5.5/2=2.75
+# when the curve reaches its exact halfway point, the resulting window size must be the baseline floor plus that half-distance: 0.5+2.75=3.25
+# in `half_sat`, setting the constant of 1.375 means the function will hit its halfway mark of 3.25 when the tree is only 1.375 meters tall
+  # max slope = 4 (for ever 1 m growth, ws increases by 4 m)
+  # 4 = (6.0-0.5)/c >> 4 = 5.5/c >> c = 5.5/4 >> c = 1.375
+# how far out to look based on maximum plot/tree height? 45 m tree??
+n_temp <- 30
+for (i in 1:n_temp) {
+  c <- 1.375 # ~dbh height
+  max_end <- 45 # biggest tree everrrrr
+  half_sat <- c + (i - 1) * ( (max_end-c) / (n_temp-1))
+  
+  func_name <- base::paste0("concave_down_", base::sprintf("%02d", i))
+  
+  v_min  <- base::as.numeric(min_ws_temp)
+  v_max  <- base::as.numeric(max_ws_temp)
+  v_half <- base::as.numeric(half_sat)
+  
+  func_body <- base::substitute(
+    dplyr::case_when(
+      base::is.na(x) ~ v_min,
+      (v_min + ((v_max - v_min) * x) / (v_half + x)) < v_min ~ v_min,
+      (v_min + ((v_max - v_min) * x) / (v_half + x)) > v_max ~ v_max,
+      TRUE ~ (v_min + ((v_max - v_min) * x) / (v_half + x))
+    ),
+    list(v_min = v_min, v_max = v_max, v_half = v_half)
+  )
+  
+  vws_functions[[func_name]] <- base::as.function(c(base::alist(x = ), func_body))
+}
+
+
+# 3. EVALUATE FUNCTIONS OVER A RANGE FOR VISUALIZATION -----------------------
+
+height_sequence <- base::seq(0, 45, by = 0.25)
+
+plot_data <- 
+  purrr::map_dfr(
+  names(vws_functions)
+  , function(name) {
+    tibble::tibble(
+      height = height_sequence,
+      window_size = vws_functions[[name]](height_sequence),
+      function_id = name,
+      shape_type = dplyr::case_when(
+        base::grepl("linear", name) ~ "linear",
+        base::grepl("concave_down", name) ~ "concave down"
+      )
+    )
+  }
+)
+
+
+ggplot2::ggplot(
+  data = plot_data, 
+  mapping = ggplot2::aes(x = height, y = window_size, group = function_id, color = shape_type)
+) +
+  ggplot2::geom_line(alpha = 0.6, linewidth = 0.7) +
+  ggplot2::labs(
+    x = "CHM (m)",
+    , y = "ws diameter (m)"
+    , color = "ws type"
+  ) +
+  ggplot2::theme_minimal() +
+  ggplot2::theme(
+    legend.position = "bottom",
+    plot.title = ggplot2::element_text(face = "bold", size = 13),
+    panel.grid.minor = ggplot2::element_blank()
+  )
+
+# names(vws_functions)
+
+
+
 ```
 
 
