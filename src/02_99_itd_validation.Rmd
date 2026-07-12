@@ -162,87 +162,32 @@ let's quickly look at the field measurements
 
 ```{r, echo=T}
 validation_trees %>% 
-  dplyr::select(height_m, drc_max_cm, dbh_cm, cbh_m, crown_length_m, crown_width_m) %>% 
+  dplyr::select(height_m, drc_max_cm, dbh_cm, cbh_m) %>% 
   summary() %>% 
   knitr::kable(format = "markdown")
 ```
 
 it looks like the Chojnacky & Rogers ([1999](https://doi.org/10.1093/wjaf/14.1.14)) DRC-to-DBH conversion worked well. Those crown and CBH measurements are suspect.
 
-what is the distribution of the field-measured tree size values
+we'll also use the horizontal crown length and width to evaluate the UAS prediction of canopy cover on a plot-level basis. this canopy cover evaluation will:
+
+* average the field measured horizontal crown length and width to approximate a circular diameter
+* use the diameter to calculate a 2D circular crown area for each field tree
+* calculate the proportion of each plot covered by these assumed circular crowns
+* for each plot, compare this proportion to the proportion of the plot predicted to be covered by crowns of UAS trees whose tree top point falls within the plot. requiring the tree top point to fall within the plot prior to calculating crown cover mimics the field technique of only measuring stems within a plot.
+
+the caveats attached to this approach are that it is notoriously difficult to measure crown dimensions using field techniques (source 2011) and the simple circular shape assumption does not match real-world conditions of irregular crown morphologies...
+
+let's check out the horizontal crown length and width dimensions measured in the field
 
 ```{r}
 validation_trees %>% 
-  sf::st_drop_geometry() %>% 
-  dplyr::select(height_m,dbh_cm,cbh_m) %>% 
-  tidyr::pivot_longer(
-    cols = dplyr::everything()
-    , names_to = "metric"
-    , values_to = "value"
-    , values_drop_na = T
-  ) %>% 
-  dplyr::mutate(
-    tree_metric = metric %>% 
-      stringr::str_extract("(height|dbh|cbh)") %>% 
-      factor(
-        ordered = T
-        , levels = c(
-          "height"
-          , "dbh"
-          , "cbh"
-        )
-        , labels = c(
-          "Height (m)"
-          , "DBH (cm)"
-          , "CBH (m)"
-        )
-      )
-  ) %>% 
-  # dplyr::glimpse()
-# plot dist
-  ggplot2::ggplot(mapping = ggplot2::aes(x = value)) +
-  ggplot2::geom_density(
-    mapping = ggplot2::aes(y=ggplot2::after_stat(scaled))
-    , alpha = 0.8
-    , fill = "brown", color = "brown"
-  ) +
-  ggplot2::facet_grid(
-    cols = dplyr::vars(tree_metric)
-    , scales = "free_x", axes = "all_x"
-  ) +
-  ggplot2::scale_y_continuous(NULL,breaks=NULL) +
-  ggplot2::scale_x_continuous(breaks=scales::breaks_extended(n=8)) +
-  ggplot2::labs(
-    x=""
-  ) +
-  ggplot2::theme_light() +
-  ggplot2::theme(
-    legend.position = "top"
-    , strip.text.x = ggplot2::element_text(color = "black", face = "bold")
-    , panel.grid.major.y = ggplot2::element_blank()
-    , panel.grid.minor.y = ggplot2::element_blank()
-  )
+  dplyr::select(crown_length_m, crown_width_m) %>% 
+  summary() %>% 
+  knitr::kable(format = "markdown")
 ```
 
-what is the distribution of tree species?
-
-```{r}
-# wut
-validation_trees %>% 
-  dplyr::count(species) %>% 
-  dplyr::ungroup() %>% 
-  dplyr::mutate(
-    pct = scales::percent(n/sum(n), accuracy = 0.1)
-    , n = scales::comma(n)
-  ) %>% 
-  kableExtra::kbl(
-    caption = "field-measured species distribution"
-    , col.names = c("species symbol","n", "%")
-  ) %>% 
-  kableExtra::kable_styling()
-```
-
-Utah juniper (*Juniperus osteosperma*, JUOS) and pinyon pine (*Pinus edulis*, PIED)
+yeah, some of those field-measured crown dimensions will need to be fixed...
 
 ok, let's verify those notes we got with the data and look for missing coordinates
 
@@ -285,6 +230,18 @@ validation_trees <-
     , !is.na(height_m)
     , height_m>=min_tree_ht_m
   ) %>%  
+  dplyr::mutate(
+    dplyr::across(
+      c(crown_length_m, crown_width_m)
+      , ~ifelse(.x>100,.x/100,.x)
+    )
+    , crown_diam_m = dplyr::case_when(
+      !is.na(crown_length_m) & !is.na(crown_width_m) ~ (crown_length_m+crown_width_m)/2
+      , !is.na(crown_width_m) ~ crown_width_m
+      , !is.na(crown_length_m) ~ crown_length_m
+      , T ~ as.numeric(NA)
+    )
+  ) %>% 
   # guessing this is WGS 84
   sf::st_as_sf(coords = c("tree_x", "tree_y"), crs = 4326, remove = F) %>% 
   sf::st_transform(sf::st_crs(stand_boundary))
@@ -316,6 +273,82 @@ validation_trees <-
     # , dplyr::across(c(trtmnt_type,trtmnt_block,trtmnt_unit),ordered)
   )
 ```
+
+what is the distribution of the field-measured tree size values
+
+```{r}
+validation_trees %>% 
+  sf::st_drop_geometry() %>% 
+  dplyr::select(height_m,dbh_cm,crown_diam_m) %>% 
+  tidyr::pivot_longer(
+    cols = dplyr::everything()
+    , names_to = "metric"
+    , values_to = "value"
+    , values_drop_na = T
+  ) %>% 
+  dplyr::mutate(
+    tree_metric = metric %>% 
+      stringr::str_extract("(height|dbh|diam)") %>% 
+      factor(
+        ordered = T
+        , levels = c(
+          "height"
+          , "dbh"
+          , "diam"
+        )
+        , labels = c(
+          "Height (m)"
+          , "DBH (cm)"
+          , "Crown Dia. (m)"
+        )
+      )
+  ) %>% 
+  # dplyr::glimpse()
+# plot dist
+  ggplot2::ggplot(mapping = ggplot2::aes(x = value)) +
+  ggplot2::geom_density(
+    mapping = ggplot2::aes(y=ggplot2::after_stat(scaled))
+    , alpha = 0.8
+    , fill = "brown", color = "brown"
+  ) +
+  ggplot2::facet_grid(
+    cols = dplyr::vars(tree_metric)
+    , scales = "free_x", axes = "all_x"
+  ) +
+  ggplot2::scale_y_continuous(NULL,breaks=NULL) +
+  ggplot2::scale_x_continuous(breaks=scales::breaks_extended(n=8)) +
+  ggplot2::labs(
+    x=""
+  ) +
+  ggplot2::theme_light() +
+  ggplot2::theme(
+    legend.position = "top"
+    , strip.text.x = ggplot2::element_text(color = "black", face = "bold")
+    , panel.grid.major.y = ggplot2::element_blank()
+    , panel.grid.minor.y = ggplot2::element_blank()
+  )
+```
+
+what is the distribution of tree species?
+
+```{r}
+# wut
+validation_trees %>% 
+  sf::st_drop_geometry() %>% 
+  dplyr::count(species) %>% 
+  dplyr::ungroup() %>% 
+  dplyr::mutate(
+    pct = scales::percent(n/sum(n), accuracy = 0.1)
+    , n = scales::comma(n)
+  ) %>% 
+  kableExtra::kbl(
+    caption = "field-measured species distribution"
+    , col.names = c("species symbol","n", "%")
+  ) %>% 
+  kableExtra::kable_styling()
+```
+
+Utah juniper (*Juniperus osteosperma*, JUOS) and pinyon pine (*Pinus edulis*, PIED)
 
 let's plot the field trees on the study unit boundaries
 
@@ -403,6 +436,46 @@ validation_plots %>%
 
 appears to be in-line with expectations but note the variability within the units and across the units by treatment type
 
+let's aggregate these by treatment type
+
+```{r}
+validation_plots %>% 
+  sf::st_drop_geometry() %>% 
+  dplyr::group_by(trtmnt_type) %>% 
+  dplyr::summarise(
+    n_plots = dplyr::n()
+    , n_trees = sum(n_trees)
+    , plot_area_m2 = sum(plot_area_m2)
+  ) %>% 
+  dplyr::ungroup() %>% 
+  dplyr::mutate(
+    area_ha = (plot_area_m2/10000)
+    , trees_per_ha = n_trees/area_ha
+    , dplyr::across(
+      tidyselect::starts_with("n_")
+      , ~scales::comma(.x,accuracy=1)
+    )
+    , dplyr::across(
+      dplyr::where(is.numeric)
+      , ~scales::comma(.x,accuracy=.1)
+    )
+  ) %>% 
+  dplyr::select(-plot_area_m2) %>% 
+  kableExtra::kbl(
+    caption = "Field-Measured tree density by treatment type"
+    , col.names = c(
+      "treatment", "# plots"
+      , "# field-measured trees"
+      , "field-measured area (ha)"
+      , "Trees<br />ha<sup>-1</sup>"
+    )
+    , escape = F
+    # , digits = 2
+  ) %>% 
+  kableExtra::kable_styling()
+
+```
+
 finally, let's check out an example individual plot (white) and tree locations (blue) on the RGB
 
 ```{r}
@@ -445,6 +518,92 @@ validation_trees %>%
 ```
 
 interesting. do you have any thoughts?
+
+let's also look at the tree crowns assuming a perfectly circular shape based on the field-measured horizontal crown length and width values
+
+```{r}
+rgb_rast %>% 
+   terra::crop(
+    validation_plots %>% 
+      dplyr::filter(plot==plt_temp) %>% 
+      sf::st_buffer(11) %>% 
+      sf::st_bbox() %>% 
+      sf::st_as_sfc() %>% 
+      sf::st_transform(terra::crs(rgb_rast)) %>% 
+      terra::vect()
+    , mask=T
+  ) %>% 
+  terra::plotRGB()
+# add plot
+validation_plots %>% 
+  dplyr::filter(plot==plt_temp) %>% 
+  sf::st_buffer(.$plot_radius_m) %>% 
+  sf::st_transform(terra::crs(rgb_rast)) %>% 
+  terra::vect() %>% 
+  terra::plot(add = T, col = NA, border = "white", lwd = 1.3)
+# add plot
+validation_plots %>% 
+  dplyr::filter(plot==plt_temp) %>% 
+  sf::st_transform(terra::crs(rgb_rast)) %>% 
+  terra::vect() %>% 
+  terra::plot(add = T, col = "white", pch = 18, cex = 2)
+# add trees
+# add trees
+validation_trees %>% 
+  dplyr::filter(plot==plt_temp) %>% 
+  sf::st_transform(terra::crs(rgb_rast)) %>% 
+  terra::vect() %>% 
+  terra::plot(add = T, col = "cyan", cex = 1.5)
+# add trees
+validation_trees %>% 
+  dplyr::filter(plot==plt_temp) %>% 
+  dplyr::mutate(crown_radius_m=crown_diam_m/2) %>% 
+  sf::st_buffer(.$crown_radius_m) %>% 
+  sf::st_transform(terra::crs(rgb_rast)) %>% 
+  terra::vect() %>% 
+  terra::plot(add = T, col = NA, border = "cyan")
+
+```
+
+the percent canopy cover of that specific example is...
+
+```{r}
+cc_temp <-
+  validation_trees %>% 
+  dplyr::filter(plot==plt_temp) %>% 
+  dplyr::mutate(crown_radius_m=crown_diam_m/2) %>% 
+  sf::st_buffer(.$crown_radius_m) %>%
+  sf::st_intersection(
+    validation_plots %>% 
+      dplyr::filter(plot==plt_temp) %>% 
+      sf::st_buffer(.$plot_radius_m) %>% 
+      dplyr::select(plot_area_m2)
+  ) %>% 
+  dplyr::group_by(plot, plot_area_m2) %>% 
+  dplyr::summarise(
+    geometry = sf::st_union(.)
+  ) %>% 
+  dplyr::ungroup() %>% 
+  dplyr::mutate(
+    cc_area_m2 = sf::st_area(.) %>% as.numeric()
+    , cc_pct = cc_area_m2/plot_area_m2 
+  )
+# add plot
+validation_plots %>% 
+  dplyr::filter(plot==plt_temp) %>% 
+  sf::st_buffer(.$plot_radius_m) %>% 
+  terra::vect() %>% 
+  terra::plot(
+    col = "gray", border = "gray", axes = F
+    , main = paste0("canopy cover (green) = ", scales::percent(cc_temp$cc_pct, accuracy=0.1))
+  )
+# add trees
+cc_temp %>% 
+  terra::vect() %>% 
+  terra::plot(add = T, col = "forestgreen", border = "forestgreen")
+```
+
+sure.
 
 ```{r, warning=FALSE, message=FALSE, echo=FALSE, include=FALSE}
 remove(list = ls()[grep("_temp",ls())])
