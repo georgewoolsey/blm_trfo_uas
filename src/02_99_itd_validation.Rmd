@@ -676,7 +676,7 @@ validation_plots_polygons <- plot_crowns_cc_fn(
 
 we should be able to plot the same canopy cover figure for each field-measured plot now. here is a sample.
 
-```{r, fig.height=9.5}
+```{r, fig.height=10}
 plts_temp <- 
   1:nrow(validation_plots_polygons) %>% 
   sample(16) %>% 
@@ -3162,7 +3162,7 @@ validation_plots_polygons <- plot_crowns_cc_fn(
 
 quickly, we'll look at a sample of the UAS-detected crowns within the plot locations and the percent canopy cover for those plots
 
-```{r, fig.height=9.5}
+```{r, fig.height=10}
 plts_temp <- 
   1:nrow(validation_plots_polygons) %>% 
   sample(16) %>% 
@@ -3234,7 +3234,7 @@ validation_plots_polygons %>%
 
 ```
 
-The plot-level aggregation comparing the canopy cover of the field method to the UAS method yielded an RMSE of `r scales::percent(cc_agg_temp$diff_canopy_cov_pct_rmse,accuracy=0.1)` and a mean error (ME) of `r scales::percent(cc_agg_temp$diff_canopy_cov_pct_mean,accuracy=0.1)`. These values mean that the average UAS prediction of plot-level canopy cover is off by about ±`r scales::number(cc_agg_temp$diff_canopy_cov_pct_rmse,accuracy=0.1)` percentage points from the field-measured value which is generally considered highly accurate and operationally acceptable. The `r ifelse(cc_agg_temp$diff_canopy_cov_pct_mean>=0,"positive","negative")` ME of `r scales::percent(cc_agg_temp$diff_canopy_cov_pct_mean,accuracy=0.1)` means that, on average across all plots, the UAS method is systematically `r ifelse(cc_agg_temp$diff_canopy_cov_pct_mean>=0,"overpredicting","underpredicting")` canopy cover by `r scales::number(cc_agg_temp$diff_canopy_cov_pct_mean,accuracy=0.1)` percentage points compared to the field data.
+The plot-level aggregation comparing the canopy cover of the field method to the UAS method yielded an RMSE of `r scales::percent(cc_agg_temp$diff_canopy_cov_pct_rmse,accuracy=0.1)` and a mean error (ME) of `r scales::percent(cc_agg_temp$diff_canopy_cov_pct_mean,accuracy=0.1)`. These values mean that the average UAS prediction of plot-level canopy cover is off by about ±`r scales::number(cc_agg_temp$diff_canopy_cov_pct_rmse*100,accuracy=0.1)` percentage points from the field-measured value which is generally considered highly accurate and operationally acceptable. The `r ifelse(cc_agg_temp$diff_canopy_cov_pct_mean>=0,"positive","negative")` ME of `r scales::percent(cc_agg_temp$diff_canopy_cov_pct_mean,accuracy=0.1)` means that, on average across all plots, the UAS method is systematically `r ifelse(cc_agg_temp$diff_canopy_cov_pct_mean>=0,"overpredicting","underpredicting")` canopy cover by `r scales::number(cc_agg_temp$diff_canopy_cov_pct_mean*100,accuracy=0.1)` percentage points compared to the field data.
 
 we can table the canopy cover measurements aggregated over all field plots
 
@@ -3467,11 +3467,9 @@ combine_plts_temp <- function(plot_list) {
   n_cols <- min(n_plots, 3)
   n_rows <- ceiling(n_plots / n_cols)
   
-  grob_list <- lapply(plot_list, function(p) {
-    cowplot::as_grob(p)
-  })
+  grob_list <- purrr::map(plot_list, cowplot::as_grob)
   
-  grDevices::dev.new()
+  # grDevices::dev.new()
   cowplot::plot_grid(
     plotlist = grob_list
     , ncol = n_cols
@@ -3492,6 +3490,7 @@ cowplot::save_plot(
   , ncol = 1
   , nrow = 1
   , dpi = 300
+  , bg = "white"
 )
 ```
 
@@ -3588,6 +3587,7 @@ get the IoU summary stats
 validation_plots_polygons %>% 
   sf::st_drop_geometry() %>% 
   dplyr::select(crown_pred_ref_iou) %>% 
+  dplyr::mutate(dplyr::across(dplyr::everything(),~round(.x,3))) %>% 
   dplyr::rename(`tree crown IoU`=crown_pred_ref_iou) %>% 
   summary() %>% 
   knitr::kable(format = "markdown")
@@ -3595,9 +3595,145 @@ validation_plots_polygons %>%
 
 let's check out some examples of high, medium, and low crown overlap plots
 
-```{r}
-validation_plots_polygons %>% 
+```{r, results=F, fig.show='hide'}
+set.seed(55)
+plts_temp <- 
+  validation_plots_polygons %>% 
+  sf::st_drop_geometry() %>% 
+  dplyr::mutate(
+    pct_crown_pred_ref_iou = dplyr::percent_rank(crown_pred_ref_iou)
+    , grp_temp = dplyr::case_when(
+      pct_crown_pred_ref_iou <= 0.1 ~ "low IoU"
+      , pct_crown_pred_ref_iou >= 0.9 ~ "high IoU"
+      , pct_crown_pred_ref_iou > 0.4 & pct_crown_pred_ref_iou < 0.6 ~ "mid IoU"
+      , T ~ "other"
+    ) %>% 
+    ordered(levels=c("low IoU","mid IoU","high IoU"))
+    , row_temp = dplyr::row_number()
+  ) %>% 
+  # dplyr::group_by(grp_temp) %>% 
+  # dplyr::summarise(
+  #   dplyr::across(
+  #     crown_pred_ref_iou
+  #     , list(min,max,median,mean)
+  #   )
+  # )
+  dplyr::slice_sample(n=3, by = grp_temp) %>% 
+  dplyr::filter(grp_temp != "other") %>% 
+  dplyr::group_by(grp_temp) %>% 
+  dplyr::mutate(order_temp = dplyr::row_number()) %>% 
+  dplyr::ungroup() %>% 
+  dplyr::arrange(order_temp,grp_temp) %>% 
+  # dplyr::glimpse()
+  dplyr::pull(row_temp) %>% 
+  purrr::map(plt_validation_plots_polygons_temp)
+# plts_temp[[1]]
+# plts_temp[[2]]
+# plts_temp[[3]]
+
+grobs_temp <- purrr::map(plts_temp, cowplot::as_grob)
+# grobs_temp[[1]]
   
-plt_validation_plots_polygons_temp()
+plt_temp <- cowplot::plot_grid(
+  plotlist = grobs_temp
+  , ncol = 3
+  , nrow = 3
+)
+# plt_temp
+# ?cowplot::draw_label
+tit1_temp <- cowplot::ggdraw() + 
+  cowplot::draw_label(
+    paste0(
+      "IoU: "
+      , scales::number(as.numeric(min(validation_plots_polygons$crown_pred_ref_iou)),accuracy = 0.01)
+      , " to "
+      , scales::number(as.numeric(quantile(validation_plots_polygons$crown_pred_ref_iou,0.1)),accuracy = 0.01)
+    )
+    , fontface = 'bold', x = 0.5, hjust = 0.5, size = 10
+  )
+tit2_temp <- cowplot::ggdraw() + 
+  cowplot::draw_label(
+    paste0(
+      "IoU: "
+      , scales::number(as.numeric(quantile(validation_plots_polygons$crown_pred_ref_iou,0.4)),accuracy = 0.01)
+      , " to "
+      , scales::number(as.numeric(quantile(validation_plots_polygons$crown_pred_ref_iou,0.6)),accuracy = 0.01)
+    )
+    , fontface = 'bold', x = 0.5, hjust = 0.5, size = 10
+  )
+tit3_temp <- cowplot::ggdraw() + 
+  cowplot::draw_label(
+    paste0(
+      "IoU: "
+      , scales::number(as.numeric(quantile(validation_plots_polygons$crown_pred_ref_iou,0.9)),accuracy = 0.01)
+      , " to "
+      , scales::number(as.numeric(max(validation_plots_polygons$crown_pred_ref_iou)),accuracy = 0.01)
+    )
+    , fontface = 'bold', x = 0.5, hjust = 0.5, size = 10
+  )
+plt_tit_temp <- cowplot::plot_grid(tit1_temp, tit2_temp, tit3_temp, ncol = 3)
+# plt_tit_temp
+
+
+fnl_plt_temp <- cowplot::plot_grid(plt_tit_temp, plt_temp, ncol = 1, rel_heights = c(0.05, 1))
+# ?cowplot::save_plot
+cowplot::save_plot(
+  filename = "../data/field_uas_crown_iou_comp.png"
+  , plot = fnl_plt_temp 
+  , base_width = 9.9
+  , base_height = 10
+  , ncol = 1
+  , nrow = 1
+  , dpi = 300
+  , bg = "white"
+)
 ```
 
+```{r, fig.width=9.9, fig.height=10, fig.show='asis'}
+print(fnl_plt_temp)
+```
+
+there are certainly some interesting things going on with these visuals...
+
+finally, let's check out the distribution of crown IoU by treatment type
+
+```{r}
+validation_plots_polygons %>% 
+  dplyr::ungroup() %>% 
+  sf::st_drop_geometry() %>% 
+  dplyr::mutate(
+    trtmnt_type = ordered(trtmnt_type)
+  ) %>% 
+  ggplot2::ggplot(mapping = ggplot2::aes(x=crown_pred_ref_iou,fill=trtmnt_type)) +
+  ggplot2::geom_point(mapping = ggplot2::aes(y=0), color = "gray") +
+  ggplot2::geom_violin(
+    mapping = ggplot2::aes(y = 0)
+    , alpha = 0.8, color = NA
+  ) +
+  ggplot2::geom_boxplot(width = 0.1, fill = NA, outliers = F) +
+  ggplot2::facet_grid(
+    rows = dplyr::vars(trtmnt_type)
+    , scales = "free_y"
+    , switch = "y"
+    , axes = "all_x"
+  ) +
+  ggplot2::scale_fill_brewer(palette = "Dark2") +
+  ggplot2::scale_color_brewer(palette = "Dark2") +
+  ggplot2::scale_x_continuous(breaks = scales::breaks_extended(n=8)) +
+  ggplot2::scale_y_continuous(NULL,breaks=NULL) +
+  ggplot2::theme_light() +
+  ggplot2::labs(
+    x="tree crown Intersection over Union (IoU)"
+    , subtitle = "spatial alignment between the UAS crown polygons and circular field crowns"
+    , y = ""
+  ) +
+  ggplot2::theme(
+    legend.position = "none"
+    , axis.text.y = ggplot2::element_text(size = 7)
+    , axis.text.x = ggplot2::element_text(size = 8)
+    , strip.text = ggplot2::element_text(size = 10, color = "black", face = "bold")
+    , strip.placement = "outside"
+  )
+```
+
+treatment intensity seems to have minimal impact on the spatial agreement between the UAS crown polygons and circular field crowns

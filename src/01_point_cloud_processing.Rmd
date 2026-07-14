@@ -5,6 +5,7 @@ In this section we'll process the [raw point cloud data](#data_desc) using [`clo
 The `cloud2trees` package can be installed by following the directions listed in the [README file on GitHub](https://github.com/georgewoolsey/cloud2trees). If one is still experiencing difficulties installing the package, see the [example.R file](https://github.com/georgewoolsey/cloud2trees/blob/main/inst/examples/example.R) which details how to install the package using a virgin R instance.
 
 ```{r, eval=FALSE}
+###   ```{r,eval=F
 ## remotes helps us get packages hosted on github
 install.packages("remotes")
 ## get cloud2trees
