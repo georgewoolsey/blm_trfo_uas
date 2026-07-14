@@ -80,7 +80,7 @@ remove(list = ls()[grep("_temp",ls())])
 gc()
 ```
 
-## Reference Field Data
+## Reference Field Data{#ref_field_dta}
 
 Field-measured data is frequently cited as the gold standard for validating remote sensing methods, but it may be more appropriate to frame field data as the status-quo baseline against which new methodologies are compared. Field inventories carry well-documented challenges, including measurement error, subjective assessments, and data transcription errors ([Elzinga et al. 2005]( https://doi.org/10.1093/wjaf/20.2.134); [Westfall and Woodall 2007](https://doi.org/10.1016/j.foreco.2007.07.014); [Luoma et al. 2017](https://doi.org/10.3390/f8020038); [Wang et al. 2019](https://doi.org/10.1016/j.isprsjprs.2018.11.008); [Sparks et al. 2024](https://doi.org/10.1093/forsci/fxae015)). This means that a comparison of the remote sensing forest measurement method against field data evaluates alignment with current operational practices rather than absolute environmental reality. Here are the notes I got along with the field inventory data:
 
@@ -401,19 +401,23 @@ validation_plots <-
 
 we aggregated the field-measured plot data. let's look at the TPH to make sure it aligns with expectations
 
-```{r, fig.height=9}
+```{r}
 validation_plots %>% 
   dplyr::ungroup() %>% 
   sf::st_drop_geometry() %>% 
   dplyr::mutate(
     trtmnt_type = ordered(trtmnt_type)
-    , my_fct = forcats::fct_cross(trtmnt_type,trtmnt_block,trtmnt_unit)
+    # , my_fct = forcats::fct_cross(trtmnt_type,trtmnt_block,trtmnt_unit)
   ) %>% 
-  dplyr::arrange(desc(trtmnt_type),trees_per_ha) %>% 
-  dplyr::mutate(my_fct = forcats::fct_reorder(my_fct, trees_per_ha)) %>% 
-  ggplot2::ggplot(mapping = ggplot2::aes(x=trees_per_ha,y=my_fct,fill=trtmnt_type)) +
-  ggplot2::geom_point(mapping = ggplot2::aes(color=trtmnt_type), color = "gray") +
-  ggplot2::geom_boxplot(width = 0.5, alpha = 0.8, outliers = F) +
+  # dplyr::arrange(desc(trtmnt_type),trees_per_ha) %>% 
+  # dplyr::mutate(my_fct = forcats::fct_reorder(my_fct, trees_per_ha)) %>% 
+  ggplot2::ggplot(mapping = ggplot2::aes(x=trees_per_ha,fill=trtmnt_type)) +
+  ggplot2::geom_point(mapping = ggplot2::aes(y=0,color=trtmnt_type), color = "gray") +
+  ggplot2::geom_violin(
+    mapping = ggplot2::aes(y = 0)
+    , alpha = 0.8, color = NA
+  ) +
+  ggplot2::geom_boxplot(width = 0.1, fill = NA, outliers = F) +
   ggplot2::facet_grid(
     rows = dplyr::vars(trtmnt_type)
     , scales = "free_y"
@@ -422,7 +426,8 @@ validation_plots %>%
   ) +
   ggplot2::scale_fill_brewer(palette = "Dark2") +
   ggplot2::scale_color_brewer(palette = "Dark2") +
-  ggplot2::scale_x_continuous(labels = scales::comma) +
+  ggplot2::scale_x_continuous(labels = scales::comma, breaks = scales::breaks_extended(n=8)) +
+  ggplot2::scale_y_continuous(NULL,breaks=NULL) +
   ggplot2::theme_light() +
   ggplot2::labs(x = latex2exp::TeX("trees $ha^{-1}$"), y = "", subtitle = "field plot TPH measurements") +
   ggplot2::theme(
@@ -434,7 +439,7 @@ validation_plots %>%
   )
 ```
 
-appears to be in-line with expectations but note the variability within the units and across the units by treatment type
+appears to be in-line with expectations but note the variability in the plot data by treatment type
 
 let's aggregate these by treatment type
 
@@ -603,7 +608,151 @@ cc_temp %>%
   terra::plot(add = T, col = "forestgreen", border = "forestgreen")
 ```
 
-sure.
+sure. let's make a function to attach the canopy cover percentage to a plot with a given set of tree crown polygons
+
+```{r}
+plot_crowns_cc_fn <- function(plots_sf, crowns_sf) {
+  # plots idx
+  plots_sf <- plots_sf %>% 
+    dplyr::ungroup() %>% 
+    dplyr::mutate(
+      xxx_idx = dplyr::row_number()
+      , xxx_area = sf::st_area(.) %>% as.numeric()
+    )
+
+  # map over plots to allow for plots that overlap to have their own answer
+  plt_cc_temp <-
+    plots_sf$xxx_idx %>%
+    purrr::set_names() %>%
+    purrr::map(
+      \(x)
+      crowns_sf %>%
+        sf::st_transform(sf::st_crs(plots_sf)) %>%
+        sf::st_intersection(
+          plots_sf %>%
+            dplyr::filter(xxx_idx==x) %>%
+            dplyr::select(xxx_idx,xxx_area)
+        ) %>%
+        dplyr::group_by(xxx_idx, xxx_area) %>%
+        dplyr::summarise(
+          geometry = sf::st_union(.)
+          , .groups = "drop_last"
+        ) %>%
+        dplyr::ungroup() %>%
+        dplyr::mutate(
+          canopy_cov_area_m2 = sf::st_area(.) %>% as.numeric()
+          , canopy_cov_pct = canopy_cov_area_m2/xxx_area
+          , canopy_cov_geom = sf::st_geometry(.)
+        ) %>%
+        dplyr::select(-c(xxx_area)) %>% 
+        sf::st_drop_geometry()
+    ) %>%
+    purrr::list_rbind()
+
+  return(
+    plots_sf %>%
+      dplyr::left_join(plt_cc_temp, by = "xxx_idx") %>%
+      dplyr::select(-c(xxx_idx, xxx_area))
+  )
+} 
+# apply with the reference data
+# validation_plots %>% dplyr::glimpse()
+validation_plots_polygons <- plot_crowns_cc_fn(
+    plots_sf = 
+      validation_plots %>% 
+      sf::st_buffer(.$plot_radius_m)
+    , crowns_sf = 
+      validation_trees %>% 
+        dplyr::mutate(crown_radius_m=crown_diam_m/2) %>% 
+        sf::st_buffer(.$crown_radius_m)
+  ) %>% 
+  dplyr::rename_with(
+    .cols = tidyselect::starts_with("canopy_")
+    , ~ paste0("ref_",.x,recycle0 = T)
+  )
+
+# validation_plots_polygons %>% dplyr::glimpse()
+```
+
+we should be able to plot the same canopy cover figure for each field-measured plot now. here is a sample.
+
+```{r, fig.height=9.5}
+plts_temp <- 
+  1:nrow(validation_plots_polygons) %>% 
+  sample(16) %>% 
+  purrr::map(
+    \(x)
+    validation_plots_polygons %>% 
+      dplyr::slice(x) %>% 
+      dplyr::mutate(
+        lab = paste0(
+          "plot: ", plot
+          , "\ncanopy cover = "
+          , scales::percent(ref_canopy_cov_pct,accuracy=0.1)
+        )
+      ) %>% 
+      ggplot2::ggplot() +
+      ggplot2::geom_sf(color = "gray", fill = "gray") +
+      ggplot2::geom_sf(
+        data = 
+          validation_plots_polygons %>% 
+            dplyr::slice(x) %>% 
+            sf::st_drop_geometry() %>% 
+            sf::st_set_geometry("ref_canopy_cov_geom") %>% 
+            sf::st_set_crs(sf::st_crs(validation_plots_polygons))
+        , color = "forestgreen", fill = "forestgreen"
+      ) +
+      ggplot2::facet_wrap(dplyr::vars(lab)) + 
+      ggplot2::theme_light() +
+      ggplot2::theme(
+        strip.text.x = ggplot2::element_text(color = "black", face = "bold", size = 7)
+        , panel.grid = ggplot2::element_blank()
+        , axis.text = ggplot2::element_blank()
+        , axis.title = ggplot2::element_blank()
+      )
+  )
+patchwork::wrap_plots(plts_temp, ncol = 4)
+
+```
+
+let's check out the distribution of canopy cover by treatment type
+
+```{r}
+validation_plots_polygons %>% 
+  dplyr::ungroup() %>% 
+  sf::st_drop_geometry() %>% 
+  dplyr::mutate(
+    trtmnt_type = ordered(trtmnt_type)
+  ) %>% 
+  ggplot2::ggplot(mapping = ggplot2::aes(x=ref_canopy_cov_pct,fill=trtmnt_type)) +
+  ggplot2::geom_point(mapping = ggplot2::aes(y=0), color = "gray") +
+  ggplot2::geom_violin(
+    mapping = ggplot2::aes(y = 0)
+    , alpha = 0.8, color = NA
+  ) +
+  ggplot2::geom_boxplot(width = 0.1, fill = NA, outliers = F) +
+  ggplot2::facet_grid(
+    rows = dplyr::vars(trtmnt_type)
+    , scales = "free_y"
+    , switch = "y"
+    , axes = "all_x"
+  ) +
+  ggplot2::scale_fill_brewer(palette = "Dark2") +
+  ggplot2::scale_color_brewer(palette = "Dark2") +
+  ggplot2::scale_x_continuous(labels = scales::percent, breaks = scales::breaks_extended(n=8)) +
+  ggplot2::scale_y_continuous(NULL,breaks=NULL) +
+  ggplot2::theme_light() +
+  ggplot2::labs(x = "canopy cover", y = "", subtitle = "field plot canopy cover based on horizontal 2D crown measurements and a circular shape assumption") +
+  ggplot2::theme(
+    legend.position = "none"
+    , axis.text.y = ggplot2::element_text(size = 7)
+    , axis.text.x = ggplot2::element_text(size = 8)
+    , strip.text = ggplot2::element_text(size = 10, color = "black", face = "bold")
+    , strip.placement = "outside"
+  )
+```
+
+interesting
 
 ```{r, warning=FALSE, message=FALSE, echo=FALSE, include=FALSE}
 remove(list = ls()[grep("_temp",ls())])
@@ -1266,7 +1415,7 @@ reference_prediction_match_ans_temp <- reference_prediction_match(
 # reference_prediction_match_ans_temp$pred_data %>% dplyr::glimpse()
 ```
 
-the `ground_truth_prediction_match()` uses the output from `reference_prediction_match()` and creates a nice, clean data frame with the instances classified as TP, FP, or FN for use in aggregating to calculate detection accuracy metrics. Optionally, users can set the foundation for quantification accuracy assessment via the `comp_cols` argument (see the `diff_*` and `pct_diff_*` columns in the output)
+the `ground_truth_prediction_match()` uses the output from `reference_prediction_match()` and creates a nice, clean data frame with the instances classified as TP, FP, or FN for use in aggregating to calculate detection accuracy metrics. Optionally, users can set the foundation for physical measurement accuracy assessment via the `comp_cols` argument (see the `diff_*` and `pct_diff_*` columns in the output)
 
 ```{r}
 gt_temp <- ground_truth_prediction_match(
@@ -1538,6 +1687,8 @@ gggttt_temp %>% agg_ground_truth_match()
 
 test it out on the example data (but without the `diff_*` and `pct_diff_*` columns which we'll review next)
 
+**Single-Plot Detection Accuracy Example**
+
 ```{r}
 gt_temp %>% 
   # remove FP that were outside boundary since we included them to allow for edge reference trees to be matched
@@ -1560,13 +1711,15 @@ gt_temp %>%
   knitr::kable(format = "markdown")
 ```
 
-## Quantification Accuracy Overview {#quant_metrics_form}
+this result if for just a single plot as an example...below we'll use the data from all field plots
 
-Quantification accuracy metrics such as RMSE, MAPE, and Mean Error of tree form measurements (e.g. height, diameter) are calculated by aggregating the differences between the estimated tree attributes and the field reference values for instances classified as True Positives. These metrics tell us about the method's ability to accurately quantify the form of the trees it successfully identified.
+## Physical Measurement Accuracy Overview {#quant_metrics_form}
 
-to prepare our results for analysis, we will develop a function that aggregates the tree-level data into a single record for each metric-error measurement combination. this function will calculate detection performance metrics such as F-score, precision, and recall (using the `confusion_matrix_scores_fn()` we defined above), as well as quantification accuracy metrics including Root Mean Squared Error (RMSE), Mean Error (ME), and Mean Absolute Percentage Error (MAPE) to assess the accuracy of our tree form measurements. this could be a valuable function for any future analysis comparing predictions to reference data.
+Physical measurement accuracy metrics such as RMSE, MAPE, and Mean Error of tree form measurements (e.g. height, diameter) are calculated by aggregating the differences between the estimated tree attributes and the field reference values for instances classified as True Positives. These metrics tell us about the method's ability to accurately quantify the form of the trees it successfully identified.
 
-here are the quantification accuracy metric formulas:
+to prepare our results for analysis, we will develop a function that aggregates the tree-level data into a single record for each metric-error measurement combination. this function will calculate detection performance metrics such as F-score, precision, and recall (using the `confusion_matrix_scores_fn()` we defined above), as well as physical measurement accuracy metrics including Root Mean Squared Error (RMSE), Mean Error (ME), and Mean Absolute Percentage Error (MAPE) to assess the accuracy of our tree form measurements. this could be a valuable function for any future analysis comparing predictions to reference data.
+
+here are the physical measurement accuracy metric formulas:
 
 $$
 \textrm{RMSE} = \sqrt{ \frac{  \sum_{i=1}^{N} (y_{i} - \hat{y_{i}})^{2}}{N}}
@@ -1591,9 +1744,10 @@ There is a lot going on in our `agg_ground_truth_match()` function but it's appl
   - interpretation of the ME is enhanced if these "diff_" columns are calculated as the predicted value minus the actual value (e.g. `pred_diameter_m - gt_diameter_m`) 
 * Optionally, if the data contain columns with the prefix "pct_diff_" the mean absolute percent error (MAPE) is calculated for those columns with the return having the suffix "_mape"
   - these "pct_diff_" columns are calculated as the actual value minus the predicted value divided by the actual value (e.g. `(gt_diameter_m - pred_diameter_m)/gt_diameter_m`) 
-### Example: Quantification Accuracy
+  
+### Example: Physical measurement Accuracy
 
-we already demonstrated minimum use of the `agg_ground_truth_match()` function to get detection accuracy metrics, now we'll demonstrate the quantification accuracy metrics by keeping the `diff_*` and `pct_diff_*` columns calculated with the `ground_truth_prediction_match()` function
+we already demonstrated minimum use of the `agg_ground_truth_match()` function to get detection accuracy metrics, now we'll demonstrate the physical measurement accuracy metrics by keeping the `diff_*` and `pct_diff_*` columns calculated with the `ground_truth_prediction_match()` function
 
 ```{r,include=F,eval=F}
 gt_temp %>% 
@@ -1616,6 +1770,8 @@ gt_temp %>%
   ) %>% View()
 ```
 
+**Single-Plot Physical Measurement Accuracy Example**
+
 ```{r}
 gt_temp %>% 
   # remove FP that were outside boundary since we included them to allow for edge reference trees to be matched
@@ -1634,6 +1790,8 @@ gt_temp %>%
   dplyr::mutate(dplyr::across(dplyr::where(is.numeric),~round(.x,3))) %>% 
   knitr::kable("markdown")
 ```
+
+this result if for just a single plot as an example...below we'll use the data from all field plots
 
 nice, that could be useful for evaluation
 
@@ -2067,7 +2225,7 @@ now we have a single data set with all predicted trees and all reference trees w
 ground_truth_prediction_match_ans %>% dplyr::glimpse()
 ```
 
-we can use this data to get study-wide detection and quantification accuracy metrics
+we can use this data to get study-wide detection and physical measurement accuracy metrics
 
 ## Detection Accuracy Results
 
@@ -2338,7 +2496,7 @@ ground_truth_prediction_match_ans %>%
 
 the commission error (percentage shown in the gray bar) is highest for the small trees which suggests we could potentially improve our ITD window function to decrease the number of trees detected in this height range. However, going back to the detection rate above, this same height range also had the lowest detection rate which would suggest we increase the number of trees identified in this height range. This conflict suggests that the trees in this height range are likely difficult to detect for the study area using the data and ITD methods used in this study. For example, they may be subordinate to directly adjacent taller trees with the crowns interlocking, so they are often grouped with the taller tree during the CHM-based ITD.
 
-## Quantification Accuracy Results{#quant_acc}
+## Physical measurement Accuracy Results{#quant_acc}
 
 let's table the tree-level aggregated measurement error
 
@@ -2354,7 +2512,7 @@ agg_ground_truth_match_ans %>%
     , det_trees
     , tp_n
     , omission_rate,commission_rate,recall,precision,f_score
-    # quantification
+    # physical measurement
     , tidyselect::ends_with("_mean")
     , tidyselect::ends_with("_rmse")
     , tidyselect::ends_with("_mape")
@@ -2366,7 +2524,7 @@ agg_ground_truth_match_ans %>%
     , det_trees
     , tp_n
     , omission_rate,commission_rate,recall,precision,f_score
-    # quantification
+    # physical measurement
     # , c(tidyselect::contains("volume") & !tidyselect::contains("paraboloid"))
     , tidyselect::contains("area")
     , tidyselect::contains("height")
@@ -2408,7 +2566,7 @@ agg_ground_truth_match_ans %>%
   # ncol()
   # dplyr::glimpse()
   kableExtra::kbl(
-    caption = "Quantification Accuracy"
+    caption = "Physical measurement Accuracy"
     , col.names = c(
       "data"
       , "TP predictions"
@@ -2444,10 +2602,9 @@ dta_temp <-
   dplyr::bind_cols(
     agg_ground_truth_match_ans %>% 
       dplyr::select(tidyselect::ends_with("_rmse") , tidyselect::ends_with("_mape"), tidyselect::ends_with("_mean") )
-  ) %>% 
-  dplyr::glimpse()
+  )
 # plt fn temp
-plt_fn_temp <- function(
+plt_scatter_fn <- function(
     dta
     , which_col = "dbh_cm"
     , title_lab = "DBH"
@@ -2480,12 +2637,50 @@ plt_fn_temp <- function(
     )
     # scale limits
     max_val <- max( 
-      max(dta_temp[[y_var]],na.rm=T)
-      , max(dta_temp[[x_var]],na.rm=T)
+      max(d[[y_var]],na.rm=T)
+      , max(d[[x_var]],na.rm=T)
     )
     
+    # annotations
+    if( any( stringr::str_equal(names(d), paste0("diff_",which_col, "_rmse")) ) ){
+    rmse_val <- d %>% 
+      dplyr::slice(1) %>% 
+      dplyr::select(dplyr::all_of(paste0("diff_",which_col, "_rmse"))) %>% 
+      dplyr::pull(1) %>% 
+      unique()
+      rmse_val <- dplyr::case_when(
+        stringr::str_ends(which_col,"_cm") ~ scales::number(rmse_val, accuracy = 0.1, suffix = " (cm)")
+        , stringr::str_ends(which_col,"_m") ~ scales::number(rmse_val, accuracy = 0.01, suffix = " (m)")
+        , stringr::str_ends(which_col,"_m2") ~ scales::number(rmse_val, accuracy = 0.1, suffix = " (m²)")
+        , stringr::str_ends(which_col,"_pct") ~ scales::percent(rmse_val, accuracy = 0.1)
+        , T ~ scales::number(rmse_val, accuracy = 0.1)
+      )
+    }else{rmse_val <- NA}
+    if( any( stringr::str_equal(names(d), paste0("pct_diff_",which_col, "_mape")) ) ){
+      mape_val <- d %>% 
+        dplyr::slice(1) %>% 
+        dplyr::select(dplyr::all_of(paste0("pct_diff_",which_col, "_mape"))) %>% 
+        dplyr::pull(1) %>% 
+        unique() %>% 
+        scales::percent(accuracy = 0.1)
+    }else{mape_val <- NA}
+    if( any( stringr::str_equal(names(d), paste0("diff_",which_col, "_mean")) ) ){
+      me_val <- d %>% 
+        dplyr::slice(1) %>% 
+        dplyr::select(dplyr::all_of(paste0("diff_",which_col, "_mean"))) %>% 
+        dplyr::pull(1) %>% 
+        unique()
+        me_val <- dplyr::case_when(
+          stringr::str_ends(which_col,"_cm") ~ scales::number(me_val, accuracy = 0.1, suffix = " (cm)")
+          , stringr::str_ends(which_col,"_m") ~ scales::number(me_val, accuracy = 0.01, suffix = " (m)")
+          , stringr::str_ends(which_col,"_m2") ~ scales::number(me_val, accuracy = 0.1, suffix = " (m²)")
+          , stringr::str_ends(which_col,"_pct") ~ scales::percent(me_val, accuracy = 0.1)
+          , T ~ scales::number(me_val, accuracy = 0.1)
+        )
+    }else{me_val <- NA}
+    
     # plot
-    d %>% 
+    p <- d %>% 
       ggplot2::ggplot(mapping = ggplot2::aes(y = .data[[y_var]], x = .data[[x_var]])) +
       ggplot2::geom_abline(color = "gray33", lwd = 1) +
       ggplot2::geom_point(color = "brown", alpha = 0.7, size = 0.9) +
@@ -2500,32 +2695,9 @@ plt_fn_temp <- function(
           #   , "*'%'"
           # )
           paste0(
-            "RMSE = "
-            , d %>% 
-              dplyr::slice(1) %>% 
-              dplyr::select(dplyr::all_of(paste0("diff_",which_col, "_rmse"))) %>% 
-              dplyr::pull(1) %>% 
-              unique() %>% 
-              # scales::number(accuracy = 0.1, suffix = " (m²)")
-              scales::number(
-                accuracy = ifelse(which_col=="dbh_cm",0.1,0.01)
-                , suffix = ifelse(which_col=="dbh_cm"," (cm)"," (m)") 
-              )
-            , "\nMAPE = "
-            , d %>% 
-              dplyr::select(dplyr::all_of(paste0("pct_diff_",which_col, "_mape"))) %>% 
-              dplyr::pull(1) %>% 
-              unique() %>% 
-              scales::percent(accuracy = 0.1)
-            , "\nME = "
-            , d %>% 
-              dplyr::select(dplyr::all_of(paste0("diff_",which_col, "_mean"))) %>% 
-              dplyr::pull(1) %>% 
-              unique() %>% 
-              scales::number(
-                accuracy = ifelse(which_col=="dbh_cm",0.1,0.01)
-                , suffix = ifelse(which_col=="dbh_cm"," (cm)"," (m)") 
-              )
+            "RMSE = ", rmse_val
+            , ifelse(!is.na(mape_val), paste0("\nMAPE = ", mape_val),"")
+            , ifelse(!is.na(me_val), paste0("\nME = ", me_val),"")
             , "\n"
             , lmf_temp
             , "\n R² = "
@@ -2540,8 +2712,6 @@ plt_fn_temp <- function(
       #   facets = dplyr::vars(dataset_factor), scales = "free", axis.labels = "all"
       #   # , labeller = ggplot2::labeller(class = ggplot2::label_wrap_gen(width = 10))
       # ) +
-      ggplot2::scale_x_continuous(limits = c(0, max_val ), expand = ggplot2::expansion(mult = c(0,0.1))) +
-      ggplot2::scale_y_continuous(limits = c(0, max_val ), expand = ggplot2::expansion(mult = c(0,0.1))) +
       ggplot2::labs(
         x = x_lab
         , y = y_lab
@@ -2553,16 +2723,27 @@ plt_fn_temp <- function(
       ggplot2::theme(
         strip.text = ggplot2::element_text(size = 10, face = "bold", color = "black")
       ) 
+    if(stringr::str_ends(which_col,"_pct")){
+      p + 
+        ggplot2::scale_x_continuous(limits = c(0, max_val ), labels = scales::percent, expand = ggplot2::expansion(mult = c(0,0.1))) +
+        ggplot2::scale_y_continuous(limits = c(0, max_val ), labels = scales::percent, expand = ggplot2::expansion(mult = c(0,0.1)))
+    }else{
+      return(
+        p + 
+        ggplot2::scale_x_continuous(limits = c(0, max_val ), expand = ggplot2::expansion(mult = c(0,0.1))) +
+        ggplot2::scale_y_continuous(limits = c(0, max_val ), expand = ggplot2::expansion(mult = c(0,0.1)))
+      )
+    }
   }
 # get the plottttttttttttttttttt
 dbh_plt_temp <-
-  plt_fn_temp(dta_temp, which_col = "dbh_cm", title_lab = "DBH", x_lab = "reference DBH (cm)", y_lab = "predicted DBH (cm)")
+  plt_scatter_fn(dta_temp, which_col = "dbh_cm", title_lab = "DBH", x_lab = "reference DBH (cm)", y_lab = "predicted DBH (cm)")
 # dbh_plt_temp
 
 # get the plottttttttttttttttttt
 ht_plt_temp <-
-  plt_fn_temp(dta_temp, which_col = "tree_height_m", title_lab = "Height", x_lab = "reference Height (m)", y_lab = "predicted Height (m)")
-ht_plt_temp
+  plt_scatter_fn(dta_temp, which_col = "tree_height_m", title_lab = "Height", x_lab = "reference Height (m)", y_lab = "predicted Height (m)")
+# ht_plt_temp
 ```
 
 **DBH: predicted vs reference**
@@ -2791,18 +2972,23 @@ In addition to the tree-level accuracy metrics (e.g. height RMSE and MAPE), we c
 *for this data, "stand-level" refers to the combined area covered by all field plots*
 
 ```{r}
-pred_stand_temp <-
+# uas trees in plots
+pred_trees_temp <-
   treetops_sf %>% 
   sf::st_intersection(
-    validation_plots %>% 
-      sf::st_buffer(.$plot_radius_m) %>% 
-      sf::st_union() %>% 
-      sf::st_transform(terra::crs(treetops_sf)) %>% 
-      sf::st_as_sf() %>% 
-      dplyr::mutate(area_m2 = sf::st_area(.) %>% as.numeric())
+    validation_plots_polygons %>% 
+      dplyr::ungroup() %>% 
+      dplyr::summarise(
+        area_m2 = sum(plot_area_m2)
+        , n_plots = dplyr::n()
+        , geometry = sf::st_union(.)
+      ) %>% 
+      sf::st_transform(terra::crs(treetops_sf))
   ) %>% 
-  sf::st_drop_geometry() %>% 
-  dplyr::group_by(area_m2) %>% 
+  sf::st_drop_geometry()
+pred_stand_temp <- 
+  pred_trees_temp %>% 
+  dplyr::group_by(area_m2, n_plots) %>% 
   dplyr::summarise(
     n_trees = dplyr::n()
     , basal_area_m2 = sum(basal_area_m2)
@@ -2819,16 +3005,18 @@ ref_stand_temp <-
   validation_trees %>% 
   sf::st_transform(terra::crs(treetops_sf)) %>% 
   sf::st_intersection(
-    validation_plots %>% 
-      sf::st_buffer(.$plot_radius_m) %>% 
-      sf::st_union() %>% 
-      sf::st_transform(terra::crs(treetops_sf)) %>% 
-      sf::st_as_sf() %>% 
-      dplyr::mutate(area_m2 = sf::st_area(.) %>% as.numeric())
+    validation_plots_polygons %>% 
+      dplyr::ungroup() %>% 
+      dplyr::summarise(
+        area_m2 = sum(plot_area_m2)
+        , n_plots = dplyr::n()
+        , geometry = sf::st_union(.)
+      ) %>% 
+      sf::st_transform(terra::crs(treetops_sf))
   ) %>% 
   sf::st_drop_geometry() %>% 
   dplyr::mutate(basal_area_m2 = pi * dbh_cm^2 / (4*10000)) %>% 
-  dplyr::group_by(area_m2) %>% 
+  dplyr::group_by(area_m2, n_plots) %>% 
   dplyr::summarise(
     n_trees = dplyr::n()
     , basal_area_m2 = sum(basal_area_m2)
@@ -2843,9 +3031,9 @@ ref_stand_temp <-
 # dplyr::glimpse(ref_stand_temp)
 stand_temp <- 
   dplyr::inner_join(
-    ref_stand_temp %>% dplyr::rename_with(.cols = -c(area_ha), ~paste0("ref_",.x,recycle0 = T))
-    , pred_stand_temp %>% dplyr::rename_with(.cols = -c(area_ha), ~paste0("pred_",.x,recycle0 = T))
-    , by = "area_ha"
+    ref_stand_temp %>% dplyr::rename_with(.cols = -c(area_ha,n_plots), ~paste0("ref_",.x,recycle0 = T))
+    , pred_stand_temp %>% dplyr::rename_with(.cols = -c(area_ha,n_plots), ~paste0("pred_",.x,recycle0 = T))
+    , by = dplyr::join_by(area_ha,n_plots)
   ) %>% 
   # comps not done in agg_ground_truth_match()
   dplyr::mutate(
@@ -2869,11 +3057,11 @@ let's table the stand-level measurement error
 ```{r}
 stand_temp %>% 
   dplyr::select(
-    area_ha
+    area_ha,n_plots
     # detection
     , ref_n_trees
     , pred_n_trees
-    # quantification
+    # physical measurement
     , tidyselect::ends_with("_basal_area_m2_per_ha")
     , tidyselect::ends_with("_trees_per_ha")
   ) %>% 
@@ -2887,7 +3075,7 @@ stand_temp %>%
       , .fn = ~ scales::percent(.x, accuracy = .1)
     )
     , dplyr::across(
-      .cols = c(tidyselect::ends_with("_trees"))
+      .cols = c(n_plots,tidyselect::ends_with("_trees"))
       , .fn = ~ scales::comma(.x, accuracy = 1)
     )
     , dplyr::across(
@@ -2901,12 +3089,13 @@ stand_temp %>%
   dplyr::select(
     !tidyselect::starts_with("pct_diff_")
   ) %>% 
+  dplyr::relocate(n_plots) %>% 
   # dplyr::glimpse()
   
   kableExtra::kbl(
     caption = "Stand-Level Accuracy"
     , col.names = c(
-      "field-measured area (ha)"
+      "# plots","field-measured area (ha)"
       , "reference", "predicted"
       , rep(c("reference","predicted","difference"), times = 2)
     )
@@ -2916,7 +3105,7 @@ stand_temp %>%
   kableExtra::kable_styling(font_size = 11.5) %>% 
   kableExtra::add_header_above(
     c(
-      " "=1
+      " "=2
       , "# Trees" = 2
       # , "Area" = 3
       , "Basal Area<br />m<sup>2</sup> ha<sup>-1</sup>" = 3
@@ -2924,8 +3113,207 @@ stand_temp %>%
     )
     , escape = F
   ) %>% 
-  kableExtra::column_spec( c(1,seq(3,9,by=3) ), border_right = TRUE, include_thead = TRUE) %>% 
+  kableExtra::column_spec( c(2,seq(4,10,by=3) ), border_right = TRUE, include_thead = TRUE) %>% 
+  kableExtra::collapse_rows(columns = c(1), valign = "top")
+
+```
+
+Should we even be calculating basal area for pinyon-juniper systems? Traditional silvicultural metrics like basal area and volume are not particularly useful for managing these woodlands because the trees/shrubs feature highly irregular, multi-stemmed growth forms. Furthermore, field inventories like FIA measure diameter at root collar (DRC) instead of standard diameter at breast height (DBH) and then convert those metrics using regional allometric equations. Because of this, it is probably inappropriate for us to quantify the accuracy of UAS-predicted DBH, which is modeled using a height-to-DBH equation from local FIA data, against field-calculated DBH values derived from converted DRC measurements. Instead, modern management evaluations in these pinyon-juniper systems prioritize tree density measurements and canopy clump configurations to analyze structural and spatial patterns. This focus on horizontal canopy architecture, tracking trees per hectare and interspace connectivity, provides a much more direct and ecologically meaningful way to evaluate ecosystem health and fire risk across these arid landscapes.
+
+Let's shift our focus to evaluating UAS-predicted canopy cover compared to field-measured values. Recall that [to obtain field-measured canopy cover](#ref_field_dta), we averaged the field-recorded horizontal crown length and width to approximate a circular diameter, used that diameter to calculate a 2D circular crown area for each tree, and determined the proportion of each plot covered by these assumed circular crowns. For each plot, we'll compare this proportion to the canopy cover predicted by the UAS using trees whose tree-top points fall within the plot boundaries irrespective of if a tree was matched as a true positive in our instance matching evaluation. Requiring the tree-top point to fall within the plot mimics the field technique of only measuring stems located inside the plot boundaries. The main caveats attached to this canopy cover accuracy evaluation are that measuring crown dimensions accurately using manual ground techniques is notoriously difficult, and the simple circular shape assumption rarely matches the irregular crown morphologies found in the real-world ([Rautiainen et al. 2008](https://doi.org/10.14214/sf.261); [Gallardo-Salazar & Pompa-García 2020](https://doi.org/10.3390/rs12244144); [Ren et al. 2024](https://doi.org/10.1111/2041-210X.14401)).
+
+```{r}
+# read crowns
+pred_crowns_temp <- 
+  cloud2trees:::search_dir_final_detected(dir = c2t_process_dir)[["crowns_flist"]] %>% 
+  purrr::map(
+    \(x)
+    crowns_sf <- sf::st_read(
+      dsn = x, quiet = TRUE
+      , query = 
+        sprintf(
+          "SELECT * FROM %s WHERE treeID IN (%s)"
+          , basename(x) %>% stringr::str_remove("^.*/") %>% stringr::str_remove("\\.[^.]+$")
+          , stringr::str_c("'", unique(pred_trees_temp$treeID), "'", collapse = ", ")
+        )
+    ) %>% 
+    cloud2trees::simplify_multipolygon_crowns()
+  ) %>% 
+  purrr::list_rbind()
+# pred_trees_temp %>% nrow()
+# pred_crowns_temp %>% nrow()
+# attach predicted cc to plot data
+validation_plots_polygons <- plot_crowns_cc_fn(
+    plots_sf = validation_plots_polygons
+    , crowns_sf = pred_crowns_temp
+  ) %>% 
+  dplyr::rename_with(
+    .cols = tidyselect::starts_with("canopy_")
+    , ~ paste0("pred_",.x,recycle0 = T)
+  ) %>% 
+  dplyr::mutate(
+    diff_canopy_cov_pct = pred_canopy_cov_pct-ref_canopy_cov_pct
+    , diff_canopy_cov_area_m2 = pred_canopy_cov_area_m2-ref_canopy_cov_area_m2
+  )
+
+# validation_plots_polygons %>% dplyr::glimpse()
+```
+
+quickly, we'll look at a sample of the UAS-detected crowns within the plot locations and the percent canopy cover for those plots
+
+```{r, fig.height=9.5}
+plts_temp <- 
+  1:nrow(validation_plots_polygons) %>% 
+  sample(16) %>% 
+  purrr::map(
+    \(x)
+    validation_plots_polygons %>% 
+      dplyr::slice(x) %>% 
+      dplyr::mutate(
+        lab = paste0(
+          "plot: ", plot
+          , "\ncanopy cover = "
+          , scales::percent(pred_canopy_cov_pct,accuracy=0.1)
+        )
+      ) %>% 
+      ggplot2::ggplot() +
+      ggplot2::geom_sf(color = "gray", fill = "gray") +
+      ggplot2::geom_sf(
+        data = 
+          validation_plots_polygons %>% 
+            dplyr::slice(x) %>% 
+            sf::st_drop_geometry() %>% 
+            sf::st_set_geometry("pred_canopy_cov_geom") %>% 
+            sf::st_set_crs(sf::st_crs(validation_plots_polygons))
+        , color = "forestgreen", fill = "forestgreen"
+      ) +
+      ggplot2::facet_wrap(dplyr::vars(lab)) + 
+      ggplot2::theme_light() +
+      ggplot2::theme(
+        strip.text.x = ggplot2::element_text(color = "black", face = "bold", size = 7)
+        , panel.grid = ggplot2::element_blank()
+        , axis.text = ggplot2::element_blank()
+        , axis.title = ggplot2::element_blank()
+      )
+  )
+patchwork::wrap_plots(plts_temp, ncol = 4)
+```
+
+let's check the relationship between the UAS and reference field plot-level canopy cover measurements
+
+```{r}
+cc_agg_temp <- validation_plots_polygons %>% 
+  sf::st_drop_geometry() %>% 
+  dplyr::ungroup() %>% 
+  dplyr::summarise(
+    sq = sum(diff_canopy_cov_pct^2, na.rm = T)
+    , mean = mean(diff_canopy_cov_pct, na.rm = T)
+    , sumabs = sum(abs(diff_canopy_cov_pct), na.rm = T)
+    , nomiss = sum(!is.na(diff_canopy_cov_pct))
+  ) %>% 
+  dplyr::ungroup() %>% 
+  dplyr::mutate(
+    rmse = dplyr::case_when(
+      dplyr::coalesce(nomiss,0)==0 ~ as.numeric(NA)
+      , T ~ sqrt(sq/nomiss)
+    )
+  ) %>% 
+  dplyr::select(mean,rmse) %>% 
+  dplyr::rename_with(
+    ~paste0("diff_canopy_cov_pct_",.x, recycle0 = T)
+  ) 
+# get the plottttttttttttttttttt
+validation_plots_polygons %>% 
+  sf::st_drop_geometry() %>% 
+  dplyr::bind_cols(
+    cc_agg_temp    
+  ) %>% 
+  plt_scatter_fn(which_col = "canopy_cov_pct", title_lab = "Canopy Cover", x_lab = "reference Canopy Cover (%)", y_lab = "predicted Canopy Cover (%)")
+```
+
+looking good. we can table that
+
+```{r}
+# comps not done in agg_ground_truth_match()
+validation_plots_polygons %>% 
+  sf::st_drop_geometry() %>% 
+  dplyr::ungroup() %>% 
+  dplyr::summarise(
+    n_plots = sum(!is.na(diff_canopy_cov_pct))
+    , plot_area_ha = sum(plot_area_m2)/10000
+    , dplyr::across(
+      .cols = c(ref_canopy_cov_pct,pred_canopy_cov_pct,diff_canopy_cov_pct)
+      , mean
+    )
+  ) %>% 
+  dplyr::mutate(
+    # pct_diff_canopy_cov_pct = (pred_canopy_cov_pct-ref_canopy_cov_pct)/ref_canopy_cov_pct
+    dplyr::across(c(tidyselect::ends_with("_pct")),~scales::percent(.x,accuracy=0.1))
+    , dplyr::across(c(plot_area_ha),~scales::number(.x,accuracy=0.1))
+    , dplyr::across(dplyr::where(is.numeric),~scales::number(.x,accuracy=1))
+  ) %>% 
+  kableExtra::kbl(
+    caption = "Canopy Cover Across all Measured Plots"
+    , col.names = c(
+      "# plots", "field-measured area (ha)"
+      , rep(c("reference","predicted","difference"), times = 1)
+    )
+    , escape = F
+    # , digits = 2
+  ) %>% 
+  kableExtra::kable_styling(font_size = 11.5) %>% 
+  kableExtra::add_header_above(
+    c(
+      " "=2
+      , "Canopy Cover (%)" = 3
+    )
+    , escape = F
+  ) %>% 
+  kableExtra::column_spec( c(2,seq(2,5,by=3) ), border_right = TRUE, include_thead = TRUE) %>% 
   kableExtra::collapse_rows(columns = c(1), valign = "top")
 ```
 
-neat
+let's check that out by treatment type. note that since the UAS method tended to overpredict canopy cover (ME of ``)
+
+```{r}
+validation_plots_polygons %>% 
+  sf::st_drop_geometry() %>% 
+  dplyr::group_by(trtmnt_type) %>% 
+  dplyr::summarise(
+    n_plots = sum(!is.na(diff_canopy_cov_pct))
+    , plot_area_ha = sum(plot_area_m2)/10000
+    , dplyr::across(
+      .cols = c(n_trees,ref_canopy_cov_pct,pred_canopy_cov_pct,diff_canopy_cov_pct)
+      , mean
+    )
+  ) %>% 
+  dplyr::ungroup() %>% 
+  dplyr::mutate(
+    # pct_diff_canopy_cov_pct = (pred_canopy_cov_pct-ref_canopy_cov_pct)/ref_canopy_cov_pct
+    dplyr::across(c(tidyselect::ends_with("_pct")),~scales::percent(.x,accuracy=0.1))
+    , dplyr::across(c(plot_area_ha),~scales::number(.x,accuracy=0.1))
+    , dplyr::across(dplyr::where(is.numeric),~scales::number(.x,accuracy=1))
+  ) %>% 
+  kableExtra::kbl(
+    caption = "Canopy Cover Across all Measured Plots"
+    , col.names = c(
+      "treatment","# plots", "field-measured area (ha)"
+      , "mean<br /># trees"
+      , rep(c("reference","predicted","difference"), times = 1)
+    )
+    , escape = F
+    # , digits = 2
+  ) %>% 
+  kableExtra::kable_styling(font_size = 11.5) %>% 
+  kableExtra::add_header_above(
+    c(
+      " "=4
+      , "Canopy Cover (%)" = 3
+    )
+    , escape = F
+  ) %>% 
+  kableExtra::column_spec( c(3,4,7), border_right = TRUE, include_thead = TRUE) %>% 
+  kableExtra::collapse_rows(columns = c(1), valign = "top")
+```
+
+note that the overprediction of canopy cover by the UAS method compared to the field measurement increases as the tree density increases
