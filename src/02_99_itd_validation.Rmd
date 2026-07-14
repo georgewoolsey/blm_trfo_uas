@@ -3140,6 +3140,7 @@ pred_crowns_temp <-
     cloud2trees::simplify_multipolygon_crowns()
   ) %>% 
   purrr::list_rbind()
+# pred_crowns_temp %>% dplyr::glimpse()
 # pred_trees_temp %>% nrow()
 # pred_crowns_temp %>% nrow()
 # attach predicted cc to plot data
@@ -3229,9 +3230,13 @@ validation_plots_polygons %>%
     cc_agg_temp    
   ) %>% 
   plt_scatter_fn(which_col = "canopy_cov_pct", title_lab = "Canopy Cover", x_lab = "reference Canopy Cover (%)", y_lab = "predicted Canopy Cover (%)")
+
+
 ```
 
-looking good. we can table that
+The plot-level aggregation comparing the canopy cover of the field method to the UAS method yielded an RMSE of `r scales::percent(cc_agg_temp$diff_canopy_cov_pct_rmse,accuracy=0.1)` and a mean error (ME) of `r scales::percent(cc_agg_temp$diff_canopy_cov_pct_mean,accuracy=0.1)`. These values mean that the average UAS prediction of plot-level canopy cover is off by about ±`r scales::number(cc_agg_temp$diff_canopy_cov_pct_rmse,accuracy=0.1)` percentage points from the field-measured value which is generally considered highly accurate and operationally acceptable. The `r ifelse(cc_agg_temp$diff_canopy_cov_pct_mean>=0,"positive","negative")` ME of `r scales::percent(cc_agg_temp$diff_canopy_cov_pct_mean,accuracy=0.1)` means that, on average across all plots, the UAS method is systematically `r ifelse(cc_agg_temp$diff_canopy_cov_pct_mean>=0,"overpredicting","underpredicting")` canopy cover by `r scales::number(cc_agg_temp$diff_canopy_cov_pct_mean,accuracy=0.1)` percentage points compared to the field data.
+
+we can table the canopy cover measurements aggregated over all field plots
 
 ```{r}
 # comps not done in agg_ground_truth_match()
@@ -3273,7 +3278,7 @@ validation_plots_polygons %>%
   kableExtra::collapse_rows(columns = c(1), valign = "top")
 ```
 
-let's check that out by treatment type. note that since the UAS method tended to overpredict canopy cover (ME of ``)
+let's check that out by treatment type
 
 ```{r}
 validation_plots_polygons %>% 
@@ -3316,4 +3321,283 @@ validation_plots_polygons %>%
   kableExtra::collapse_rows(columns = c(1), valign = "top")
 ```
 
-note that the overprediction of canopy cover by the UAS method compared to the field measurement increases as the tree density increases
+Note that the overprediction of canopy cover by the UAS method compared to the field measurement increases as the tree density increases. Let's look at that trend
+
+```{r}
+# Data trends (dashed) are visualized using a LOESS (locally weighted scatterplot smoothing) regression. 
+# A span of 1.0 was utilized to include 100% of the observations in each local neighborhood, 
+# and the local polynomial degree was restricted to 1 (local linear regression) to prevent overfitting and boundary inflation at the data extremes.
+
+# The dashed line represents a locally estimated scatterplot smoothing (LOESS) trend line
+# , calculated with a smoothing parameter (span) of 1.0 and a local linear polynomial fit (degree = 1).
+validation_plots_polygons %>%
+  sf::st_drop_geometry() %>% 
+  # dplyr::glimpse()
+  ggplot2::ggplot(
+    mapping = ggplot2::aes(y = diff_canopy_cov_pct, x = trees_per_ha)
+  ) + 
+  ggplot2::geom_hline(yintercept = 0, color = "gray33", lwd = 1) +
+  ggplot2::geom_point(color = "brown", alpha = 0.7, size = 0.7) +
+  ggplot2::geom_smooth(
+    method = "loess", se=F
+    , span = 1 # 0.75 = default
+    , method.args = list(degree = 1)
+    , lwd = 1, color = "gray", linetype = "dashed"
+  ) +
+  ggplot2::annotate(
+    "text"
+    , x = Inf
+    # , y = 0.045
+    , y = Inf
+    , label = "prediction > reference"
+    , hjust = 1.1
+    , vjust = 1.2
+    , parse = F
+    , size = 2.5
+  ) +
+  ggplot2::annotate(
+    "text"
+    , x = Inf
+    # , y = -0.04
+    , y = -Inf
+    , label = "prediction < reference"
+    , hjust = 1.1
+    , vjust = -0.4
+    , parse = F
+    , size = 2.5
+  ) +
+  ggplot2::scale_x_continuous(breaks = scales::breaks_extended(n=8)) +
+  ggplot2::scale_y_continuous(
+    limits = c(-1,1)
+    # breaks = seq(-1,1,by=0.2)
+    , breaks = scales::breaks_extended(n = 8)
+    , labels = scales::percent
+  ) +
+  ggplot2::labs(
+    x = "field reference TPH", y = "Canopy Cover difference"
+    , subtitle = "Canopy Cover difference by reference TPH"
+  ) +
+  ggplot2::theme_light()
+```
+
+The higher canopy cover predictions by the UAS method compared to the field method is a logical outcome of how crown boundaries are defined by each method. The UAS approach delineates crowns from an aerial perspective and utilizes a segmentation routine that prevents any two crowns from overlapping. Conversely, the field method assumes a perfectly circular crown extending symmetrically from the tree stem. In dense stands, this circular geometry causes field-calculated crowns to overlap in 2D space which may artificially reduce the total canopy cover. In reality, tree branches grow asymmetrically. For example, extending away from competitors to capture available sunlight. The UAS captures this irregular, outward branch expansion which may explain why it results in larger (and more realistic) canopy cover measurements than the field-based method.
+
+let's check out a visual representation of that phenomenon by looking as some example plots
+
+```{r, results=F, fig.show='hide'}
+# harrypotter::hp(n=2, option="hermionegranger") %>% scales::show_col()
+terra_plt_fn_temp <- function(rgb, rgb_square, plot_poly, ref_pt, ref_poly, pred_poly, plot_title="") {
+  grDevices::dev.new()
+  grDevices::dev.control("enable")
+  
+  terra::plotRGB(rgb)
+  terra::plot(rgb_square, add = T, border = "white", col = NA, lwd = 2)
+  terra::plot(terra::vect(plot_poly %>% sf::st_transform(terra::crs(rgb)) ), add = T, border = "white", col = NA, lwd = 0.8)
+  terra::plot(terra::vect(ref_pt %>% sf::st_transform(terra::crs(rgb)) ), add = T, col = harrypotter::hp(n=2, option="hermionegranger")[1])
+  terra::plot(terra::vect(ref_poly %>% sf::st_transform(terra::crs(rgb)) ), add = T, border = harrypotter::hp(n=2, option="hermionegranger")[1], col = NA, lwd = 1.4)
+  terra::plot(terra::vect(pred_poly %>% sf::st_transform(terra::crs(rgb)) ), add = T, border = harrypotter::hp(n=2, option="hermionegranger")[2], col = NA, lwd = 1.4)
+  # graphics::title(main = plot_title, cex.main = 0, col.main = "white", font.main = 2) 
+  
+  p <- grDevices::recordPlot()
+  grDevices::dev.off()
+  return(p)
+}
+
+# for a single record in the validation plot data
+plt_validation_plots_polygons_temp <- function(x){
+    # plot
+    plot_temp <- validation_plots_polygons %>% dplyr::slice(x)
+    # sq
+    rgb_sq_temp <- plot_temp %>% 
+      sf::st_buffer(1.5) %>% 
+      sf::st_bbox() %>% 
+      sf::st_as_sfc() %>% 
+      sf::st_transform(terra::crs(rgb_rast)) %>% 
+      terra::vect()
+    # rgb
+    rgb_temp <- rgb_rast %>% 
+       terra::crop(
+          rgb_sq_temp
+        , mask=T
+      )
+    # ref pts
+    ref_pt_temp <- validation_trees %>% dplyr::filter(plot==plot_temp$plot)
+    # ref polys
+    ref_poly_temp <- 
+      ref_pt_temp %>% 
+      dplyr::mutate(crown_radius_m=crown_diam_m/2) %>% 
+      sf::st_buffer(.$crown_radius_m)
+    # pred polys
+    pred_poly_temp <- 
+      pred_crowns_temp %>% 
+        dplyr::inner_join(
+          treetops_sf %>% 
+            sf::st_intersection(plot_temp %>% sf::st_transform(sf::st_crs(treetops_sf)) ) %>% 
+            sf::st_drop_geometry() %>% 
+            dplyr::select(treeID)
+          , by = "treeID"
+        )
+    # plt
+    plt <- terra_plt_fn_temp(
+      rgb = rgb_temp 
+      , rgb_square = rgb_sq_temp 
+      , plot_poly = plot_temp 
+      , ref_pt = ref_pt_temp 
+      , ref_poly = ref_poly_temp 
+      , pred_poly = pred_poly_temp 
+      , plot_title = paste0("plot: ",plot_temp$plot)
+    )
+    return(plt)
+  }
+
+# get individual plots
+set.seed(44)
+plts_temp <- 
+  1:nrow(validation_plots_polygons) %>% 
+  sample(9) %>% 
+  purrr::map(plt_validation_plots_polygons_temp)
+
+# plts_temp[[1]]
+# plts_temp[[2]]
+# plts_temp[[3]]
+# patchwork::wrap_plots(plts_temp, ncol = 3) doesn't work :\
+
+combine_plts_temp <- function(plot_list) {
+  n_plots <- length(plot_list)
+  n_cols <- min(n_plots, 3)
+  n_rows <- ceiling(n_plots / n_cols)
+  
+  grob_list <- lapply(plot_list, function(p) {
+    cowplot::as_grob(p)
+  })
+  
+  grDevices::dev.new()
+  cowplot::plot_grid(
+    plotlist = grob_list
+    , ncol = n_cols
+    , nrow = n_rows
+  )  
+  # graphics::par(mfrow = c(n_rows, n_cols), mar = c(1, 1, 2, 1))
+  #   for (i in seq_len(n_plots)) {
+  #   grDevices::replayPlot(plot_list[[i]])
+  # }
+}
+
+plt_temp <- combine_plts_temp(plts_temp)
+cowplot::save_plot(
+  filename = "../data/field_uas_crown_comp.png"
+  , plot = plt_temp 
+  , base_width = 10
+  , base_height = 10
+  , ncol = 1
+  , nrow = 1
+  , dpi = 300
+)
+```
+
+```{r, fig.width=10, fig.height=10, fig.show='asis'}
+print(plt_temp)
+```
+
+interesting. we see that the UAS crowns (orange) generally align with the green areas that appear to be trees from the aerial perspective and,the individual crowns segmented using the UAS method do not overlap. By contrast, the field-measured stems and the assumed circular crowns (red) overlap with each other and are not always spatially aligned with the green areas in the aerial imagery. This slight misalignment is the result of variations in the location recording systems used on the ground and the UAS system in addition to the stems of trees not being positioned directly under the crown due to real-world tree lean. We can also see a few examples of field-measured tree stems that are very near each other so that the simulated circular crowns have high or even complete overlap.
+
+We can move beyond summary canopy cover percentages and evaluate the spatial overlap of the crown footprints using the Intersection over Union (IoU) metric. The IoU index provides a spatial assessment by measuring the geographic alignment between the UAS crown polygons and circular field crowns. To quantify the spatial agreement between your UAS-delineated crowns and the field-calculated circular crowns, IoU is calculated by dividing the area of overlap between the two crown layers by the total combined area of both layers:
+
+$$
+\text{IoU}=\frac{\text{Area of Intersection}}{\text{Area of Union}}=\frac{|A\cap B|}{|A\cup B|}
+$$
+
+where $A$ represents the spatial footprint of the field-calculated circular crowns within a plot and $B$ represents the spatial footprint of the UAS-segmented crown polygons within the same plot.
+
+```{r}
+# validation_plots_polygons %>% dplyr::glimpse()
+iou_temp <-
+  1:nrow(validation_plots_polygons) %>% 
+  purrr::map(function(x){
+    # plot
+    plot_temp <- validation_plots_polygons %>% dplyr::slice(x)
+    # ref pts
+    ref_pt_temp <- validation_trees %>% dplyr::filter(plot==plot_temp$plot)
+    # ref polys
+    ref_poly_temp <- 
+      ref_pt_temp %>% 
+      dplyr::mutate(crown_radius_m=crown_diam_m/2) %>% 
+      sf::st_buffer(.$crown_radius_m) %>% 
+      sf::st_transform(sf::st_crs(treetops_sf)) %>% 
+      sf::st_union()
+    # pred polys
+    pred_poly_temp <- 
+      pred_crowns_temp %>% 
+        dplyr::inner_join(
+          treetops_sf %>% 
+            sf::st_intersection(plot_temp %>% sf::st_transform(sf::st_crs(treetops_sf)) ) %>% 
+            sf::st_drop_geometry() %>% 
+            dplyr::select(treeID)
+          , by = "treeID"
+        ) %>% 
+        sf::st_union()
+    u <- sf::st_union(ref_poly_temp,pred_poly_temp)
+    i <- sf::st_intersection(ref_poly_temp,pred_poly_temp)
+    
+    return(
+      plot_temp %>% 
+        sf::st_drop_geometry() %>% 
+        dplyr::select(plot) %>% 
+        dplyr::mutate(
+          crown_pred_ref_iou = as.numeric(sf::st_area(i))/as.numeric(sf::st_area(u))
+        )
+    )
+  }) %>% 
+  purrr::list_rbind()
+# add
+validation_plots_polygons <- validation_plots_polygons %>% dplyr::left_join(iou_temp, by = "plot")
+```
+
+what is the distribution of crown IoU values over the measured plots?
+
+```{r}
+validation_plots_polygons %>% 
+  sf::st_drop_geometry() %>% 
+# plot dist
+  ggplot2::ggplot(mapping = ggplot2::aes(x = crown_pred_ref_iou)) +
+  ggplot2::geom_density(
+    mapping = ggplot2::aes(y=ggplot2::after_stat(scaled))
+    , alpha = 0.8
+    , fill = "brown", color = "brown"
+  ) +
+  ggplot2::geom_vline(
+    mapping = ggplot2::aes(xintercept = median(validation_plots_polygons$crown_pred_ref_iou,na.rm=T) )
+    , linetype = "dashed", lwd = 1, color = "gray33"
+  ) +
+  ggplot2::scale_y_continuous(NULL,breaks=NULL) +
+  ggplot2::scale_x_continuous(breaks=scales::breaks_extended(n=8)) +
+  ggplot2::labs(
+    x="tree crown Intersection over Union (IoU)"
+    , subtitle = "spatial alignment between the UAS crown polygons and circular field crowns"
+  ) +
+  ggplot2::theme_light() +
+  ggplot2::theme(
+    panel.grid.major.y = ggplot2::element_blank()
+    , panel.grid.minor.y = ggplot2::element_blank()
+  )
+```
+
+get the IoU summary stats
+
+```{r, echo=T}
+validation_plots_polygons %>% 
+  sf::st_drop_geometry() %>% 
+  dplyr::select(crown_pred_ref_iou) %>% 
+  dplyr::rename(`tree crown IoU`=crown_pred_ref_iou) %>% 
+  summary() %>% 
+  knitr::kable(format = "markdown")
+```
+
+let's check out some examples of high, medium, and low crown overlap plots
+
+```{r}
+validation_plots_polygons %>% 
+  
+plt_validation_plots_polygons_temp()
+```
+
