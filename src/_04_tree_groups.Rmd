@@ -123,14 +123,18 @@ get_clumps_temp <- function(tree_list) {
       , clump_n_trees_grp = dplyr::case_when(
         clump_n_trees == 1 ~ "Individual"
         , clump_n_trees >= 2 & clump_n_trees <= 4 ~ "2-4 trees"
-        , clump_n_trees >= 5 & clump_n_trees <= 9 ~ "5-9 trees"
-        , clump_n_trees >= 10 & clump_n_trees <= 15 ~ "10-15 trees"
-        , clump_n_trees > 15 ~ ">15 trees"
-        # , T ~ "error"
+        
+        , clump_n_trees >= 5 & clump_n_trees <= 10 ~ "5-10 trees"
+        , clump_n_trees > 10 ~ ">10 trees"
+        # , clump_n_trees >= 5 & clump_n_trees <= 9 ~ "5-9 trees"
+        # , clump_n_trees >= 10 & clump_n_trees <= 15 ~ "10-15 trees"
+        # , clump_n_trees > 15 ~ ">15 trees"
+        # # , T ~ "error"
       ) %>%
       factor(
         ordered = T
-        , levels = c("Individual", "2-4 trees", "5-9 trees", "10-15 trees", ">15 trees")
+        , levels = c("Individual", "2-4 trees", "5-10 trees", ">10 trees")
+        # , levels = c("Individual", "2-4 trees", "5-9 trees", "10-15 trees", ">15 trees")
       )
     ) %>%
     dplyr::ungroup()
@@ -146,9 +150,9 @@ get_clumps_temp <- function(tree_list) {
 }
 ```
 
-
 ```{r grp-them-crwns, results=F}
 # do it for all treatment units
+# c2t_process_dir
 crowns_clump_fnm <- file.path(c2t_process_dir, "crowns_clump.csv")
 clump_polys_fnm <- file.path(c2t_process_dir, "crowns_clump_polys.gpkg")
 if(
@@ -204,7 +208,8 @@ if(
         clump_n_trees_grp%>%
         factor(
           ordered = T
-          , levels = c("Individual", "2-4 trees", "5-9 trees", "10-15 trees", ">15 trees")
+          , levels = c("Individual", "2-4 trees", "5-10 trees", ">10 trees")
+          # , levels = c("Individual", "2-4 trees", "5-9 trees", "10-15 trees", ">15 trees")
         )
     )
   # clump_polys
@@ -241,7 +246,7 @@ let's look at what this clump definition did
 ```{r}
 dta_temp <- crowns_sf %>% 
   dplyr::inner_join(
-    unq_units_df %>% dplyr::slice(4)
+    unq_units_df %>% dplyr::slice(3)
     , by = dplyr::join_by(trtmnt_type,trtmnt_block,trtmnt_unit)
   ) %>% 
   dplyr::mutate(clump_id = factor(clump_id))
@@ -260,9 +265,14 @@ where each clump is colored by a (nearly) distinct color
 here it with clumps colored by clump group size
 
 ```{r}
+hey_clump_pal <- 
+  harrypotter::hp(n = length(levels(crowns_sf$clump_n_trees_grp)), option = "always") %>% 
+  setNames(levels(crowns_sf$clump_n_trees_grp))
+# scales::show_col(pal_clump_n_trees_grp)
+
 ggplot2::ggplot(data = dta_temp) + 
   ggplot2::geom_sf(mapping = ggplot2::aes(fill = clump_n_trees_grp), color = "gray") +
-  harrypotter::scale_fill_hp_d("always", drop = F) +
+  ggplot2::scale_fill_manual(values = hey_clump_pal, name = "", drop = F) +
   ggplot2::labs(fill="") +
   ggplot2::theme_void() +
   ggplot2::theme(legend.position = "top", legend.direction = "horizontal") +
@@ -275,6 +285,7 @@ and we have `clump_*` variables
 crowns_sf %>% 
   sf::st_drop_geometry() %>% 
   dplyr::select(treeID, tidyselect::starts_with("trtmnt_"), tidyselect::starts_with("clump_")) %>% 
+  # dplyr::count(clump_n_trees_grp)
   dplyr::glimpse()
 ```
 
@@ -363,7 +374,7 @@ get_clump_dist_rast_temp <- function(x, clump_dist_m = 3){
 }
 ```
 
-let's get the distance raster and openinings vector data
+let's get the distance raster and openings vector data
 
 ```{r}
 # get it
@@ -382,11 +393,7 @@ get_clump_dist_rast_ans <-
 let's check out the distance raster for the same example unit we looked at above
 
 ```{r, results=F, fig.show='asis'}
-# harrypotter::hp(n = length(levels(crowns_sf$clump_n_trees_grp)), option = "always") %>% scales::show_col()
 # color the grps
-hey_clump_pal <-
-  harrypotter::hp(n = length(levels(crowns_sf$clump_n_trees_grp)), house = "always") %>%
-  setNames(levels(crowns_sf$clump_n_trees_grp))
 plt_dist_rast_fn <- 
   function(x, add_clumps = F, max_dist = NA){
     plt_tit <- paste0(
@@ -396,6 +403,17 @@ plt_dist_rast_fn <-
       , " | "
       , unq_units_df %>% dplyr::slice(x) %>% dplyr::pull(trtmnt_unit)
     )
+    
+    # get around empty levels that causes problems in the legend of ggplot
+    blank_df <- 
+      dplyr::tibble(
+        clump_n_trees_grp = levels(clump_polys$clump_n_trees_grp) %>% 
+          ordered(levels = levels(clump_polys$clump_n_trees_grp))
+        , geometry = rep("GEOMETRYCOLLECTION EMPTY", length(levels(clump_polys$clump_n_trees_grp))) %>% 
+          sf::st_as_sfc(crs = sf::st_crs(clump_polys))
+      ) %>% 
+      sf::st_as_sf()
+    
     # plt unit
     unit_temp <- stand_boundary %>% 
       dplyr::filter(
@@ -485,7 +503,8 @@ plt_dist_rast_fn <-
               unq_units_df %>% dplyr::slice(x)
               , by = dplyr::join_by(trtmnt_type,trtmnt_block,trtmnt_unit)
             ) %>% 
-            dplyr::select(clump_n_trees_grp)
+            dplyr::select(clump_n_trees_grp) %>% 
+            dplyr::bind_rows(blank_df)
           , mapping = ggplot2::aes(fill = clump_n_trees_grp)
           , color = NA
         ) +
@@ -506,7 +525,7 @@ plt_dist_rast_fn <-
     return(plt_rast)
   }
 # one unit
-plt_dist_rast_fn(4, add_clumps = F)
+plt_dist_rast_fn(3, add_clumps = F)
 ```
 
 ```{r, include=F, eval=F}
@@ -608,7 +627,7 @@ plt_dist_rast_fn(4)
 
 now we'll overlay the tree clump groups on the distance raster for all units
 
-```{r,eval=T,purl=FALSE, results=F, fig.show='asis', fig.height=9.5, fig.width=9.5}
+```{r,eval=F,purl=FALSE, results=F, fig.show='asis', fig.height=9.5, fig.width=9.5}
 # mapping
 plt_blk_temp <- function(blk, add = F, save = F) {
   # which idx
@@ -672,7 +691,6 @@ gc()
 let's check out the openings for the same example unit we looked at above
 
 ```{r, results=F, fig.show='asis'}
-# harrypotter::hp(n = length(levels(crowns_sf$clump_n_trees_grp)), option = "always") %>% scales::show_col()
 plt_openings_vect_fn <- 
   function(x, add_clumps = F, max_area = NA){
     plt_tit <- paste0(
@@ -682,6 +700,18 @@ plt_openings_vect_fn <-
       , " | "
       , unq_units_df %>% dplyr::slice(x) %>% dplyr::pull(trtmnt_unit)
     )
+    
+    # get around empty levels that causes problems in the legend of ggplot
+    blank_df <- 
+      dplyr::tibble(
+        clump_n_trees_grp = levels(clump_polys$clump_n_trees_grp) %>% 
+          ordered(levels = levels(clump_polys$clump_n_trees_grp))
+        , geometry = rep("GEOMETRYCOLLECTION EMPTY", length(levels(clump_polys$clump_n_trees_grp))) %>% 
+          sf::st_as_sfc(crs = sf::st_crs(clump_polys))
+      ) %>% 
+      sf::st_as_sf()
+
+    
     # plt unit
     unit_temp <- stand_boundary %>% 
       dplyr::filter(
@@ -772,12 +802,13 @@ plt_openings_vect_fn <-
               unq_units_df %>% dplyr::slice(x)
               , by = dplyr::join_by(trtmnt_type,trtmnt_block,trtmnt_unit)
             ) %>% 
-            dplyr::select(clump_n_trees_grp)
+            dplyr::select(clump_n_trees_grp) %>% 
+            dplyr::bind_rows(blank_df)
           , mapping = ggplot2::aes(fill = clump_n_trees_grp)
           , color = NA
         ) +
         # harrypotter::scale_fill_hp_d("always", name = "clump size", drop = F) +
-        ggplot2::scale_fill_manual(values = hey_clump_pal, name = "", drop = F) +
+        ggplot2::scale_fill_manual(values = hey_clump_pal, name = "", drop = F, limits = levels(crowns_sf$clump_n_trees_grp)) +
         # tree points
         ggplot2::geom_sf(
           data = 
@@ -793,12 +824,12 @@ plt_openings_vect_fn <-
     return(plt_open)
   }
 # one unit
-plt_openings_vect_fn(6, add_clumps = F)
+plt_openings_vect_fn(3, add_clumps = F)
 ```
 
 now we'll overlay the tree clump groups on the openings data for all units
 
-```{r,eval=T,purl=FALSE, results=F, fig.show='asis', fig.height=9.5, fig.width=9.5}
+```{r,eval=F,purl=FALSE, results=F, fig.show='asis', fig.height=9.5, fig.width=9.5}
 # mapping
 plt_blk_temp <- function(blk, add = F, save = F) {
   # which idx
@@ -1210,9 +1241,8 @@ clump_n_trees_grp_summary %>%
 
 this is neat, let's check out the same type of plot but look at the tree measurements within the different clump sizes
 
-*DBH* 
-
-```{r}
+```{r, eval=F, include=F}
+# *DBH* 
 crowns_sf %>% 
   sf::st_drop_geometry() %>% 
   dplyr::ungroup() %>%
@@ -1399,7 +1429,7 @@ open_temp %>%
 
 interesting
 
-let's table this
+let's table this by unit (which is the underlying data used to generate the distribution immediately above)
 
 ```{r}
 open_temp %>% 
@@ -1429,6 +1459,68 @@ open_temp %>%
   kableExtra::scroll_box(height = "8.4in")
 ```
 
+and table the summary of open space by treatment type
 
-
+```{r}
+# open_temp$pct_open %>% summary()
+open_temp %>% 
+  dplyr::select(
+    trtmnt_type
+    , trtmnt_unit_area_ha
+    , pct_open
+  ) %>% 
+  dplyr::group_by(trtmnt_type) %>% 
+  dplyr::summarise(
+    dplyr::across(
+      c(pct_open)
+      , .fns = list(
+        q25 = ~quantile(.x,na.rm=T,probs=0.25)
+        , median = ~median(.x,na.rm=T)
+        , mean = ~mean(.x,na.rm=T)
+        , q75 = ~quantile(.x,na.rm=T,probs=0.75)
+        # , q10 = ~quantile(.x,na.rm=T,probs=0.1)
+        # , q50 = ~quantile(.x,na.rm=T,probs=0.5)
+        # , q90 = ~quantile(.x,na.rm=T,probs=0.9)
+        # , min = ~min(.x,na.rm=T)
+        # , max = ~max(.x,na.rm=T)
+        , range = ~paste0(
+          scales::percent(min(.x,na.rm=T), accuracy = 0.1)
+          ,"-"
+          , scales::percent(max(.x,na.rm=T), accuracy = 0.1)
+        )
+      )
+    )
+    , n = dplyr::n()
+    , trtmnt_unit_area_ha = mean(trtmnt_unit_area_ha, na.rm=T)
+  ) %>% 
+  dplyr::ungroup() %>% 
+  dplyr::mutate(
+    n = scales::comma(n,accuracy=1)
+    , trtmnt_unit_area_ha = scales::comma(trtmnt_unit_area_ha,accuracy=.1)
+    , dplyr::across(.cols = dplyr::where(is.numeric), ~scales::percent(.x,accuracy=0.1) )
+  ) %>% 
+  dplyr::arrange(trtmnt_type) %>% 
+  dplyr::relocate(trtmnt_type,n,trtmnt_unit_area_ha) %>% 
+  kableExtra::kbl(
+    caption = "openings by treatment type"
+    , col.names = c(
+      "type","# units","mean unit area (ha)"
+      , "1st Qu."
+      , "median"
+      , "mean"
+      , "3rd Qu."
+      , "range"
+    )
+    , escape = F
+    # , digits = 2
+  ) %>% 
+  kableExtra::kable_styling(font_size = 10.6) %>% 
+  kableExtra::add_header_above(c(
+    " "=3
+    # , "Detection" = 3
+    # , "Area" = 3
+    , "% unit open" = 5
+  )) %>% 
+  kableExtra::column_spec(c(3,8), border_right = TRUE, include_thead = TRUE) 
+```
 
