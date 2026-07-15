@@ -1305,9 +1305,9 @@ terra_plt_ortho(
 )
 ```
 
-let's check out the RGB by treatment block
+let's check out some examples of the RGB by treatment block
 
-```{r rgb-plt-all-xxx, eval=F,purl=FALSE, results=F, fig.show='asis', fig.height=8, fig.width=9.5}
+```{r,eval=F,purl=FALSE, results=F, fig.show='asis', fig.height=8, fig.width=9.5}
 # mapping
 plt_blk_temp <- function(blk, add = F, save = F) {
   if(save){

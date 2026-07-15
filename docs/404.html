@@ -51,6 +51,10 @@
 <link href="libs/anchor-sections-1.1.0/anchor-sections.css" rel="stylesheet" />
 <link href="libs/anchor-sections-1.1.0/anchor-sections-hash.css" rel="stylesheet" />
 <script src="libs/anchor-sections-1.1.0/anchor-sections.js"></script>
+<script src="libs/kePrint-0.0.1/kePrint.js"></script>
+<link href="libs/lightable-0.0.1/lightable.css" rel="stylesheet" />
+<link href="libs/bsTable-3.3.7/bootstrapTable.min.css" rel="stylesheet" />
+<script src="libs/bsTable-3.3.7/bootstrapTable.js"></script>
 <link href="libs/htmltools-fill-0.5.9/fill.css" rel="stylesheet" />
 <script src="libs/htmlwidgets-1.6.4/htmlwidgets.js"></script>
 <link href="libs/leaflet-1.3.1/leaflet.css" rel="stylesheet" />
@@ -65,10 +69,6 @@
 <script src="libs/clipboard-0.0.1/setClipboardText.js"></script>
 <link href="libs/mapviewCSS-0.0.1/mapview-popup.css" rel="stylesheet" />
 <link href="libs/mapviewCSS-0.0.1/mapview.css" rel="stylesheet" />
-<script src="libs/kePrint-0.0.1/kePrint.js"></script>
-<link href="libs/lightable-0.0.1/lightable.css" rel="stylesheet" />
-<link href="libs/bsTable-3.3.7/bootstrapTable.min.css" rel="stylesheet" />
-<script src="libs/bsTable-3.3.7/bootstrapTable.js"></script>
 <script type="text/javascript">
 
 // toggle visibility of R source blocks in R Markdown output
@@ -183,18 +183,17 @@ code span.wa { color: #60a0b0; font-weight: bold; font-style: italic; } /* Warni
 </ul></li>
 <li class="chapter" data-level="2" data-path="processing.html"><a href="processing.html"><i class="fa fa-check"></i><b>2</b> Point Cloud Processing</a>
 <ul>
-<li class="chapter" data-level="2.1" data-path="processing.html"><a href="processing.html#data-location"><i class="fa fa-check"></i><b>2.1</b> Data Location</a></li>
-<li class="chapter" data-level="2.2" data-path="processing.html"><a href="processing.html#point-cloud-to-raster-cloud2raster"><i class="fa fa-check"></i><b>2.2</b> Point Cloud to Raster: <code>cloud2raster()</code></a></li>
-<li class="chapter" data-level="2.3" data-path="processing.html"><a href="processing.html#individial-tree-detection-tuning-itd_tuning"><i class="fa fa-check"></i><b>2.3</b> Individial Tree Detection Tuning: <code id="itd">itd_tuning()</code></a></li>
-<li class="chapter" data-level="2.4" data-path="processing.html"><a href="processing.html#tree-extraction-raster2trees"><i class="fa fa-check"></i><b>2.4</b> Tree Extraction: <code id="trees">raster2trees()</code></a></li>
-<li class="chapter" data-level="2.5" data-path="processing.html"><a href="processing.html#cbh-modeling-trees_cbh"><i class="fa fa-check"></i><b>2.5</b> CBH Modeling: <code>trees_cbh()</code></a></li>
-<li class="chapter" data-level="2.6" data-path="processing.html"><a href="processing.html#dbh-modeling-trees_dbh"><i class="fa fa-check"></i><b>2.6</b> DBH Modeling: <code>trees_dbh()</code></a></li>
-<li class="chapter" data-level="2.7" data-path="processing.html"><a href="processing.html#hmd-modeling-trees_hmd"><i class="fa fa-check"></i><b>2.7</b> HMD Modeling: <code>trees_hmd()</code></a></li>
-<li class="chapter" data-level="2.8" data-path="processing.html"><a href="processing.html#forest-type-trees_type"><i class="fa fa-check"></i><b>2.8</b> Forest Type: <code id="trees_type">trees_type()</code></a></li>
-<li class="chapter" data-level="2.9" data-path="processing.html"><a href="processing.html#combine-data"><i class="fa fa-check"></i><b>2.9</b> Combine data</a></li>
-<li class="chapter" data-level="2.10" data-path="processing.html"><a href="processing.html#crown-biomass-trees_biomass"><i class="fa fa-check"></i><b>2.10</b> Crown Biomass: <code id="trees_biomass">trees_biomass()</code></a></li>
-<li class="chapter" data-level="2.11" data-path="processing.html"><a href="processing.html#processing-time-summary"><i class="fa fa-check"></i><b>2.11</b> Processing Time Summary</a></li>
-<li class="chapter" data-level="2.12" data-path="processing.html"><a href="processing.html#data-export"><i class="fa fa-check"></i><b>2.12</b> Data Export</a></li>
+<li class="chapter" data-level="2.1" data-path="processing.html"><a href="processing.html#point-cloud-to-raster-cloud2raster"><i class="fa fa-check"></i><b>2.1</b> Point Cloud to Raster: <code>cloud2raster()</code></a></li>
+<li class="chapter" data-level="2.2" data-path="processing.html"><a href="processing.html#individial-tree-detection-tuning-itd_tuning"><i class="fa fa-check"></i><b>2.2</b> Individial Tree Detection Tuning: <code id="itd">itd_tuning()</code></a></li>
+<li class="chapter" data-level="2.3" data-path="processing.html"><a href="processing.html#tree-extraction-raster2trees"><i class="fa fa-check"></i><b>2.3</b> Tree Extraction: <code id="trees">raster2trees()</code></a></li>
+<li class="chapter" data-level="2.4" data-path="processing.html"><a href="processing.html#cbh-modeling-trees_cbh"><i class="fa fa-check"></i><b>2.4</b> CBH Modeling: <code>trees_cbh()</code></a></li>
+<li class="chapter" data-level="2.5" data-path="processing.html"><a href="processing.html#dbh-modeling-trees_dbh"><i class="fa fa-check"></i><b>2.5</b> DBH Modeling: <code>trees_dbh()</code></a></li>
+<li class="chapter" data-level="2.6" data-path="processing.html"><a href="processing.html#hmd-modeling-trees_hmd"><i class="fa fa-check"></i><b>2.6</b> HMD Modeling: <code>trees_hmd()</code></a></li>
+<li class="chapter" data-level="2.7" data-path="processing.html"><a href="processing.html#forest-type-trees_type"><i class="fa fa-check"></i><b>2.7</b> Forest Type: <code id="trees_type">trees_type()</code></a></li>
+<li class="chapter" data-level="2.8" data-path="processing.html"><a href="processing.html#combine-data"><i class="fa fa-check"></i><b>2.8</b> Combine data</a></li>
+<li class="chapter" data-level="2.9" data-path="processing.html"><a href="processing.html#crown-biomass-trees_biomass"><i class="fa fa-check"></i><b>2.9</b> Crown Biomass: <code id="trees_biomass">trees_biomass()</code></a></li>
+<li class="chapter" data-level="2.10" data-path="processing.html"><a href="processing.html#processing-time-summary"><i class="fa fa-check"></i><b>2.10</b> Processing Time Summary</a></li>
+<li class="chapter" data-level="2.11" data-path="processing.html"><a href="processing.html#data-export"><i class="fa fa-check"></i><b>2.11</b> Data Export</a></li>
 </ul></li>
 <li class="chapter" data-level="3" data-path="slash-piles.html"><a href="slash-piles.html"><i class="fa fa-check"></i><b>3</b> Slash Piles</a>
 <ul>
@@ -229,6 +228,17 @@ code span.wa { color: #60a0b0; font-weight: bold; font-style: italic; } /* Warni
 </ul></li>
 <li class="chapter" data-level="5.3" data-path="silv_sum.html"><a href="silv_sum.html#tree-distribution-by-treatment-type"><i class="fa fa-check"></i><b>5.3</b> Tree Distribution by Treatment Type</a></li>
 <li class="chapter" data-level="5.4" data-path="silv_sum.html"><a href="silv_sum.html#visual-crowns-by-unit"><i class="fa fa-check"></i><b>5.4</b> Visual Crowns by Unit</a></li>
+</ul></li>
+<li class="chapter" data-level="6" data-path="tree-group-analysis.html"><a href="tree-group-analysis.html"><i class="fa fa-check"></i><b>6</b> Tree Group Analysis</a>
+<ul>
+<li class="chapter" data-level="6.1" data-path="tree-group-analysis.html"><a href="tree-group-analysis.html#group-tree-crowns"><i class="fa fa-check"></i><b>6.1</b> Group Tree Crowns</a></li>
+<li class="chapter" data-level="6.2" data-path="tree-group-analysis.html"><a href="tree-group-analysis.html#identify-openings"><i class="fa fa-check"></i><b>6.2</b> Identify Openings</a>
+<ul>
+<li class="chapter" data-level="6.2.1" data-path="tree-group-analysis.html"><a href="tree-group-analysis.html#visualize-distance-raster"><i class="fa fa-check"></i><b>6.2.1</b> Visualize Distance Raster</a></li>
+<li class="chapter" data-level="6.2.2" data-path="tree-group-analysis.html"><a href="tree-group-analysis.html#visualize-openings"><i class="fa fa-check"></i><b>6.2.2</b> Visualize Openings</a></li>
+</ul></li>
+<li class="chapter" data-level="6.3" data-path="tree-group-analysis.html"><a href="tree-group-analysis.html#tree-clump-summary"><i class="fa fa-check"></i><b>6.3</b> Tree Clump Summary</a></li>
+<li class="chapter" data-level="6.4" data-path="tree-group-analysis.html"><a href="tree-group-analysis.html#openings-summary"><i class="fa fa-check"></i><b>6.4</b> Openings Summary</a></li>
 </ul></li>
 </ul>
 
