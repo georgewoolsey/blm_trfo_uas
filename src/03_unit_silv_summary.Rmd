@@ -435,7 +435,7 @@ plt_metric_dist_fn <- function(df, metric_name, metric_label = NA) {
     , switch = "y"
   ) +
   ggplot2::scale_fill_brewer(palette = "Dark2") +
-  ggplot2::scale_x_continuous(limits=c(0,NA),labels = scales::comma) +
+    ggplot2::scale_x_continuous(limits=c(0,NA),labels = scales::comma, breaks = scales::breaks_extended(n=6)) +
   ggplot2::scale_y_continuous(NULL,breaks=NULL) +
   ggplot2::labs(
     fill="",x=latex2exp::TeX(metric_label),y=""
@@ -472,7 +472,7 @@ plt_metric_violin_fn <- function(df, metric_name, metric_label = NA) {
     , switch = "y"
   ) +
   ggplot2::scale_fill_brewer(palette = "Dark2") +
-  ggplot2::scale_x_continuous(limits=c(0,NA),labels = scales::comma) +
+  ggplot2::scale_x_continuous(limits=c(0,NA),labels = scales::comma, breaks = scales::breaks_extended(n=6)) +
   ggplot2::scale_y_continuous(NULL,breaks=NULL) +
   ggplot2::labs(
     fill="",x=latex2exp::TeX(metric_label),y=""
@@ -498,45 +498,32 @@ since we also have imperial units let's see TPA
 plt_metric_violin_fn(unit_sum_df,"trees_per_ac",metric_label = "trees $ac^{-1}$")
 ```
 
-we can also look at the QMD in cm
-
-```{r}
-plt_metric_violin_fn(unit_sum_df,"qmd_cm",metric_label = "QMD (cm)")
-```
-
-and QMD in inches
-
-```{r}
-plt_metric_violin_fn(unit_sum_df,"qmd_in",metric_label = "QMD (in)")
-```
-
-and basal area in square meters per hectare
-
-```{r}
+```{r, include=FALSE, eval=FALSE}
+# and basal area in square meters per hectare
 plt_metric_violin_fn(unit_sum_df,"basal_area_m2_per_ha",metric_label = "basal area ($m^{2} ha^{-1}$)")
 ```
 
-but also basal area in square feet per acre
-
-```{r}
+```{r, include=FALSE, eval=FALSE}
+# but also basal area in square feet per acre
 plt_metric_violin_fn(unit_sum_df,"basal_area_ft2_per_ac",metric_label = "basal area ($ft^{2} ac^{-1}$)")
 ```
 
-## Tree Distribution by Treatment Type
+## Tree Size Distribution by Treatment Type
 
-distribution of individual tree height and DBH by treatment type (this groups all trees under the same treatment type together)
+distribution of individual tree height by treatment type (this groups all trees under the same treatment type together)
 
 ```{r, fig.height=8}
 treetops_sf %>% 
   sf::st_drop_geometry() %>% 
   # dplyr::count(trtmnt_type, trtmnt_block)
-  dplyr::select(trtmnt_type, tree_height_m, dbh_cm) %>% 
+  dplyr::select(trtmnt_type, tree_height_m) %>% 
   tidyr::pivot_longer(cols = -c(trtmnt_type)) %>% 
   dplyr::mutate(
-    name = dplyr::case_match(
+    name = dplyr::recode_values(
       name
       , "tree_height_m" ~ "tree height (m)"
       , "dbh_cm" ~ "tree DBH (cm)"
+      , "crown_area_m2" ~ "crown area (m²)"
     )
   ) %>% 
   ggplot2::ggplot(
@@ -552,15 +539,16 @@ treetops_sf %>%
         sf::st_drop_geometry() %>%
         dplyr::group_by(trtmnt_type) %>%
         dplyr::summarise(dplyr::across(
-          .cols = c(tree_height_m, dbh_cm) 
+          .cols = c(tree_height_m) 
           , ~median(.x,na.rm=T)
         )) %>% 
         tidyr::pivot_longer(cols = -c(trtmnt_type)) %>% 
         dplyr::mutate(
-          name = dplyr::case_match(
+          name = dplyr::recode_values(
             name
             , "tree_height_m" ~ "tree height (m)"
             , "dbh_cm" ~ "tree DBH (cm)"
+            , "crown_area_m2" ~ "crown area (m²)"
           )
         )
     , mapping = ggplot2::aes(xintercept = value)
@@ -575,7 +563,7 @@ treetops_sf %>%
     , scales = "free_x"
   ) +
   ggplot2::scale_fill_brewer(palette = "Dark2") +
-  ggplot2::scale_x_continuous(limits=c(0,NA),labels = scales::comma) +
+  ggplot2::scale_x_continuous(limits=c(0,NA),labels = scales::comma, breaks=scales::breaks_extended(n=10)) +
   ggplot2::scale_y_continuous(NULL,breaks=NULL) +
   ggplot2::labs(
     fill=""
@@ -594,9 +582,8 @@ treetops_sf %>%
   )
 ```
 
-and in imperial units
-
-```{r, fig.height=8}
+```{r, fig.height=8, include = F, eval = F}
+# and in imperial units
 treetops_sf %>% 
   sf::st_drop_geometry() %>% 
   # dplyr::count(trtmnt_type, trtmnt_block)
@@ -672,7 +659,7 @@ treetops_sf %>%
 table it
 
 ```{r}
-tbl_df_temp <- 
+tbl_df_temp <-
   treetops_sf %>% 
   sf::st_drop_geometry() %>%
   dplyr::select(-c(dbh_m,trtmnt_unit_area_ha, tidyselect::ends_with("_ft2"))) %>% 
@@ -682,6 +669,7 @@ tbl_df_temp <-
     , tidyselect::starts_with("dbh_")
       | tidyselect::starts_with("tree_height_")
       | tidyselect::starts_with("tree_cbh_")
+      # | tidyselect::starts_with("crown_area_")
   ) %>%
   dplyr::group_by(
     trtmnt_type # , trtmnt_block, trtmnt_unit,trtmnt_unit_area_ha
@@ -714,6 +702,65 @@ summary statistics of selected tree metrics by treatment type
 
 *metric* units
 
+```{r, include=F, eval=F}
+crwn_temp <- 
+  treetops_sf %>% 
+  sf::st_drop_geometry() %>% 
+  dplyr::filter(crown_area_m2==max(crown_area_m2)) %>% 
+  dplyr::pull(treeID)
+
+
+crnw_shp_temp <- 
+  cloud2trees:::search_dir_final_detected(dir = c2t_process_dir)[["crowns_flist"]] %>% 
+  purrr::map(
+    \(x)
+    crowns_sf <- sf::st_read(
+      dsn = x, quiet = TRUE
+      , query = 
+        sprintf(
+          "SELECT * FROM %s WHERE treeID IN (%s)"
+          , basename(x) %>% stringr::str_remove("^.*/") %>% stringr::str_remove("\\.[^.]+$")
+          , stringr::str_c("'", unique(crwn_temp), "'", collapse = ", ")
+        )
+    ) %>% 
+    cloud2trees::simplify_multipolygon_crowns()
+  ) %>% 
+  purrr::list_rbind()
+crnw_shp_temp %>% 
+  sf::st_area(.) %>% 
+  as.numeric()
+crnw_shp_temp %>% 
+  cloud2trees:::st_calculate_diameter() %>% 
+  sf::st_drop_geometry() %>% 
+  dplyr::select(treeID,diameter_m) %>% 
+  dplyr::inner_join(
+    treetops_sf %>% 
+      sf::st_drop_geometry() %>% 
+      dplyr::filter(treeID == crwn_temp) %>% 
+      dplyr::select(treeID,crown_dia_m)
+  )
+# rgb
+rgb_rast %>% 
+   terra::crop(
+    crnw_shp_temp %>% 
+      sf::st_union() %>% 
+      sf::st_buffer(11) %>% 
+      sf::st_bbox() %>% 
+      sf::st_as_sfc() %>% 
+      sf::st_transform(terra::crs(rgb_rast)) %>% 
+      terra::vect()
+    , mask=T
+  ) %>% 
+  terra::plotRGB()
+# add crwn
+crnw_shp_temp %>% 
+  sf::st_union() %>% 
+  sf::st_transform(terra::crs(rgb_rast)) %>% 
+  terra::vect() %>% 
+  terra::plot(add = T, col = NA, border = "white", lwd = 1.3)
+
+```
+
 ```{r}
 # table metric
 tbl_df_temp %>% 
@@ -724,6 +771,7 @@ tbl_df_temp %>%
       , n
     )
   ) %>% 
+  dplyr::select( -c(tidyselect::starts_with("dbh_"))  ) %>% 
   dplyr::mutate(
     dplyr::across(
       dplyr::where(is.numeric)
@@ -739,7 +787,7 @@ tbl_df_temp %>%
     )
     , col.names = c(
       " "
-      , rep(c("Mean","Std Dev","Range"), times = 3)
+      , rep(c("Mean","Std Dev","Range"), times = 2)
     )
     , escape = F
   ) %>% 
@@ -747,15 +795,15 @@ tbl_df_temp %>%
   kableExtra::add_header_above(
     c(
       " "=1
-      , "DBH (cm)" = 3
+      # , "DBH (cm)" = 3
       , "Height (m)" = 3
       , "CBH (m)" = 3
     )
     , escape = F
   ) %>% 
-  kableExtra::column_spec(seq(1,10,by=3), border_right = TRUE, include_thead = TRUE) %>% 
+  kableExtra::column_spec(seq(1,7,by=3), border_right = TRUE, include_thead = TRUE) %>% 
   kableExtra::column_spec(
-    column = 1:10
+    column = 1:7
     , extra_css = "font-size: 11px;"
     , include_thead = T
   ) %>% 
@@ -780,6 +828,7 @@ tbl_df_temp %>%
       , n
     )
   ) %>% 
+  dplyr::select( -c(tidyselect::starts_with("dbh_"))  ) %>% 
   dplyr::mutate(
     dplyr::across(
       dplyr::where(is.numeric)
@@ -795,7 +844,7 @@ tbl_df_temp %>%
     )
     , col.names = c(
       " "
-      , rep(c("Mean","Std Dev","Range"), times = 3)
+      , rep(c("Mean","Std Dev","Range"), times = 2)
     )
     , escape = F
   ) %>% 
@@ -803,15 +852,15 @@ tbl_df_temp %>%
   kableExtra::add_header_above(
     c(
       " "=1
-      , "DBH (in)" = 3
+      # , "DBH (in)" = 3
       , "Height (ft)" = 3
       , "CBH (ft)" = 3
     )
     , escape = F
   ) %>% 
-  kableExtra::column_spec(seq(1,10,by=3), border_right = TRUE, include_thead = TRUE) %>% 
+  kableExtra::column_spec(seq(1,7,by=3), border_right = TRUE, include_thead = TRUE) %>% 
   kableExtra::column_spec(
-    column = 1:10
+    column = 1:7
     , extra_css = "font-size: 11px;"
     , include_thead = T
   ) %>% 
@@ -824,7 +873,7 @@ tbl_df_temp %>%
   )
 ```
 
-another common thing to look at are binned height/DBH distributions
+another common thing to look at are binned tree size distributions
 
 ```{r, include = F, eval = F}
 # what does this look like from WTT?
@@ -953,25 +1002,9 @@ treetops_sf %>%
 ggplot2::ggsave("../data/explt.jpg", height = 11, width = 10.5, dpi = "print")
 ```
 
-we'll start with DBH bins
-
-```{r}
+```{r, include=F, eval=F}
+# we'll start with DBH bins
 # make ggplot2::cut_* bins pretty
-make_bins_pretty <- function(bin_factor, suffix = "") {
-  # convert factor to character and remove brackets and parens
-  clean_labels <- bin_factor %>%
-    as.character() %>%
-    stringr::str_replace_all(c("\\[" = "", "\\(" = "", "\\]" = "", "\\)" = "")) %>%
-    stringr::str_replace(",", "-")
-  
-  # suffix
-  if(stringr::str_squish(suffix) != "" && inherits(suffix,"character")){
-    clean_labels <- stringr::str_c(clean_labels, " ", suffix) %>% stringr::str_squish()
-  }
-  
-  # reorder based on the original factor levels 
-  forcats::fct_reorder(factor(clean_labels), as.numeric(bin_factor))
-}
 # plot 
 treetops_sf %>% 
   sf::st_drop_geometry() %>% 
@@ -1044,7 +1077,7 @@ treetops_sf %>%
 # ggplot2::ggsave("../data/explt.jpg", height = 7.5, width = 10.5, dpi = "print")
 ```
 
-and height bins
+TPH by height bins
 
 ```{r}
 # plot 

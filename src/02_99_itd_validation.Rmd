@@ -171,7 +171,7 @@ it looks like the Chojnacky & Rogers ([1999](https://doi.org/10.1093/wjaf/14.1.1
 
 we'll also use the horizontal crown length and width to evaluate the UAS prediction of canopy cover on a plot-level basis. this canopy cover evaluation will:
 
-* average the field measured horizontal crown length and width to approximate a circular diameter
+* average the field measured horizontal crown length and width to approximate a circular diameter ([Williams et al. 2020](https://doi.org/10.3390/w12082213))
 * use the diameter to calculate a 2D circular crown area for each field tree
 * calculate the proportion of each plot covered by these assumed circular crowns
 * for each plot, compare this proportion to the proportion of the plot predicted to be covered by crowns of UAS trees whose tree top point falls within the plot. requiring the tree top point to fall within the plot prior to calculating crown cover mimics the field technique of only measuring stems within a plot.
@@ -524,7 +524,7 @@ validation_trees %>%
 
 interesting. do you have any thoughts?
 
-let's also look at the tree crowns assuming a perfectly circular shape based on the field-measured horizontal crown length and width values
+let's also look at the tree crowns assuming a perfectly circular shape based on the field-measured horizontal crown length and width values ([Williams et al. 2020](https://doi.org/10.3390/w12082213))
 
 ```{r}
 rgb_rast %>% 
