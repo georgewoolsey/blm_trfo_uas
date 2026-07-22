@@ -21,16 +21,17 @@ While some research on tree spatial patterns use tree point locations buffered w
 
 Remember we are only looking at what could be considered "overstory" trees since we filtered the tree list to keep only trees that meet a certain minimum height
 
-```{r}
-crowns_sf %>% 
+```{r, echo=T}
+treetops_sf %>% 
   sf::st_drop_geometry() %>% 
-  dplyr::select(tree_height_m, dbh_cm) %>% 
-  summary()
+  dplyr::select(tree_height_m) %>% 
+  summary() %>% 
+  knitr::kable(format = "markdown")
 ```
 
 Since a primary objective of this analysis is to evaluate how [different treatments](#silv_sum) influence forest structure, we'll treat each unit as a discrete area and exclude any trees located outside of the unit boundaries from the clump classification process. This approach assumes that trees within a unit do not form functional clusters with those in adjacent areas (even though some units share a common border and we have data extending beyond the unit boundaries). This assumption prevents data from untreated control areas or differently treated areas from influencing the results when summarized by treatment type. This intentional ignorance of edge effects means that the scale of focus of this analysis is strictly on the treatment unit.
 
-make the clump groups
+define a function to make the tree clump groupings by treatment unit
 
 ```{r, eval = F, warning=FALSE, message=FALSE, echo=FALSE, include=FALSE}
 c2t_output_dir <- "../data"
@@ -97,10 +98,11 @@ crowns_sf %>% dplyr::glimpse()
 ```
 
 ```{r, results=F}
-get_clumps_temp <- function(tree_list) {
+get_clumps_temp <- function(tree_list, buffer = 0) {
   # buffer and dissolve (arcGIS logic)
   clump_polys <- tree_list %>%
     dplyr::ungroup() %>% 
+    sf::st_buffer(buffer) %>% 
     sf::st_union() %>%
     sf::st_cast("POLYGON") %>%
     sf::st_as_sf() %>%
@@ -148,9 +150,15 @@ get_clumps_temp <- function(tree_list) {
     )
   return(list(clump_polys = clump_polys, tree_list = trees_with_clumps))
 }
+# buffer for UAS-delineated crown polygons
+my_buffer <- 1
 ```
 
+make the clump groups using the UAS-delineated crown polygons. because we are using the irregular crown shapes that align with real-world crowns and want to account for slight misalignment between the UAS GPS and on-the-ground conditions we'll define clump group membership using a `r my_buffer/2` m buffer on the crowns. Under this condition, trees that do not have interlocking crowns based on UAS delineations but are within `r my_buffer` m of one another will be considered part of the same tree clump group. We'll use this same `r my_buffer` m distance threshold in defining treeless openings which will be required to comprise continuous space at least `r my_buffer` m away from the nearest tree.
+
 ```{r grp-them-crwns, results=F}
+# crowns_sf %>% dplyr::glimpse()
+# crowns_sf %>% sf::st_drop_geometry() %>% dplyr::count(trtmnt_type,trtmnt_block,trtmnt_unit)
 # do it for all treatment units
 # c2t_process_dir
 crowns_clump_fnm <- file.path(c2t_process_dir, "crowns_clump.csv")
@@ -161,15 +169,14 @@ if(
 ){
   get_clumps_ans_temp <- 
     1:nrow(unq_units_df) %>% 
-    purrr::map(
-      \(x)
+    purrr::map(function(x, buff = my_buffer/2){
       crowns_sf %>% 
         dplyr::inner_join(
           unq_units_df %>% dplyr::slice(x)
           , by = dplyr::join_by(trtmnt_type,trtmnt_block,trtmnt_unit)
         ) %>% 
-        get_clumps_temp()
-    )
+        get_clumps_temp(buffer = buff)
+    })
   # get trees
   crowns_sf <-
     get_clumps_ans_temp %>%
@@ -243,6 +250,74 @@ if(
 
 let's look at what this clump definition did
 
+```{r, include=F, eval = T}
+get_huge_palette <- function(n_colors) {
+  # 1. Establish the universally trusted, high-contrast Okabe-Ito base anchors
+  # These are optimized for Protan, Deutan, and Tritan colorblindness
+  okabe_ito <- c(
+    "#0072B2", "#E69F00", "#009E73", "#56B4E9", 
+    "#D55E00", "#CC79A7", "#F0E442", "#000000"
+  )
+  
+  # Calculate remaining slots needed
+  rem_colors <- base::max(0, n_colors - base::length(okabe_ito))
+  colors_per_tier <- base::ceiling(rem_colors / 3)
+  
+  # 2. Build 3 hyper-contrasting HCL bands with maximized saturation
+  # Band 1: Midnight/Deep tones (Low luminance, high chroma)
+  tier_dark <- grDevices::hcl(
+    h = base::seq(from = 0, to = 330, length.out = colors_per_tier), 
+    c = 85, 
+    l = 25
+  )
+  
+  # Band 2: Electric/Vibrant tones (Medium luminance, max chroma)
+  tier_medium <- grDevices::hcl(
+    h = base::seq(from = 40, to = 370, length.out = colors_per_tier), 
+    c = 95, 
+    l = 55
+  )
+  
+  # Band 3: Neon Pastel/Light tones (High luminance, moderate chroma)
+  tier_light <- grDevices::hcl(
+    h = base::seq(from = 20, to = 350, length.out = colors_per_tier), 
+    c = 65, 
+    l = 85
+  )
+  
+  # 3. Interleave the three bands using tidyverse to enforce severe brightness jumps
+  generated_colors <- tibble::tibble(
+    dark   = tier_dark,
+    medium = tier_medium,
+    light  = tier_light
+  ) %>%  
+    tidyr::pivot_longer(
+      cols = dplyr::everything(), 
+      names_to = "tier", 
+      values_to = "hex_color"
+    ) %>%  
+    dplyr::mutate(nr = dplyr::row_number()) %>% 
+    # dplyr::slice_sample(n=n_colors*2) %>% 
+    dplyr::slice_head(n=n_colors) %>%
+    dplyr::arrange(nr) %>% 
+    dplyr::pull(hex_color)
+  
+  # Combine anchors with generated colors
+  raw_palette <- base::c(okabe_ito, generated_colors)[1:n_colors]
+  
+  # 4. Apply a wide mathematical dispersion stride
+  # This breaks up the sequential sweeps entirely, packing contrasting tones side-by-side
+  stride <- base::ceiling(base::sqrt(n_colors))
+  indices <- base::seq(from = 1, to = n_colors, by = 1)
+  dispersed_indices <- base::order((indices - 1) %% stride, (indices - 1) %/% stride)
+  
+  final_palette <- raw_palette[dispersed_indices]
+  
+  return(final_palette)
+}
+
+```
+
 ```{r}
 dta_temp <- crowns_sf %>% 
   dplyr::inner_join(
@@ -250,19 +325,40 @@ dta_temp <- crowns_sf %>%
     , by = dplyr::join_by(trtmnt_type,trtmnt_block,trtmnt_unit)
   ) %>% 
   dplyr::mutate(clump_id = factor(clump_id))
+# get_huge_palette(nrow(dta_temp)) %>% scales::show_col()
+# get_huge_palette(8) %>% scales::show_col()
+# get_huge_palette(22) %>% scales::show_col()
 # plt
 ggplot2::ggplot(data = dta_temp) + 
+  # add clump outline
+  ggplot2::geom_sf(
+    data = 
+      clump_polys %>% 
+      dplyr::inner_join(
+        dta_temp %>% sf::st_drop_geometry() %>% dplyr::distinct(trtmnt_type,trtmnt_block,trtmnt_unit)
+        , by = dplyr::join_by(trtmnt_type,trtmnt_block,trtmnt_unit)
+      )
+    , fill = NA
+    , color = "gray88"
+  ) +
+  # add crowns
   ggplot2::geom_sf(mapping = ggplot2::aes(fill = clump_id), color = "gray", alpha = 0.8) +
   ggplot2::scale_fill_manual(
-    values = c(viridis::turbo(n=nrow(dta_temp)/2), viridis::viridis(n=nrow(dta_temp)/2)) %>% sample()
+    values = 
+    get_huge_palette(nrow(dta_temp))
+    # c(
+    #   viridis::magma(n=nrow(dta_temp)/2, begin = 0, end = 0.85)
+    #   , viridis::mako(n=nrow(dta_temp)/2, begin = 0, end = 0.85)
+    #   , viridis::viridis(n=nrow(dta_temp)/2, begin = 0, end = 0.85)
+    # ) %>% sample()
   ) +
   ggplot2::theme_void() +
   ggplot2::theme(legend.position = "none")
 ```
 
-where each clump is colored by a (nearly) distinct color
+where each clump (light outline) is colored by a (nearly) distinct color
 
-here it with clumps colored by clump group size
+here it is with clumps (light outline) colored by clump group size
 
 ```{r}
 hey_clump_pal <- 
@@ -271,6 +367,18 @@ hey_clump_pal <-
 # scales::show_col(pal_clump_n_trees_grp)
 
 ggplot2::ggplot(data = dta_temp) + 
+  # add clump outline
+  ggplot2::geom_sf(
+    data = 
+      clump_polys %>% 
+      dplyr::inner_join(
+        dta_temp %>% sf::st_drop_geometry() %>% dplyr::distinct(trtmnt_type,trtmnt_block,trtmnt_unit)
+        , by = dplyr::join_by(trtmnt_type,trtmnt_block,trtmnt_unit)
+      )
+    , fill = NA
+    , color = "gray88"
+  ) +
+  # add crowns
   ggplot2::geom_sf(mapping = ggplot2::aes(fill = clump_n_trees_grp), color = "gray") +
   ggplot2::scale_fill_manual(values = hey_clump_pal, name = "", drop = F) +
   ggplot2::labs(fill="") +
@@ -307,10 +415,9 @@ gc()
 
 ## Identify Openings
 
-Let's identify the gaps within a treatment unit. We'll identify openings based on their distance from the nearest tree crown where an opening is any area located at least 3 m from the nearest tree ([Churchill et al. 2016](https://scholarworks.umt.edu/ico/3)). This 3 m buffer accounts for the zone of immediate canopy influence and ensures that areas categorized as open are functionally distinct from the canopy. This threshold is flexible and can be adjusted to meet specific management or analysis objectives (e.g. flame length; wildlife corridors). 
+Let's identify the gaps within a treatment unit. We'll identify openings based on their distance from the nearest tree crown. We'll use this same `r my_buffer` m distance threshold in defining treeless openings, where each opening will be required to comprise continuous space at least `r my_buffer` m away from the nearest tree. This `r my_buffer` m buffer accounts for the zone of immediate canopy influence and ensures that areas categorized as open are functionally distinct from the canopy. This threshold is flexible and can be adjusted to meet specific management or analysis objectives (e.g. flame length; wildlife corridors). 
 
-First, we'll generate a distance raster where each cell represents the distance to the nearest tree clump group (i.e. crown) within the treatment unit boundary. Areas with a distance value of 3 m or greater are classified as openings and are defined by spatial connectedness, not a specific geometric shape. As such, they may be irregularly shaped as they are allowed to wind between clumps to follow a path where trees are distant. A single opening continues as long as the flow of open space is not entirely obstructed by surrounding tree groups. Once a gap is completely surrounded by canopy, the opening is closed off and is treated as a discrete spatial feature.
-
+First, we'll generate a distance raster where each cell represents the distance to the nearest tree clump group (i.e. crown) within the treatment unit boundary. Areas with a distance value of `r my_buffer` m or greater are classified as openings and are defined by spatial connectedness, not a specific geometric shape. As such, they may be irregularly shaped as they are allowed to wind between clumps to follow a path where trees are distant. A single opening continues as long as the flow of open space is not entirely obstructed by surrounding tree groups. Once a gap is completely surrounded by canopy, the opening is closed off and is treated as a discrete spatial feature.
 
 ```{r}
 # create function to pass a return from get_clump_summary() and get a distance raster
@@ -383,7 +490,7 @@ get_clump_dist_rast_ans <-
   purrr::map(
     \(x)
     get_clump_dist_rast_temp(
-      x, clump_dist_m = 3
+      x, clump_dist_m = my_buffer
     )
   )
 ```
@@ -503,6 +610,17 @@ plt_dist_rast_fn <-
               unq_units_df %>% dplyr::slice(x)
               , by = dplyr::join_by(trtmnt_type,trtmnt_block,trtmnt_unit)
             ) %>% 
+            dplyr::select(clump_n_trees_grp)
+          # , mapping = ggplot2::aes(fill = clump_n_trees_grp)
+          , color = "gray33"
+          , fill = NA
+        ) +
+        ggplot2::geom_sf(
+          data = crowns_sf %>% 
+            dplyr::inner_join(
+              unq_units_df %>% dplyr::slice(x)
+              , by = dplyr::join_by(trtmnt_type,trtmnt_block,trtmnt_unit)
+            ) %>% 
             dplyr::select(clump_n_trees_grp) %>% 
             dplyr::bind_rows(blank_df)
           , mapping = ggplot2::aes(fill = clump_n_trees_grp)
@@ -526,6 +644,7 @@ plt_dist_rast_fn <-
   }
 # one unit
 plt_dist_rast_fn(3, add_clumps = F)
+# plt_dist_rast_fn(3, add_clumps = T)
 ```
 
 ```{r, include=F, eval=F}
@@ -802,6 +921,17 @@ plt_openings_vect_fn <-
               unq_units_df %>% dplyr::slice(x)
               , by = dplyr::join_by(trtmnt_type,trtmnt_block,trtmnt_unit)
             ) %>% 
+            dplyr::select(clump_n_trees_grp)
+          # , mapping = ggplot2::aes(fill = clump_n_trees_grp)
+          , color = "gray33"
+          , fill = NA
+        ) +
+        ggplot2::geom_sf(
+          data = crowns_sf %>% 
+            dplyr::inner_join(
+              unq_units_df %>% dplyr::slice(x)
+              , by = dplyr::join_by(trtmnt_type,trtmnt_block,trtmnt_unit)
+            ) %>% 
             dplyr::select(clump_n_trees_grp) %>% 
             dplyr::bind_rows(blank_df)
           , mapping = ggplot2::aes(fill = clump_n_trees_grp)
@@ -825,6 +955,7 @@ plt_openings_vect_fn <-
   }
 # one unit
 plt_openings_vect_fn(3, add_clumps = F)
+# plt_openings_vect_fn(3, add_clumps = T)
 ```
 
 now we'll overlay the tree clump groups on the openings data for all units

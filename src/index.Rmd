@@ -73,7 +73,7 @@ library(tidyverse)
 # Uses the ~ shorthand for an anonymous function where .x is each file
 purrr::walk(
   rmd_files
-  # rmd_files[1:3]
+  # rmd_files[1:4]
   , ~ {
     message(paste0(.x,".R"))
     # temp_r_script <- file.path("c:/Users/georg/Downloads",paste0(.x,".R"))

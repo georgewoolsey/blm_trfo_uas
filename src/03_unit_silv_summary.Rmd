@@ -1,6 +1,94 @@
 # Treatment Unit Silvicultural Summary{#silv_sum}
 
-In this section, we're going to aggregate the detected trees by treatment unit to produce silvicultural summaries. Before we do that, we'll use pile predictions as a mask to remove smaller, detected "trees" that are actually piles or downed trees/debris so that we are only working with trees within units.
+In this section, we're going to aggregate the UAS-detected trees within the treatment units to produce silvicultural summaries.
+
+first, let's read in the UAS-delineated tree crown polygons as well so we have them for visualization and such
+
+```{r,eval=F,purl=FALSE}
+crowns_sf <-
+  cloud2trees:::search_dir_final_detected(dir = c2t_process_dir)[["crowns_flist"]] %>% 
+  purrr::map(function(x){
+    # read it
+    crowns_sf_temp <- sf::st_read(
+      dsn = x, quiet = TRUE
+      , query = 
+        sprintf(
+          "SELECT * FROM %s WHERE treeID IN (%s)"
+          , basename(x) %>% stringr::str_remove("^.*/") %>% stringr::str_remove("\\.[^.]+$")
+          , stringr::str_c("'", unique(treetops_sf$treeID), "'", collapse = ", ")
+        )
+    ) %>% 
+    # throw in hey_xxxxxxxxxx to test it works if we include non-existant columns
+    dplyr::select( dplyr::any_of(c(
+      "hey_xxxxxxxxxx"
+      , "treeID"
+      , "crown_area_m2"
+      , "crown_diameter_m"
+      , "tree_height_m"
+      , "tree_x"
+      , "tree_y"
+    )))
+    # check if cols exist
+    has_cols <- all(c("crown_area_m2", "crown_diameter_m") %in% names(crowns_sf_temp))
+    
+    if(!has_cols){
+      # get the crown data
+      crowns_sf_temp <- 
+        crowns_sf_temp %>% 
+        cloud2trees::simplify_multipolygon_crowns() %>% 
+        dplyr::mutate(
+          crown_area_m2 = sf::st_area(.) %>% as.numeric()
+        ) %>% 
+        cloud2trees:::st_calculate_diameter() %>% 
+        dplyr::rename(crown_diameter_m=diameter_m)
+      #write....FYI: this replaces the raw data from cloud2trees and excludes trees outside of the treatment units...
+      sf::st_write(obj=crowns_sf_temp, dsn = x, quiet = T, append = F)
+    }
+    
+    # return data
+    crowns_sf_temp <- crowns_sf_temp %>% 
+      dplyr::select(
+        treeID
+        , crown_area_m2
+        , crown_diameter_m
+      ) %>% 
+      dplyr::inner_join(
+        treetops_sf %>% 
+        sf::st_drop_geometry() %>% 
+        # throw in hey_xxxxxxxxxx to test it works if we include non-existant columns
+        dplyr::select( -dplyr::any_of(c(
+          "hey_xxxxxxxxxx"
+          , "crown_area_m2"
+          , "crown_diameter_m"
+        )))
+      )
+    return(crowns_sf_temp)
+    
+  }) %>% 
+  purrr::list_rbind()
+# crowns_sf %>% dplyr::glimpse()
+# crowns_sf %>% sf::st_drop_geometry() %>% dplyr::count(trtmnt_type)
+
+# add crown data to tree points
+treetops_sf <- 
+  treetops_sf %>% 
+  # throw in hey_xxxxxxxxxx to test it works if we include non-existant columns
+  dplyr::select( -dplyr::any_of(c(
+    "hey_xxxxxxxxxx"
+    , "crown_area_m2"
+    , "crown_diameter_m"
+  ))) %>% 
+  dplyr::left_join(
+    crowns_sf %>% 
+      sf::st_drop_geometry() %>% 
+      dplyr::select(
+        treeID
+        , crown_area_m2
+        , crown_diameter_m
+      )
+    , by = "treeID"
+  )
+```
 
 using our cleaned UAS-detected trees data, how many trees per treatment unit?
 
@@ -228,7 +316,7 @@ calc_silv_metrics <- function(tree_list, stand_area_ha = NULL, study_boundary = 
 }
 ```
 
-check out the data structure returned by the `calc_silv_metrics()` function
+check out the data structure returned by the `calc_silv_metrics()` function for a *single example treatment unit*
 
 ```{r}
 calc_silv_metrics(
@@ -244,6 +332,8 @@ calc_silv_metrics(
   ) %>% 
   dplyr::glimpse()
 ```
+
+neat...but remember, it might [not make sense to look at metrics reliant on tree DBH](#stand_acc) like basal area. As such, we'll focus these summaries on tree density measures and use tree height and crown physical measurements to explore the tree-level heterogeneity
 
 ```{r, warning=FALSE, message=FALSE, echo=FALSE, include=FALSE}
 remove(list = ls()[grep("_temp",ls())])
@@ -405,7 +495,7 @@ unit_sum_df %>%
   ggplot2::scale_fill_brewer(palette = "Dark2") +
   ggplot2::scale_x_continuous(labels = scales::comma) +
   ggplot2::theme_light() +
-  ggplot2::labs(x = "trees per ha", y = "") +
+  ggplot2::labs(x = "trees ha⁻¹", y = "") +
   ggplot2::theme(
     legend.position = "none"
     , axis.text.y = ggplot2::element_text(size = 7)
@@ -488,14 +578,14 @@ plt_metric_violin_fn <- function(df, metric_name, metric_label = NA) {
   )
 }
 # plot it
-plt_metric_violin_fn(unit_sum_df,"trees_per_ha",metric_label = "trees $ha^{-1}$")
+plt_metric_violin_fn(unit_sum_df,"trees_per_ha",metric_label = "trees ha⁻¹")
 # plt_metric_dist_fn(unit_sum_df,"trees_per_ha",metric_label = "trees $ha^{-1}$")
 ```
 
 since we also have imperial units let's see TPA
 
 ```{r}
-plt_metric_violin_fn(unit_sum_df,"trees_per_ac",metric_label = "trees $ac^{-1}$")
+plt_metric_violin_fn(unit_sum_df,"trees_per_ac",metric_label = "trees ac⁻¹")
 ```
 
 ```{r, include=FALSE, eval=FALSE}
@@ -512,11 +602,11 @@ plt_metric_violin_fn(unit_sum_df,"basal_area_ft2_per_ac",metric_label = "basal a
 
 distribution of individual tree height by treatment type (this groups all trees under the same treatment type together)
 
-```{r, fig.height=8}
+```{r,eval=F,purl=FALSE, fig.height=8}
 treetops_sf %>% 
   sf::st_drop_geometry() %>% 
   # dplyr::count(trtmnt_type, trtmnt_block)
-  dplyr::select(trtmnt_type, tree_height_m) %>% 
+  dplyr::select(trtmnt_type, tree_height_m, crown_diameter_m) %>% 
   tidyr::pivot_longer(cols = -c(trtmnt_type)) %>% 
   dplyr::mutate(
     name = dplyr::recode_values(
@@ -524,6 +614,7 @@ treetops_sf %>%
       , "tree_height_m" ~ "tree height (m)"
       , "dbh_cm" ~ "tree DBH (cm)"
       , "crown_area_m2" ~ "crown area (m²)"
+      , "crown_diameter_m" ~ "crown diam. (m)"
     )
   ) %>% 
   ggplot2::ggplot(
@@ -539,7 +630,7 @@ treetops_sf %>%
         sf::st_drop_geometry() %>%
         dplyr::group_by(trtmnt_type) %>%
         dplyr::summarise(dplyr::across(
-          .cols = c(tree_height_m) 
+          .cols = c(tree_height_m,crown_diameter_m) 
           , ~median(.x,na.rm=T)
         )) %>% 
         tidyr::pivot_longer(cols = -c(trtmnt_type)) %>% 
@@ -549,6 +640,7 @@ treetops_sf %>%
             , "tree_height_m" ~ "tree height (m)"
             , "dbh_cm" ~ "tree DBH (cm)"
             , "crown_area_m2" ~ "crown area (m²)"
+            , "crown_diameter_m" ~ "crown diam. (m)"
           )
         )
     , mapping = ggplot2::aes(xintercept = value)
@@ -658,7 +750,7 @@ treetops_sf %>%
 
 table it
 
-```{r}
+```{r,eval=F,purl=FALSE}
 tbl_df_temp <-
   treetops_sf %>% 
   sf::st_drop_geometry() %>%
@@ -668,7 +760,8 @@ tbl_df_temp <-
     dplyr::any_of(c(tidyselect::starts_with("trtmnt_")))
     , tidyselect::starts_with("dbh_")
       | tidyselect::starts_with("tree_height_")
-      | tidyselect::starts_with("tree_cbh_")
+      # | tidyselect::starts_with("tree_cbh_")
+      | tidyselect::starts_with("crown_diameter_")
       # | tidyselect::starts_with("crown_area_")
   ) %>%
   dplyr::group_by(
@@ -679,9 +772,9 @@ tbl_df_temp <-
       dplyr::where(is.numeric)
       , .fns = list(
         mean = ~mean(.x,na.rm=T)
+        , median = ~quantile(.x,na.rm=T,probs=0.5)
         , sd = ~sd(.x,na.rm=T)
         # , q10 = ~quantile(.x,na.rm=T,probs=0.1)
-        # , q50 = ~quantile(.x,na.rm=T,probs=0.5)
         # , q90 = ~quantile(.x,na.rm=T,probs=0.9)
         # , min = ~min(.x,na.rm=T)
         # , max = ~max(.x,na.rm=T)
@@ -761,7 +854,7 @@ crnw_shp_temp %>%
 
 ```
 
-```{r}
+```{r,eval=F,purl=FALSE}
 # table metric
 tbl_df_temp %>% 
   dplyr::select(
@@ -787,7 +880,7 @@ tbl_df_temp %>%
     )
     , col.names = c(
       " "
-      , rep(c("Mean","Std Dev","Range"), times = 2)
+      , rep(c("Mean","Median","Std Dev","Range"), times = 2)
     )
     , escape = F
   ) %>% 
@@ -795,15 +888,16 @@ tbl_df_temp %>%
   kableExtra::add_header_above(
     c(
       " "=1
-      # , "DBH (cm)" = 3
-      , "Height (m)" = 3
-      , "CBH (m)" = 3
+      # , "DBH (cm)" = 4
+      , "Height (m)" = 4
+      # , "CBH (m)" = 4
+      , "Crown diam. (m)" = 4
     )
     , escape = F
   ) %>% 
-  kableExtra::column_spec(seq(1,7,by=3), border_right = TRUE, include_thead = TRUE) %>% 
+  kableExtra::column_spec(seq(1,9,by=4), border_right = TRUE, include_thead = TRUE) %>% 
   kableExtra::column_spec(
-    column = 1:7
+    column = 1:9
     , extra_css = "font-size: 11px;"
     , include_thead = T
   ) %>% 
@@ -816,9 +910,8 @@ tbl_df_temp %>%
   )
 ```
 
-*imperial* units
-
-```{r}
+```{r, eval = F, include=FALSE}
+# *imperial* units
 # table metric
 tbl_df_temp %>% 
   dplyr::select(
@@ -926,9 +1019,9 @@ treetops_sf %>%
   calc_imperial_units_fn() %>% 
   # metric cuts/bins
   dplyr::mutate(
-    dbh_in_bin = ggplot2::cut_width(dbh_in, width = 2, boundary = 0) %>% 
+    dbh_in_bin = ggplot2::cut_width(dbh_in, width = 2, boundary = 0, closed = "left") %>% 
       make_bins_pretty(suffix = "in") # pretty that
-    # , tree_height_ft_bin = ggplot2::cut_width(tree_height_ft, width = 2, boundary = 0) %>% 
+    # , tree_height_ft_bin = ggplot2::cut_width(tree_height_ft, width = 2, boundary = 0, closed = "left") %>% 
     #   make_bins_pretty(" ft") # pretty that
   ) %>% 
   # dplyr::group_by(dplyr::across(
@@ -1012,7 +1105,7 @@ treetops_sf %>%
   calc_imperial_units_fn() %>% # get dbh inches
   # metric cuts/bins
   dplyr::mutate(
-    dbh_in_bin = ggplot2::cut_width(dbh_in, width = 2, boundary = 0) %>% 
+    dbh_in_bin = ggplot2::cut_width(dbh_in, width = 2, boundary = 0, closed = "left") %>% 
       make_bins_pretty(suffix = "in") # pretty that
   ) %>% 
   dplyr::count(trtmnt_type, dbh_in_bin) %>% 
@@ -1077,18 +1170,106 @@ treetops_sf %>%
 # ggplot2::ggsave("../data/explt.jpg", height = 7.5, width = 10.5, dpi = "print")
 ```
 
-TPH by height bins
+*metric* units: TPH by height bins
 
 ```{r}
 # plot 
 treetops_sf %>% 
   sf::st_drop_geometry() %>% 
   dplyr::select(trtmnt_type,tree_height_m) %>% 
-  calc_imperial_units_fn() %>% # get ft
   # metric cuts/bins
   dplyr::mutate(
-    tree_height_ft_bin = ggplot2::cut_width(tree_height_ft, width = 3, boundary = 0) %>% 
-      make_bins_pretty(suffix = "ft") # pretty that
+    tree_height_m_bin = ggplot2::cut_width(tree_height_m, width = 1, boundary = 0, closed = "left") %>% 
+      make_bins_pretty(suffix = "m") %>% 
+      forcats::fct_relabel(~ stringr::str_replace(.x, "^0-", paste0(min_tree_ht_m,"-")) )
+  ) %>% 
+  dplyr::count(trtmnt_type, tree_height_m_bin) %>% 
+  dplyr::ungroup() %>% 
+  # area by type
+  dplyr::inner_join(
+    unit_sum_df %>% 
+      dplyr::group_by(trtmnt_type) %>% 
+      dplyr::summarise(trtmnt_unit_area_ha=sum(trtmnt_unit_area_ha,na.rm=T))
+    , by = "trtmnt_type"
+  ) %>% 
+  dplyr::group_by(trtmnt_type) %>% 
+  dplyr::mutate(
+    pct = n/sum(n)
+    , tph = n/trtmnt_unit_area_ha
+    , lab = ifelse(
+      pct>0.02
+      , paste0(scales::comma(tph,accuracy=1), "\n",scales::percent(pct,accuracy=1) )
+      , ""
+    )
+  ) %>% 
+  dplyr::ungroup() %>% 
+  
+  ###### this makes sure the long tail isn't plotted :/
+  dplyr::group_by(trtmnt_type) %>%
+  dplyr::arrange(trtmnt_type,tree_height_m_bin) %>%
+  dplyr::mutate(cum = cumsum(pct)) %>%
+  dplyr::group_by(tree_height_m_bin) %>%
+  dplyr::filter(min(cum)<0.998) %>%
+  dplyr::ungroup() %>%
+  ###### this makes sure the long tail isn't plotted :/
+  
+  # dplyr::glimpse()
+  ggplot2::ggplot(
+    mapping = ggplot2::aes(y = tph, x = tree_height_m_bin)
+  ) +
+  ggplot2::geom_col(
+    mapping = ggplot2::aes(fill = trtmnt_type)
+    , width = 0.6
+    , color = NA, alpha = 0.8
+  ) +
+  ggplot2::geom_text(
+    mapping = ggplot2::aes(label = lab)
+    , color = "black", size = 2.5, vjust = -0.2
+  ) +
+  ggplot2::scale_fill_brewer(palette = "Dark2") +
+  # ggplot2::scale_x_discrete(drop = F) + 
+  ggplot2::scale_y_continuous(
+    # breaks = seq(0,1,by=0.2)
+    labels = scales::comma
+    , expand = ggplot2::expansion(mult = c(0,0.1))
+  ) +
+  ggplot2::facet_grid(
+    cols = dplyr::vars(trtmnt_type)
+    # , rows = dplyr::vars(trtmnt_block)
+    # , ncol = 2
+    , axes = "all"
+    # , switch = "y"
+  ) +
+  ggplot2::labs(
+    x = "tree height (m)", y = "trees ha⁻¹", fill = ""
+    , subtitle = "Trees per hectare by tree height bin"
+  ) +
+  ggplot2::theme_light() +
+  ggplot2::theme(
+    legend.position = "none"
+    , strip.text = ggplot2::element_text(size = 11, color = "black", face = "bold")
+    , axis.text.x = ggplot2::element_text(size = 8, angle = 45, hjust = 1, vjust = 1)
+    # , axis.text.x = ggplot2::element_text(size = 12)
+    # , axis.text.y = ggplot2::element_blank()
+    # , axis.ticks.y = ggplot2::element_blank()
+  )
+
+```
+
+*imperial* units: TPA by height bins
+
+```{r}
+# plot 
+treetops_sf %>% 
+  sf::st_drop_geometry() %>% 
+  dplyr::select(-c(tidyselect::contains("_ft"))) %>% 
+  calc_imperial_units_fn() %>% 
+  dplyr::select(trtmnt_type,tree_height_ft) %>% 
+  # metric cuts/bins
+  dplyr::mutate(
+    tree_height_ft_bin = ggplot2::cut_width(tree_height_ft, width = 3, boundary = 0, closed = "left") %>% 
+      make_bins_pretty(suffix = "ft") %>% 
+      forcats::fct_relabel(~ stringr::str_replace(.x, "^0-", paste0( floor(min_tree_ht_m*3.281) ,"-")) )
   ) %>% 
   dplyr::count(trtmnt_type, tree_height_ft_bin) %>% 
   dplyr::ungroup() %>% 
@@ -1099,13 +1280,11 @@ treetops_sf %>%
       dplyr::summarise(trtmnt_unit_area_ha=sum(trtmnt_unit_area_ha,na.rm=T))
     , by = "trtmnt_type"
   ) %>% 
-  calc_imperial_units_fn() %>% # get acres
+  calc_imperial_units_fn() %>% 
   dplyr::group_by(trtmnt_type) %>% 
   dplyr::mutate(
     pct = n/sum(n)
-    # , pct_lab = scales::percent(pct,accuracy=0.1)
     , tpa = n/trtmnt_unit_area_ac
-    , tph = n/trtmnt_unit_area_ha
     , lab = ifelse(
       pct>0.02
       , paste0(scales::comma(tpa,accuracy=1), "\n",scales::percent(pct,accuracy=1) )
@@ -1115,12 +1294,12 @@ treetops_sf %>%
   dplyr::ungroup() %>% 
   
   ###### this makes sure the long tail isn't plotted :/
-  dplyr::group_by(trtmnt_type) %>% 
-  dplyr::arrange(trtmnt_type,tree_height_ft_bin) %>% 
-  dplyr::mutate(cum = cumsum(pct)) %>% 
-  dplyr::group_by(tree_height_ft_bin) %>% 
-  dplyr::filter(min(cum)<0.998) %>% 
-  dplyr::ungroup() %>% 
+  dplyr::group_by(trtmnt_type) %>%
+  dplyr::arrange(trtmnt_type,tree_height_ft_bin) %>%
+  dplyr::mutate(cum = cumsum(pct)) %>%
+  dplyr::group_by(tree_height_ft_bin) %>%
+  dplyr::filter(min(cum)<0.998) %>%
+  dplyr::ungroup() %>%
   ###### this makes sure the long tail isn't plotted :/
   
   # dplyr::glimpse()
@@ -1151,7 +1330,7 @@ treetops_sf %>%
     # , switch = "y"
   ) +
   ggplot2::labs(
-    x = "tree height", y = "TPA", fill = ""
+    x = "tree height (ft)", y = "trees ac⁻¹", fill = ""
     , subtitle = "Trees per acre by tree height bin"
   ) +
   ggplot2::theme_light() +
@@ -1163,7 +1342,6 @@ treetops_sf %>%
     # , axis.text.y = ggplot2::element_blank()
     # , axis.ticks.y = ggplot2::element_blank()
   )
-# ggplot2::ggsave("../data/explt.jpg", height = 7.5, width = 10.5, dpi = "print")
 ```
 
 ```{r, warning=FALSE, message=FALSE, echo=FALSE, include=FALSE}
@@ -1173,35 +1351,15 @@ gc()
 
 ## Visual Crowns by Unit
 
-read in the crowns and keep only those we filtered for based on the tree top points (start of this section)
+function to plot using `terra` which is fast
 
 ```{r}
-crowns_sf <- 
-  cloud2trees:::search_dir_final_detected(dir = c2t_process_dir)[["crowns_flist"]] %>% 
-  purrr::map(function(x){
-    sf::st_read(
-      dsn = x
-      , quiet = T
-    ) %>%
-    dplyr::select(treeID) %>% 
-    dplyr::inner_join(
-      treetops_sf %>% sf::st_drop_geometry()
-      , by = "treeID"
-    )
-  }) %>%
-  dplyr::bind_rows() %>% 
-  cloud2trees::simplify_multipolygon_crowns()
-# crowns_sf %>% dplyr::glimpse()
 # unique units
 unq_units_df <- treetops_sf %>% 
   sf::st_drop_geometry() %>% 
   dplyr::distinct(trtmnt_block,trtmnt_type,trtmnt_unit) %>% 
   dplyr::arrange(trtmnt_block,trtmnt_type,trtmnt_unit)
-```
 
-function to plot using `terra` which is fast
-
-```{r}
 # function to plot ortho
 terra_plt_ortho <- function(
   ortho
@@ -1246,7 +1404,9 @@ terra_plt_ortho <- function(
       crowns %>% 
         sf::st_transform(terra::crs(ortho)) %>% 
         terra::vect()
-      , add = T, border = "cyan", col = NA, lwd = 0.6
+      , add = T
+      , border = harrypotter::hp(n=2, option="hermionegranger")[2] # "cyan"
+      , col = NA, lwd = 0.6
     )
   }
 }

@@ -3120,6 +3120,8 @@ stand_temp %>%
 
 Should we even be calculating basal area for pinyon-juniper systems? Traditional silvicultural metrics like basal area and volume are not particularly useful for managing these woodlands because the trees/shrubs feature highly irregular, multi-stemmed growth forms. Furthermore, field inventories like FIA measure diameter at root collar (DRC) instead of standard diameter at breast height (DBH) and then convert those metrics using regional allometric equations. Because of this, it is probably inappropriate for us to quantify the accuracy of UAS-predicted DBH, which is modeled using a height-to-DBH equation from local FIA data, against field-calculated DBH values derived from converted DRC measurements. Instead, modern management evaluations in these pinyon-juniper systems prioritize tree density measurements and canopy clump configurations to analyze structural and spatial patterns. This focus on horizontal canopy architecture, tracking trees per hectare and interspace connectivity, provides a much more direct and ecologically meaningful way to evaluate ecosystem health and fire risk across these arid landscapes.
 
+## Canopy Cover Evaluation{#cc_eval}
+
 Let's shift our focus to evaluating UAS-predicted canopy cover compared to field-measured values. Recall that [to obtain field-measured canopy cover](#ref_field_dta), we averaged the field-recorded horizontal crown length and width to approximate a circular diameter, used that diameter to calculate a 2D circular crown area for each tree, and determined the proportion of each plot covered by these assumed circular crowns. For each plot, we'll compare this proportion to the canopy cover predicted by the UAS using trees whose tree-top points fall within the plot boundaries irrespective of if a tree was matched as a true positive in our instance matching evaluation. Requiring the tree-top point to fall within the plot mimics the field technique of only measuring stems located inside the plot boundaries. The main caveats attached to this canopy cover accuracy evaluation are that measuring crown dimensions accurately using manual ground techniques is notoriously difficult, and the simple circular shape assumption rarely matches the irregular crown morphologies found in the real-world ([Rautiainen et al. 2008](https://doi.org/10.14214/sf.261); [Gallardo-Salazar & Pompa-García 2020](https://doi.org/10.3390/rs12244144); [Ren et al. 2024](https://doi.org/10.1111/2041-210X.14401)).
 
 ```{r}
@@ -3740,5 +3742,12 @@ treatment intensity seems to have minimal impact on the spatial agreement betwee
 
 ```{r, warning=FALSE, message=FALSE, echo=FALSE, include=FALSE}
 remove(list = ls()[grep("_temp",ls())])
+remove(
+  agg_ground_truth_match_ans,agg_ground_truth_match_by_type_ans,ground_truth_prediction_match_ans
+  , gt_pred_match_map_ans, piles_workflow_ans
+  , validation_plots, validation_plots_polygons, validation_trees
+  , agg_ground_truth_match, confusion_matrix_scores_fn, ground_truth_prediction_match, reference_prediction_match
+  , validate_df_fn
+)
 gc()
 ```
