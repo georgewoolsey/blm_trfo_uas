@@ -1018,87 +1018,6 @@ gc()
 
 let's get some summary stats of the tree clump groupings by treatment type
 
-```{r, include=F, eval=F}
-# create function to summarize metrics within clump group
-get_clump_summary_temp <- function(x){
-  # create clump polys and summary
-  clump_polys_temp <-
-    crowns_sf %>% 
-      sf::st_drop_geometry() %>% 
-      dplyr::ungroup() %>% 
-      dplyr::inner_join(
-        unq_units_df %>% dplyr::slice(x)
-        , by = dplyr::join_by(trtmnt_type,trtmnt_block,trtmnt_unit)
-      ) %>% 
-      # dplyr::glimpse()
-      dplyr::group_by(trtmnt_type,trtmnt_block,trtmnt_unit,clump_id,clump_n_trees_grp) %>% 
-      dplyr::summarise(
-        # summary metrics
-        n_trees = dplyr::n_distinct(treeID)
-        , mean_dbh_cm = mean(dbh_cm, na.rm = T)
-        , min_dbh_cm = min(dbh_cm, na.rm = T)
-        , max_dbh_cm = max(dbh_cm, na.rm = T)
-        , mean_tree_height_m = mean(tree_height_m, na.rm = T)
-        , min_tree_height_m = min(tree_height_m, na.rm = T)
-        , max_tree_height_m = max(tree_height_m, na.rm = T)
-        , loreys_height_m = sum(basal_area_m2*tree_height_m, na.rm = T) / sum(basal_area_m2, na.rm = T)
-        , basal_area_m2 = sum(basal_area_m2, na.rm = T)
-        , sum_dbh_cm_sq = sum(dbh_cm^2, na.rm = T)
-        , .groups = "drop_last"
-      ) %>%
-      dplyr::ungroup() %>% 
-      # join clump area
-      dplyr::inner_join(
-        clump_polys %>% 
-          dplyr::ungroup() %>% 
-          dplyr::inner_join(
-            unq_units_df %>% dplyr::slice(x)
-            , by = dplyr::join_by(trtmnt_type,trtmnt_block,trtmnt_unit)
-          ) %>% 
-          dplyr::mutate(area = sf::st_area(.) %>% as.numeric()) %>% 
-          sf::st_drop_geometry() %>% 
-          dplyr::group_by(trtmnt_type,trtmnt_block,trtmnt_unit,clump_id) %>% 
-          dplyr::summarise(clump_area_ha = sum(area,na.rm = T)/10000, .groups = "drop_last") %>% 
-          dplyr::ungroup()
-        , by = dplyr::join_by(trtmnt_type,trtmnt_block,trtmnt_unit,clump_id)
-      ) %>% 
-      dplyr::mutate(
-        trees_per_ha = (n_trees/clump_area_ha)
-        , basal_area_m2_per_ha = (basal_area_m2/clump_area_ha)
-        , pct_stand_basal_area = basal_area_m2/sum(basal_area_m2)
-        , pct_stand_n_trees = n_trees/sum(n_trees)
-        , qmd_cm = sqrt(sum_dbh_cm_sq/n_trees)
-      ) %>%
-      dplyr::select(-c(sum_dbh_cm_sq)) %>% 
-    # convert to imperial units
-      calc_imperial_units_fn() %>% 
-      dplyr::mutate(clump_dist_m = 3)
-  # # calculate distance between clumps
-  # clump_polys_temp <- clump_polys_temp %>% 
-  #   dplyr::mutate(
-  #     nearest = sf::st_nearest_feature(clump_polys_temp)
-  #     , distance_nearest_clump_m = sf::st_distance(
-  #         clump_polys_temp
-  #         , clump_polys_temp[nearest,]
-  #         , by_element=TRUE
-  #       ) %>% 
-  #       as.numeric()
-  #   ) %>% 
-  #   dplyr::select(-c(nearest))
-  # return
-  return(clump_polys_temp)
-}
-# get_clump_summary_temp(1) %>% dplyr::glimpse()
-# crowns_sf %>% 
-#   sf::st_drop_geometry() %>% 
-#   dplyr::inner_join(
-#     unq_units_df %>% dplyr::slice(1)
-#     , by = dplyr::join_by(trtmnt_type,trtmnt_block,trtmnt_unit)
-#   ) %>% 
-#   dplyr::distinct(clump_id) %>% 
-#   nrow()
-```
-
 ```{r}
 # create a function to summarize by number of tree clump grouping
 get_clump_n_trees_grp_summary_temp = function(x){
@@ -1137,25 +1056,26 @@ get_clump_n_trees_grp_summary_temp = function(x){
       n_trees = dplyr::n_distinct(treeID)
       , mean_dbh_cm = mean(dbh_cm, na.rm = T)
       , mean_tree_height_m = mean(tree_height_m, na.rm = T)
-      , loreys_height_m = sum(basal_area_m2*tree_height_m, na.rm = T) / sum(basal_area_m2, na.rm = T)
-      , basal_area_m2 = sum(basal_area_m2, na.rm = T)
-      , sum_dbh_cm_sq = sum(dbh_cm^2, na.rm = T)
+      , mean_crown_diameter_m = mean(crown_diameter_m, na.rm = T)
+      # , loreys_height_m = sum(basal_area_m2*tree_height_m, na.rm = T) / sum(basal_area_m2, na.rm = T)
+      # , basal_area_m2 = sum(basal_area_m2, na.rm = T)
+      # , sum_dbh_cm_sq = sum(dbh_cm^2, na.rm = T)
       , .groups = "drop_last"
     ) %>%
     dplyr::ungroup() %>% 
     dplyr::mutate(
       trees_per_ha = (n_trees/stand_area_ha) # (n_trees/clump_area_ha) ... this was not right
-      , basal_area_m2_per_ha = (basal_area_m2/stand_area_ha) # (basal_area_m2/clump_area_ha) ... this was not right
-      , qmd_cm = sqrt(sum_dbh_cm_sq/n_trees)
+      # , basal_area_m2_per_ha = (basal_area_m2/stand_area_ha) # (basal_area_m2/clump_area_ha) ... this was not right
+      # , qmd_cm = sqrt(sum_dbh_cm_sq/n_trees)
       # stand calcs
       , stand_trees_per_ha = sum(n_trees)/stand_area_ha
-      , stand_basal_area_m2 = sum(basal_area_m2)
-      , stand_basal_area_m2_per_ha = sum(basal_area_m2)/stand_area_ha
-      , pct_stand_basal_area = basal_area_m2/stand_basal_area_m2
+      # , stand_basal_area_m2 = sum(basal_area_m2)
+      # , stand_basal_area_m2_per_ha = sum(basal_area_m2)/stand_area_ha
+      # , pct_stand_basal_area = basal_area_m2/stand_basal_area_m2
       , pct_stand_n_trees = n_trees/sum(n_trees)
-      , stand_qmd_cm = sqrt(sum(get_tree_clumps_ans$dbh_cm^2, na.rm = T)/sum(n_trees))
+      # , stand_qmd_cm = sqrt(sum(get_tree_clumps_ans$dbh_cm^2, na.rm = T)/sum(n_trees))
     ) %>%
-    dplyr::select(-c(sum_dbh_cm_sq)) %>% 
+    # dplyr::select(-c(sum_dbh_cm_sq)) %>% 
     # convert to imperial units
     calc_imperial_units_fn()
   # fill in missing
@@ -1197,7 +1117,7 @@ get_clump_n_trees_grp_summary_temp = function(x){
 what does this do?
 
 ```{r}
-get_clump_n_trees_grp_summary_temp(1) %>% dplyr::glimpse()
+get_clump_n_trees_grp_summary_temp(3) %>% dplyr::glimpse()
 ```
 
 let's map over it for each treatment unit
@@ -1217,16 +1137,23 @@ clump_n_trees_grp_summary %>%
   dplyr::select(
     trtmnt_block,trtmnt_type,trtmnt_unit,clump_n_trees_grp
     , n_trees
-    , mean_dbh_in
-    , qmd_in
-    , mean_tree_height_ft
-    , loreys_height_ft
-    , trees_per_ac
-    , basal_area_ft2_per_ac, pct_stand_basal_area, pct_stand_n_trees
+    # , stand_trees_per_ha
+    # , mean_dbh_cm
+    # , qmd_cm
+    , mean_tree_height_m
+    , mean_crown_diameter_m
+    # , loreys_height_m
+    , trees_per_ha
+    # , basal_area_ft2_per_ac, pct_stand_basal_area
+    , pct_stand_n_trees
   ) %>% 
   dplyr::mutate(
     dplyr::across(
-      .cols = c(pct_stand_basal_area, pct_stand_n_trees) 
+      .cols = c(n_trees)
+      , .fns = ~ scales::comma(.x, accuracy = 1)
+    )
+    , dplyr::across(
+      .cols = tidyselect::starts_with("pct_")
       , .fns = ~ scales::percent(.x, accuracy = 1)
     )
   ) %>% 
@@ -1239,13 +1166,15 @@ clump_n_trees_grp_summary %>%
     , col.names = c(
        "block","type","unit"
       , "clump size", "trees"
-      , "mean<br>DBH (in)"
-      , "QMD (in)"
-      , "mean<br>Ht. (ft)"
-      , "Loreys<br>Ht. (ft)"
-      , "TPA"
-      , "BA<br>ft<sup>2</sup> ac<sup>-1</sup>"
-      , "Pct<br>stand BA"
+      # , "mean<br>DBH (in)"
+      # , "QMD (in)"
+      , "mean<br>Ht. (m)"
+      # , "Loreys<br>Ht. (m)"
+      , "mean<br>Crown diam. (m)"
+      # , "TPA"
+      , "trees ha<sup>-1</sup>"
+      # , "BA<br>ft<sup>2</sup> ac<sup>-1</sup>"
+      # , "Pct<br>stand BA"
       , "Pct<br>stand trees"
       )
   ) %>% 
@@ -1277,12 +1206,12 @@ clump_n_trees_grp_summary %>%
     # , pct_lab = scales::percent(pct,accuracy=0.1)
     , tpa = n/trtmnt_unit_area_ac
     , tph = n/trtmnt_unit_area_ha
-    , lab = paste0(scales::comma(tpa,accuracy=1), "\n",scales::percent(pct,accuracy=1) )
+    , lab = paste0(scales::comma(tph,accuracy=1), "\n",scales::percent(pct,accuracy=1) )
   ) %>% 
   dplyr::ungroup() %>% 
   # dplyr::glimpse()
   ggplot2::ggplot(
-    mapping = ggplot2::aes(y = tpa, x = clump_n_trees_grp)
+    mapping = ggplot2::aes(y = tph, x = clump_n_trees_grp)
   ) +
   ggplot2::geom_col(
     mapping = ggplot2::aes(fill = trtmnt_type)
@@ -1308,8 +1237,8 @@ clump_n_trees_grp_summary %>%
     # , switch = "y"
   ) +
   ggplot2::labs(
-    x = "tree clump size", y = "TPA", fill = ""
-    , subtitle = "Trees per acre by tree clump size"
+    x = "tree clump size", y = "trees ha⁻¹", fill = ""
+    , subtitle = "Trees per hectare by tree clump size"
   ) +
   ggplot2::theme_light() +
   ggplot2::theme(
@@ -1329,7 +1258,7 @@ clump_n_trees_grp_summary %>%
   dplyr::ungroup() %>% 
   # dplyr::glimpse()
   ggplot2::ggplot(
-    mapping = ggplot2::aes(y = trees_per_ac, x = clump_n_trees_grp)
+    mapping = ggplot2::aes(y = trees_per_ha, x = clump_n_trees_grp)
   ) +
   ggplot2::geom_boxplot(
     mapping = ggplot2::aes(fill = trtmnt_type)
@@ -1356,8 +1285,8 @@ clump_n_trees_grp_summary %>%
     # , switch = "y"
   ) +
   ggplot2::labs(
-    x = "tree clump size", y = "TPA", fill = ""
-    , subtitle = "Distribution of trees per acre by tree clump size"
+    x = "tree clump size", y = "trees ha⁻¹", fill = ""
+    , subtitle = "Distribution of trees per hectare by tree clump size"
   ) +
   ggplot2::theme_light() +
   ggplot2::theme(
@@ -1370,7 +1299,173 @@ clump_n_trees_grp_summary %>%
   )
 ```
 
-this is neat, let's check out the same type of plot but look at the tree measurements within the different clump sizes
+this is neat, let's check out the same type of plot but look at the proportion of unit-level trees within the different clump sizes
+
+```{r}
+clump_n_trees_grp_summary %>% 
+  dplyr::ungroup() %>% 
+  # dplyr::glimpse()
+  ggplot2::ggplot(
+    mapping = ggplot2::aes(y = pct_stand_n_trees, x = clump_n_trees_grp)
+  ) +
+  ggplot2::geom_boxplot(
+    mapping = ggplot2::aes(fill = trtmnt_type)
+    , width = 0.6
+    , alpha = 0.8
+    , outliers = F
+  ) +
+  # ggplot2::geom_text(
+  #   mapping = ggplot2::aes(label = lab)
+  #   , color = "black", size = 2.5, vjust = -0.2
+  # ) +
+  ggplot2::scale_fill_brewer(palette = "Dark2") +
+  ggplot2::scale_x_discrete(drop = F) + 
+  ggplot2::scale_y_continuous(
+    # breaks = seq(0,1,by=0.2)
+    labels = scales::percent
+    , expand = ggplot2::expansion(mult = c(0,0.1))
+  ) +
+  ggplot2::facet_grid(
+    cols = dplyr::vars(trtmnt_type)
+    # , rows = dplyr::vars(trtmnt_block)
+    # , ncol = 2
+    , axes = "all"
+    # , switch = "y"
+  ) +
+  ggplot2::labs(
+    x = "tree clump size", y = "proportion of unit trees", fill = ""
+    , subtitle = "Distribution of unit-level tree proportions by tree clump size"
+  ) +
+  ggplot2::theme_light() +
+  ggplot2::theme(
+    legend.position = "none"
+    , strip.text = ggplot2::element_text(size = 11, color = "black", face = "bold")
+    , axis.text.x = ggplot2::element_text(size = 9, angle = 45, hjust = 1, vjust = 1)
+    # , axis.text.x = ggplot2::element_text(size = 12)
+    # , axis.text.y = ggplot2::element_blank()
+    # , axis.ticks.y = ggplot2::element_blank()
+  )
+```
+
+we can aggregate those proportions over all units in a given treatment type
+
+```{r}
+clump_n_trees_grp_summary %>% 
+  dplyr::group_by(trtmnt_type, clump_n_trees_grp) %>% 
+  dplyr::summarise(n = sum(n_trees)) %>% 
+  dplyr::group_by(trtmnt_type) %>% 
+  dplyr::mutate(
+    pct = n/sum(n)
+  ) %>% 
+  dplyr::ungroup() %>% 
+  # dplyr::glimpse()
+  ggplot2::ggplot(
+    mapping = ggplot2::aes(y = pct, x = clump_n_trees_grp)
+  ) +
+  ggplot2::geom_col(
+    mapping = ggplot2::aes(fill = trtmnt_type)
+    , width = 0.6
+    , color = NA, alpha = 0.8
+  ) +
+  ggplot2::geom_text(
+    mapping = ggplot2::aes(label = scales::percent(pct,accuracy = 0.1))
+    , color = "black", size = 2.5, vjust = -0.2
+  ) +
+  ggplot2::scale_fill_brewer(palette = "Dark2") +
+  ggplot2::scale_x_discrete(drop = F) + 
+  ggplot2::scale_y_continuous(
+    # breaks = seq(0,1,by=0.2)
+    labels = scales::percent
+    , expand = ggplot2::expansion(mult = c(0,0.1))
+  ) +
+  ggplot2::facet_grid(
+    cols = dplyr::vars(trtmnt_type)
+    # , rows = dplyr::vars(trtmnt_block)
+    # , ncol = 2
+    , axes = "all"
+    # , switch = "y"
+  ) +
+  ggplot2::labs(
+    x = "tree clump size", y = "proportion of trees¹", fill = ""
+    , subtitle = "Study-wide tree proportions by tree clump size"
+  ) +
+  ggplot2::theme_light() +
+  ggplot2::theme(
+    legend.position = "none"
+    , strip.text = ggplot2::element_text(size = 11, color = "black", face = "bold")
+    , axis.text.x = ggplot2::element_text(size = 9, angle = 45, hjust = 1, vjust = 1)
+    # , axis.text.x = ggplot2::element_text(size = 12)
+    # , axis.text.y = ggplot2::element_blank()
+    # , axis.ticks.y = ggplot2::element_blank()
+  )
+```
+
+we can look at that same data in a slightly different way
+
+```{r}
+clump_n_trees_grp_summary %>% 
+  dplyr::group_by(trtmnt_type, clump_n_trees_grp) %>% 
+  dplyr::summarise(n = sum(n_trees)) %>% 
+  dplyr::group_by(trtmnt_type) %>% 
+  dplyr::mutate(
+    pct = n/sum(n)
+  ) %>% 
+  dplyr::ungroup() %>% 
+  dplyr::select(trtmnt_type, clump_n_trees_grp, pct) %>% 
+  dplyr::mutate(
+    pct_lab = scales::percent(ifelse(pct>=0.08,pct,NA), accuracy = 1)
+    , trtmnt_type = forcats::fct_rev(trtmnt_type)
+    , clump_n_trees_grp = forcats::fct_rev(clump_n_trees_grp)
+    , huh = ifelse(
+      clump_n_trees_grp %in% c(">10 trees","5-10 trees")
+      , "white"
+      , "black"
+    )
+  ) %>% 
+ggplot2::ggplot(
+  mapping = ggplot2::aes(x = pct, y = trtmnt_type, fill=clump_n_trees_grp, group=clump_n_trees_grp)
+) +
+  ggplot2::geom_col(
+    width = 0.7, alpha=0.95
+  ) +
+  ggplot2::geom_text(
+    mapping = aes(
+        label = pct_lab
+        , color = huh
+        , fontface = "bold"
+      )
+    , position = ggplot2::position_stack(vjust = 0.5)
+    # , color = "black"
+    , size = 4
+  ) +
+  ggplot2::scale_fill_manual(values = hey_clump_pal) +
+  ggplot2::scale_color_identity() +
+  ggplot2::scale_x_continuous(labels = scales::percent_format()) +
+  ggplot2::labs(
+    fill = "clump\nsize"
+    , y = ""
+    , x = "proportion of trees in different sized clumps"
+    , subtitle = "Study-wide tree proportions by tree clump size"
+  ) +
+  ggplot2::theme_light() +
+  ggplot2::theme(
+    legend.position = "top"
+    , legend.direction  = "horizontal"
+    , legend.title = element_text(size=7)
+    , axis.title.x = element_text(size=10, face = "bold")
+    , axis.text.x = element_blank()
+    , axis.ticks.x = element_blank()
+    , axis.text.y = ggplot2::element_text(size = 9, face = "bold")
+  ) +
+  ggplot2::guides(
+    fill = ggplot2::guide_legend(
+      # nrow = 2, byrow = T, 
+      reverse = T
+      # , override.aes = list(alpha = 0.9)
+    )
+  )
+```
+
 
 ```{r, eval=F, include=F}
 # *DBH* 
@@ -1422,17 +1517,17 @@ crowns_sf %>%
   )
 ```
 
-*height* 
+finally, let's check out the distribution of tree sizes within the different clump size groups by treatment type
 
 ```{r}
 crowns_sf %>% 
   sf::st_drop_geometry() %>% 
   dplyr::ungroup() %>%
   dplyr::select(trtmnt_type, clump_n_trees_grp, tree_height_m) %>% 
-  calc_imperial_units_fn() %>% 
+  # calc_imperial_units_fn() %>% 
   # dplyr::glimpse()
   ggplot2::ggplot(
-    mapping = ggplot2::aes(y = tree_height_ft, x = clump_n_trees_grp)
+    mapping = ggplot2::aes(y = tree_height_m, x = clump_n_trees_grp)
   ) +
   ggplot2::geom_boxplot(
     mapping = ggplot2::aes(fill = trtmnt_type)
@@ -1459,7 +1554,7 @@ crowns_sf %>%
     # , switch = "y"
   ) +
   ggplot2::labs(
-    x = "tree clump size", y = "height (ft)", fill = ""
+    x = "tree clump size", y = "tree height (m)", fill = ""
     , subtitle = "Distribution of tree height by tree clump size"
   ) +
   ggplot2::theme_light() +
@@ -1477,15 +1572,22 @@ for the most part, those are very wide distributions but interesting to compare 
 
 ## Openings Summary
 
-lastly, we'll look at the openings information
+lastly, we'll look at the openings information. 
+
+we define openings as contiguous spatial areas that originate `r my_buffer` m away from the nearest tree crown. Although these openings may form highly sinuous (“wavy”) corridors winding through tree clump groups, they are closed-off wherever the flow of open space is entirely obstructed by surrounding tree groups. Once a gap is completely surrounded by canopy, the opening is closed off and is treated as a discrete spatial feature. We also require that an opening must have an area greater than 40.5 square meters (0.01 acres) to be considered an actual opening.
 
 ```{r}
+my_min_openining_area_m2 <- 0.01*4047 # 1/100 of an acre where 4047=sq m in 1 acre
+
 open_full_temp <- 
   get_clump_dist_rast_ans %>% 
   purrr::map(purrr::pluck("openings_vect")) %>%
   purrr::list_rbind(names_to = "row_num") %>% 
   sf::st_drop_geometry() %>% 
-  dplyr::inner_join(unq_units_df %>% dplyr::mutate(row_num = dplyr::row_number()), by = "row_num")
+  dplyr::inner_join(unq_units_df %>% dplyr::mutate(row_num = dplyr::row_number()), by = "row_num") %>% 
+  dplyr::filter(
+    openining_area_m2 > my_min_openining_area_m2
+  )
 # dplyr::glimpse(open_full_temp)
 open_temp <- 
   open_full_temp %>% 
@@ -1526,7 +1628,7 @@ open_temp %>%
   )
 ```
 
-and we can look at the distribution of the proportion of the stand that is open (i.e. >= 3m away from the nearest tree)
+and we can look at the distribution of the proportion of the stand that is open
 
 ```{r}
 open_temp %>% 
@@ -1558,7 +1660,7 @@ open_temp %>%
   )
 ```
 
-interesting
+this is what we expected based on the treatment type prescriptions.
 
 let's table this by unit (which is the underlying data used to generate the distribution immediately above)
 
@@ -1654,4 +1756,38 @@ open_temp %>%
   )) %>% 
   kableExtra::column_spec(c(3,8), border_right = TRUE, include_thead = TRUE) 
 ```
+
+let's check out the raw size areas of the individual openings even though there is variation in the size of the treatment units which influences how large an opening can be
+
+```{r}
+open_full_temp %>% dplyr::glimpse()
+  ggplot2::ggplot(mapping = ggplot2::aes(x=pct_open)) +
+  ggplot2::geom_violin(
+    mapping = ggplot2::aes(y = 0, fill=trtmnt_type)
+    , alpha = 0.8, color = NA
+  ) +
+  ggplot2::geom_boxplot(width = 0.1, fill = NA, outliers = F) +
+  ggplot2::facet_grid(
+    rows = dplyr::vars(trtmnt_type)
+    , axes = "all"
+    , switch = "y"
+  ) +
+  ggplot2::scale_fill_brewer(palette = "Dark2") +
+  ggplot2::scale_x_continuous(limits=c(0,NA),labels = scales::percent) +
+  ggplot2::scale_y_continuous(NULL,breaks=NULL) +
+  ggplot2::labs(
+    fill="",x="% unit open",y=""
+    , title = "distribution of treatment unit open area"
+    , subtitle = "\nby treatment type"
+  ) +
+  ggplot2::theme_light() +
+  ggplot2::theme(
+    legend.position = "none"
+    , strip.text = ggplot2::element_text(size = 10, color = "black", face = "bold")
+    , axis.text.x = ggplot2::element_text(size = 9)
+    , plot.subtitle = ggplot2::element_text(margin = ggplot2::margin(t = -20, unit = "pt"))
+  )
+```
+
+
 

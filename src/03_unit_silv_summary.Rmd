@@ -4,7 +4,8 @@ In this section, we're going to aggregate the UAS-detected trees within the trea
 
 first, let's read in the UAS-delineated tree crown polygons as well so we have them for visualization and such
 
-```{r,eval=F,purl=FALSE}
+```{r}
+# ```{r,eval=F,purl=FALSE}
 crowns_sf <-
   cloud2trees:::search_dir_final_detected(dir = c2t_process_dir)[["crowns_flist"]] %>% 
   purrr::map(function(x){
