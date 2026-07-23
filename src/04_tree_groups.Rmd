@@ -17,9 +17,9 @@ gc()
 ## Group Tree Crowns
 
 While some research on tree spatial patterns use tree point locations buffered with a fixed radius (e.g. 3 m) to approximate the crown radius of a "typical" overstory tree
-(e.g. [Churchill et al. (2016)](https://scholarworks.umt.edu/ico/3)), we'll use the irregular (more realistic?) crown shapes identified from the aerial data to determine tree clump groups.
+(e.g. [Churchill et al. (2016)](https://scholarworks.umt.edu/ico/3)), we'll use the irregular, more realistic crown shapes identified from the aerial data to determine tree clump groups.
 
-Remember we are only looking at what could be considered "overstory" trees since we filtered the tree list to keep only trees that meet a certain minimum height
+Remember we are only looking at what could be considered "overstory" trees since we filtered the tree list to keep only trees that meet a certain minimum height threshold of `r min_tree_ht_m` m
 
 ```{r, echo=T}
 treetops_sf %>% 
@@ -644,7 +644,12 @@ plt_dist_rast_fn <-
   }
 # one unit
 plt_dist_rast_fn(3, add_clumps = F)
-# plt_dist_rast_fn(3, add_clumps = T)
+```
+
+and here is the distance raster with the tree clump groups overlaid
+
+```{r}
+plt_dist_rast_fn(3, add_clumps = T)
 ```
 
 ```{r, include=F, eval=F}
@@ -743,6 +748,83 @@ plt_dist_rast_fn <-
 #   purrr::walk(plt_dist_rast_fn)
 plt_dist_rast_fn(4)
 ```
+
+let's zoom in on a single clump group and the surrounding area so we can see what is going on at the fine-scale level
+
+```{r}
+aoi_temp <- 
+  clump_polys %>% 
+  sf::st_intersection(
+    clump_polys %>% 
+      dplyr::inner_join(
+        unq_units_df %>% dplyr::slice(3)
+        , by = dplyr::join_by(trtmnt_type,trtmnt_block,trtmnt_unit)
+      ) %>% 
+      sf::st_union() %>% 
+      sf::st_centroid() %>% 
+      sf::st_buffer(sqrt(2500/4),endCapStyle = "SQUARE") ## numerator = desired plot size in m2) %>% 
+  ) %>% 
+  dplyr::arrange(
+    desc(sf::st_area(.))
+  ) %>% 
+  dplyr::slice(2) %>% 
+  sf::st_buffer(6.35) %>% 
+  sf::st_bbox() %>% 
+  sf::st_as_sfc()
+# as.numeric(sf::st_area(aoi_temp))/10000
+d_temp <- get_clump_dist_rast_ans[[3]][["dist_rast"]]
+# dist rast
+d_temp %>% 
+   terra::crop(
+    aoi_temp %>% 
+      sf::st_transform(terra::crs(d_temp)) %>% 
+      terra::vect()
+    , mask=T
+  ) %>% 
+  terra::plot(
+    col = harrypotter::hp(n=100,option="mischief")
+    , axes = F
+    , plg = list(
+        title = "distance to\nnearest tree (m)"
+        , cex = 0.8, title.cex = 0.5
+        , x = "right", shrink = 0.6
+      )
+    , main = paste0("Example ", scales::comma(as.numeric(sf::st_area(aoi_temp))/10000, accuracy = 0.01), " ha area")
+    # , loc.main = "topleft"
+    , cex.main = 0.8
+  )
+# add clumps
+clump_polys %>% 
+  sf::st_intersection(aoi_temp) %>% 
+  sf::st_transform(terra::crs(d_temp)) %>% 
+  terra::vect() %>% 
+  terra::plot(add = T, col = NA, border = "gray33", lwd = 1.3)
+# add crowns
+cr_temp <- 
+  crowns_sf %>% 
+  sf::st_intersection(aoi_temp)
+
+cr_temp %>% 
+  sf::st_transform(terra::crs(d_temp)) %>% 
+  terra::vect() %>% 
+  terra::plot(
+    add = T, y = "clump_n_trees_grp"
+    , col = hey_clump_pal[cr_temp$clump_n_trees_grp]
+    , border = "gray88", lwd = 0.2
+    , plg = list(
+      x = "topright"
+      , text.col = "gray88"
+    )
+  )
+# add trees
+treetops_sf %>% 
+  sf::st_intersection(aoi_temp) %>% 
+  sf::st_transform(terra::crs(d_temp)) %>% 
+  terra::vect() %>% 
+  terra::plot(add = T, col = "gray88", cex = 0.5)
+```
+
+we zoomed in on a `r scales::comma(as.numeric(sf::st_area(aoi_temp))/10000, accuracy = 0.01)` ha area and show the distance from the nearest tree crown with the tree crowns and tree top points overlaid and unique clump groups encircled. notice that even if the crowns are not directly touching, trees within `r my_buffer` m of one another are still grouped together in the same clump group.
 
 now we'll overlay the tree clump groups on the distance raster for all units
 
@@ -955,7 +1037,12 @@ plt_openings_vect_fn <-
   }
 # one unit
 plt_openings_vect_fn(3, add_clumps = F)
-# plt_openings_vect_fn(3, add_clumps = T)
+```
+
+and here are the openings with the tree clump groups overlaid
+
+```{r}
+plt_openings_vect_fn(3, add_clumps = T)
 ```
 
 now we'll overlay the tree clump groups on the openings data for all units
@@ -1321,9 +1408,9 @@ clump_n_trees_grp_summary %>%
   ggplot2::scale_fill_brewer(palette = "Dark2") +
   ggplot2::scale_x_discrete(drop = F) + 
   ggplot2::scale_y_continuous(
-    # breaks = seq(0,1,by=0.2)
-    labels = scales::percent
-    , expand = ggplot2::expansion(mult = c(0,0.1))
+    limits = c(0,0.9)
+    , breaks = seq(0,1,by=0.2)
+    , labels = scales::percent
   ) +
   ggplot2::facet_grid(
     cols = dplyr::vars(trtmnt_type)
@@ -1374,9 +1461,9 @@ clump_n_trees_grp_summary %>%
   ggplot2::scale_fill_brewer(palette = "Dark2") +
   ggplot2::scale_x_discrete(drop = F) + 
   ggplot2::scale_y_continuous(
-    # breaks = seq(0,1,by=0.2)
-    labels = scales::percent
-    , expand = ggplot2::expansion(mult = c(0,0.1))
+    limits = c(0,0.9)
+    , breaks = seq(0,1,by=0.2)
+    , labels = scales::percent
   ) +
   ggplot2::facet_grid(
     cols = dplyr::vars(trtmnt_type)
@@ -1465,7 +1552,6 @@ ggplot2::ggplot(
     )
   )
 ```
-
 
 ```{r, eval=F, include=F}
 # *DBH* 
@@ -1589,6 +1675,55 @@ open_full_temp <-
     openining_area_m2 > my_min_openining_area_m2
   )
 # dplyr::glimpse(open_full_temp)
+# stand_boundary %>% nrow()
+# stand_boundary %>% names()
+# unit_sum_df %>% dplyr::glimpse()
+cc_df_temp <- 
+  1:nrow(unit_sum_df) %>% 
+  purrr::map(function(x){
+    # crown area
+    area_m2_temp <- 
+      crowns_sf %>% 
+      dplyr::ungroup() %>% 
+      dplyr::select(treeID) %>% 
+      sf::st_transform(sf::st_crs(stand_boundary)) %>% 
+      # crop crowns to treatment units
+      sf::st_intersection(
+        stand_boundary %>%
+          dplyr::select(unit,block,tretmnt) %>% 
+          dplyr::rename(type = tretmnt) %>% 
+          dplyr::mutate(
+            type =
+              tolower(type) %>% 
+              stringr::str_squish()
+          ) %>% 
+          dplyr::rename_with(.fn = ~paste0("trtmnt_", .x, recycle0 = T)) %>% 
+          dplyr::inner_join(
+            unit_sum_df %>% dplyr::slice(x) %>% 
+              dplyr::select(trtmnt_type,trtmnt_block,trtmnt_unit)
+            , by = dplyr::join_by(trtmnt_type,trtmnt_block,trtmnt_unit)
+          )
+      ) %>% 
+      # union by unit to dissolve internal boundaries
+      sf::st_union() %>%
+      sf::st_area() %>% 
+      as.numeric()
+    
+    ret_df <- 
+      unit_sum_df %>% 
+      dplyr::slice(x) %>% 
+      dplyr::select(trtmnt_type,trtmnt_block,trtmnt_unit,trtmnt_unit_area_ha) %>% 
+      dplyr::mutate(
+        canopy_cov_area_m2 = dplyr::coalesce(area_m2_temp,0)
+        , canopy_cov_area_ha = (canopy_cov_area_m2/10000)
+        , canopy_cov_pct = canopy_cov_area_ha/trtmnt_unit_area_ha
+      )
+    return(ret_df)
+  }) %>% 
+  purrr::list_rbind()
+# cc_df_temp %>% dplyr::glimpse()
+
+# sum qualified openinings
 open_temp <- 
   open_full_temp %>% 
   dplyr::group_by(trtmnt_type,trtmnt_block,trtmnt_unit) %>% 
@@ -1607,8 +1742,19 @@ open_temp <-
   dplyr::mutate(
     sum_openining_area_ha = sum_openining_area_m2/10000
     , pct_open = sum_openining_area_ha/trtmnt_unit_area_ha
+  ) %>% 
+  # get canopy cover as well
+  dplyr::left_join(
+    cc_df_temp %>% dplyr::select(-c(trtmnt_unit_area_ha))
+    , by = dplyr::join_by(trtmnt_type,trtmnt_block,trtmnt_unit)
   )
+  
 # dplyr::glimpse(open_temp)
+```
+
+the proportion of the unit covered by treeless openings for each treatment unit
+
+```{r}
 open_temp %>% 
   dplyr::mutate(
     my_fct = forcats::fct_cross(trtmnt_type,trtmnt_block,trtmnt_unit)
@@ -1628,7 +1774,7 @@ open_temp %>%
   )
 ```
 
-and we can look at the distribution of the proportion of the stand that is open
+based on these unit-level data, we can look at the distribution of the proportion of the stand that is open
 
 ```{r}
 open_temp %>% 
@@ -1644,7 +1790,7 @@ open_temp %>%
     , switch = "y"
   ) +
   ggplot2::scale_fill_brewer(palette = "Dark2") +
-  ggplot2::scale_x_continuous(limits=c(0,NA),labels = scales::percent) +
+  ggplot2::scale_x_continuous(limits=c(0,NA),labels = scales::percent, breaks = scales::breaks_extended(n=6)) +
   ggplot2::scale_y_continuous(NULL,breaks=NULL) +
   ggplot2::labs(
     fill="",x="% unit open",y=""
@@ -1662,6 +1808,68 @@ open_temp %>%
 
 this is what we expected based on the treatment type prescriptions.
 
+let's also look at the distribution of canopy cover based on that UAS-delineated tree crowns in these different treatments
+
+```{r}
+open_temp %>% 
+  ggplot2::ggplot(mapping = ggplot2::aes(x=canopy_cov_pct)) +
+  ggplot2::geom_violin(
+    mapping = ggplot2::aes(y = 0, fill=trtmnt_type)
+    , alpha = 0.8, color = NA
+  ) +
+  ggplot2::geom_boxplot(width = 0.1, fill = NA, outliers = F) +
+  ggplot2::facet_grid(
+    rows = dplyr::vars(trtmnt_type)
+    , axes = "all"
+    , switch = "y"
+  ) +
+  ggplot2::scale_fill_brewer(palette = "Dark2") +
+  ggplot2::scale_x_continuous(limits=c(0,NA),labels = scales::percent, breaks = scales::breaks_extended(n=6)) +
+  ggplot2::scale_y_continuous(NULL,breaks=NULL) +
+  ggplot2::labs(
+    fill="",x="% canopy cover",y=""
+    , title = "distribution of treatment canopy cover area"
+    , subtitle = "\nby treatment type"
+  ) +
+  ggplot2::theme_light() +
+  ggplot2::theme(
+    legend.position = "none"
+    , strip.text = ggplot2::element_text(size = 10, color = "black", face = "bold")
+    , axis.text.x = ggplot2::element_text(size = 9)
+    , plot.subtitle = ggplot2::element_text(margin = ggplot2::margin(t = -20, unit = "pt"))
+  )
+```
+
+let's look at the proportion of canopy cover and open area together for each treatment unit. note, that the total of canopy cover and opening area will not comprise the entire unit area with the remaining space accounted for in the form of intermediate required spacing of `r my_buffer` m between tree crowns and open space as well as very small enclosed, openings with an area less than 40.5 square meters (0.01 acres) which was required for classification as an actual treeless opening
+
+```{r}
+open_temp %>% 
+  ggplot2::ggplot(mapping = ggplot2::aes(x=pct_open,y=canopy_cov_pct,color=trtmnt_type)) +
+  ggplot2::geom_function(
+    fun = function(x) 1 - x
+    , color = "gray"
+    # , lwd = 1
+  ) +
+  ggplot2::geom_point(size = 4, alpha = 0.9) +
+  ggplot2::scale_color_brewer(palette = "Dark2") +
+  ggplot2::scale_x_continuous(limits = c(0, 1), breaks = seq(0,1,by=0.2), labels = scales::percent) +
+  ggplot2::scale_y_continuous(limits = c(0, 1), breaks = seq(0,1,by=0.2), labels = scales::percent) +
+  ggplot2::theme_light() +
+  ggplot2::labs(
+    x = "% unit open"
+    , y = "% canopy cover"
+    , color = ""
+  ) +
+  ggplot2::theme(
+    legend.position = "top"
+    , axis.text.y = ggplot2::element_text(size = 8)
+    , axis.text.x = ggplot2::element_text(size = 8)
+  )
+
+```
+
+the variability within the different treatment types is interesting
+
 let's table this by unit (which is the underlying data used to generate the distribution immediately above)
 
 ```{r}
@@ -1669,20 +1877,20 @@ open_temp %>%
   dplyr::select(
     trtmnt_type,trtmnt_block,trtmnt_unit
     , trtmnt_unit_area_ha
-    , sum_openining_area_ha
-    , pct_open
+    , sum_openining_area_ha, pct_open
+    , canopy_cov_area_ha, canopy_cov_pct
   ) %>% 
   dplyr::mutate(
     dplyr::across(tidyselect::ends_with("area_ha"), ~scales::comma(.x,accuracy=0.01))
-    , pct_open = scales::percent(pct_open,accuracy = 0.1)
+    , dplyr::across(c(pct_open,canopy_cov_pct), ~scales::percent(.x,accuracy=0.1))
   ) %>% 
   dplyr::arrange(trtmnt_type, trtmnt_block, trtmnt_unit) %>% 
   kableExtra::kbl(
     caption = "openings by treatment unit"
     , col.names = c(
       "type","block","unit","ha"
-      , "open ha"
-      , "% open"
+      , "open ha", "% open"
+      , "canopy cover ha", "% canopy cover"
     )
     , escape = F
     # , digits = 2
@@ -1760,8 +1968,8 @@ open_temp %>%
 let's check out the raw size areas of the individual openings even though there is variation in the size of the treatment units which influences how large an opening can be
 
 ```{r}
-open_full_temp %>% dplyr::glimpse()
-  ggplot2::ggplot(mapping = ggplot2::aes(x=pct_open)) +
+open_full_temp %>% 
+  ggplot2::ggplot(mapping = ggplot2::aes(x=openining_area_m2)) +
   ggplot2::geom_violin(
     mapping = ggplot2::aes(y = 0, fill=trtmnt_type)
     , alpha = 0.8, color = NA
@@ -1773,10 +1981,10 @@ open_full_temp %>% dplyr::glimpse()
     , switch = "y"
   ) +
   ggplot2::scale_fill_brewer(palette = "Dark2") +
-  ggplot2::scale_x_continuous(limits=c(0,NA),labels = scales::percent) +
+  ggplot2::scale_x_continuous(limits=c(0,NA),labels = scales::comma) +
   ggplot2::scale_y_continuous(NULL,breaks=NULL) +
   ggplot2::labs(
-    fill="",x="% unit open",y=""
+    fill="",x="opening\narea (m²)",y=""
     , title = "distribution of treatment unit open area"
     , subtitle = "\nby treatment type"
   ) +
@@ -1789,5 +1997,103 @@ open_full_temp %>% dplyr::glimpse()
   )
 ```
 
+wow. that may not be very informative...let's use a log scale on the x-axis
+
+```{r}
+open_full_temp %>% 
+  ggplot2::ggplot(mapping = ggplot2::aes(x=openining_area_m2)) +
+  ggplot2::geom_violin(
+    mapping = ggplot2::aes(y = 0, fill=trtmnt_type)
+    , alpha = 0.8, color = NA
+  ) +
+  ggplot2::geom_boxplot(width = 0.1, fill = NA, outliers = F) +
+  ggplot2::facet_grid(
+    rows = dplyr::vars(trtmnt_type)
+    , axes = "all"
+    , switch = "y"
+  ) +
+  ggplot2::scale_fill_brewer(palette = "Dark2") +
+  ggplot2::scale_x_log10(labels = scales::comma) +
+  ggplot2::scale_y_continuous(NULL,breaks=NULL) +
+  ggplot2::labs(
+    fill="",x="opening\narea (m²)",y=""
+    , title = "distribution of treeless openings area"
+    , subtitle = "\nby treatment type"
+    , caption = "* note the log scale of the x-axis"
+  ) +
+  ggplot2::theme_light() +
+  ggplot2::theme(
+    legend.position = "none"
+    , strip.text = ggplot2::element_text(size = 10, color = "black", face = "bold")
+    , axis.text.x = ggplot2::element_text(size = 9)
+    , plot.subtitle = ggplot2::element_text(margin = ggplot2::margin(t = -20, unit = "pt"))
+  )
+```
+
+table the summary statistics of the opening sizes
+
+```{r}
+# open_temp$pct_open %>% summary()
+open_full_temp %>% 
+  dplyr::select(
+    trtmnt_type
+    , openining_area_m2
+  ) %>% 
+  dplyr::group_by(trtmnt_type) %>% 
+  dplyr::summarise(
+    dplyr::across(
+      c(openining_area_m2)
+      , .fns = list(
+        q25 = ~quantile(.x,na.rm=T,probs=0.25)
+        , median = ~median(.x,na.rm=T)
+        , mean = ~mean(.x,na.rm=T)
+        , q75 = ~quantile(.x,na.rm=T,probs=0.75)
+        # , q10 = ~quantile(.x,na.rm=T,probs=0.1)
+        # , q50 = ~quantile(.x,na.rm=T,probs=0.5)
+        # , q90 = ~quantile(.x,na.rm=T,probs=0.9)
+        # , min = ~min(.x,na.rm=T)
+        # , max = ~max(.x,na.rm=T)
+        , range = ~paste0(
+          scales::comma(min(.x,na.rm=T), accuracy = 0.1)
+          ,"-"
+          , scales::comma(max(.x,na.rm=T), accuracy = 0.1)
+        )
+      )
+    )
+    , n = dplyr::n()
+    # , trtmnt_unit_area_ha = mean(trtmnt_unit_area_ha, na.rm=T)
+  ) %>% 
+  dplyr::ungroup() %>% 
+  dplyr::mutate(
+    n = scales::comma(n,accuracy=1)
+    , dplyr::across(.cols = dplyr::where(is.numeric), ~scales::comma(.x,accuracy=0.1) )
+  ) %>% 
+  dplyr::arrange(trtmnt_type) %>% 
+  dplyr::relocate(trtmnt_type,n) %>% 
+  kableExtra::kbl(
+    caption = "treeless opening sizes by treatment type"
+    , col.names = c(
+      "type","# openings"
+      , "1st Qu."
+      , "median"
+      , "mean"
+      , "3rd Qu."
+      , "range"
+    )
+    , escape = F
+    # , digits = 2
+  ) %>% 
+  kableExtra::kable_styling(font_size = 10.6) %>% 
+  kableExtra::add_header_above(
+    c(
+      " "=2
+      # , "Detection" = 3
+      # , "Area" = 3
+      , "opening area (m<sup>2</sup>)" = 5
+    )
+    , escape = F
+  ) %>% 
+  kableExtra::column_spec(c(2,7), border_right = TRUE, include_thead = TRUE) 
+```
 
 
