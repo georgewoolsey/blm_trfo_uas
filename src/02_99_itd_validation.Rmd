@@ -2227,7 +2227,7 @@ ground_truth_prediction_match_ans %>% dplyr::glimpse()
 
 we can use this data to get study-wide detection and physical measurement accuracy metrics
 
-## Detection Accuracy Results
+## Detection Accuracy Results{#detect_acc_res}
 
 first, we'll check out the site-wide detection accuracy results
 
@@ -3743,7 +3743,8 @@ treatment intensity seems to have minimal impact on the spatial agreement betwee
 ```{r, warning=FALSE, message=FALSE, echo=FALSE, include=FALSE}
 remove(list = ls()[grep("_temp",ls())])
 remove(
-  agg_ground_truth_match_ans,agg_ground_truth_match_by_type_ans,ground_truth_prediction_match_ans
+  # agg_ground_truth_match_ans
+  agg_ground_truth_match_by_type_ans,ground_truth_prediction_match_ans
   , gt_pred_match_map_ans, piles_workflow_ans
   , validation_plots, validation_plots_polygons, validation_trees
   , agg_ground_truth_match, confusion_matrix_scores_fn, ground_truth_prediction_match, reference_prediction_match

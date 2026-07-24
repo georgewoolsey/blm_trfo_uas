@@ -2096,4 +2096,315 @@ open_full_temp %>%
   kableExtra::column_spec(c(2,7), border_right = TRUE, include_thead = TRUE) 
 ```
 
+```{r, warning=FALSE, message=FALSE, echo=FALSE, include=FALSE}
+remove(list = ls()[grep("_temp",ls())])
+gc()
+```
 
+## Treatment Compliance Evaluation
+
+The spatially-explicit forest inventories generated with UAS data and individual tree detection point cloud processing workflows enable evaluation of silvicultral treatment prescription compliance. For this specific project, the "uniform" thinning treatments provided explicit instructions for the spatial arrangement of post-treatment stand conditions:
+
+***Uniform - Low***
+
+>Light intensity thinning: Leave 15 feet between tree crowns. 70% of the retained (i.e. leave) trees should be over 8 inches basal diameter if present and 30% should be between 2 inches and 8 inches in basal diameter.
+
+***Uniform - High***
+
+>Heavy intensity thinning: Leave at least 30 feet between tree crowns; 70% of the retained (i.e. leave) trees should be over 8 inches basal diameter if present and 30% should be between 2 inches and 8 inches in basal diameter.
+
+The following is a subset of items provided in the general guidance for both "uniform" prescriptions that are most relevant for our evaluation:
+
+>d. Cut all dead pinyon trees <8 inches in basal diameter. Leave all other standing dead trees for wildlife snags. Dead trees are not considered when applying the spacing guides above.
+>e. Remove 70% of all woody shrubs (i.e. gambel oak and serviceberry); retain all gambel oak stems greater than 3 inches in basal diameter. 
+>f. All trees with green spray paint should be not be cut and piles should be placed at least 15 ft from the canopy of those trees. These have a small piece of equipment that are recording tree growth (Fig. 2). These point dendrometers are on the bole (main stem) of the tree, located 1-2 feet above the ground on the east side of the tree, and a shapefile of the trees approximate location has been provided.
+>g. In addition to the above, the following apply:
+  ....
+  4.  Except for leave trees, all live trees having a minimum size of one (1) inch basal diameter and a height of 12 inches shall be cut. 
+  5. Retain trees that contain raptor nests.
+  6. No ponderosa pine trees should be cut
+
+Since we know our UAS-based individual tree delineation [does not perfectly align with field-marked trees](#detect_acc_res) (`r scales::percent(agg_ground_truth_match_ans$f_score,accuracy=1)` F-score), we'll combine UAS-delineated tree crowns that are spatially continuous (i.e. directly touching or overlapping) into singular "tree objects" for this evaluation of the treatment tree spacing compliance. We'll then calculate the distance between spatially distinct post treatment tree objects for comparison against the prescription targets. Additionally, since the prescription requires that priority trees like ponderosa pine and wildlife trees are not removed, and thus excluded from the spacing guidelines, the average space between residual trees should be slightly lower than the targets (even if the spacing is perfectly implemented to prescription) due to these restrictions which require keeping more trees than would be needed to meet the spacing guidelines.
+
+As a reminder, we are only evaluating UAS-detected tree objects that have a minimum height of `r min_tree_ht_m` m and have a top point that falls within a treatment unit boundary. This approach assumes that trees within a unit do not form functional clusters with those in adjacent areas (even though some units share a common border and we have data extending beyond the unit boundaries). This assumption prevents data from untreated control areas or differently treated areas from influencing the results when summarized by treatment type. This intentional ignorance of edge effects means that the scale of focus of this analysis is strictly on the treatment unit.
+
+```{r dist-my-resid-trees, results=F}
+# combine trees crowns by unit to form tree object polygons
+tree_obj_polys <- 
+  1:nrow(unit_sum_df) %>% 
+  purrr::map(function(x){
+    unt_temp <- unit_sum_df %>% dplyr::slice(x) %>% 
+      dplyr::select(trtmnt_type,trtmnt_block,trtmnt_unit)
+    
+    tree_obj_polys_temp <- 
+      crowns_sf %>% 
+      dplyr::ungroup() %>% 
+      dplyr::inner_join(
+        unt_temp    
+        , by = dplyr::join_by(trtmnt_type,trtmnt_block,trtmnt_unit)
+      ) %>% 
+      sf::st_union() %>%
+      sf::st_cast("POLYGON") %>%
+      sf::st_as_sf() %>%
+      dplyr::mutate(tree_obj_id = dplyr::row_number()) %>% 
+      dplyr::bind_cols(unt_temp) %>% 
+      dplyr::relocate(tidyselect::starts_with("trtmnt_"))
+    
+    # for each tree obj (row) find the nearest other tree obj (non-self)
+    # nearest_df_temp <-
+    #   1:nrow(tree_obj_polys_temp) %>% 
+    #   purrr::map(function(row_id){
+    #     # curr
+    #     current_geom <- sf::st_geometry(tree_obj_polys_temp)[row_id]
+    #     # others
+    #     other_geoms <- sf::st_geometry(tree_obj_polys_temp)[-row_id]
+    #     # nearest
+    #     n_idx <- sf::st_nearest_feature(current_geom, other_geoms)
+    #     # updt since we dropped this row_id from others
+    #     n_idx <- ifelse(n_idx >= row_id, n_idx + 1, n_idx)
+    #     # dist
+    #     nearest_dist <- sf::st_distance(
+    #       current_geom 
+    #       , sf::st_geometry(tree_obj_polys_temp)[n_idx]
+    #       , by_element = TRUE
+    #     )
+    #     # df
+    #     df_ret <- dplyr::tibble(
+    #       tree_obj_id = tree_obj_polys_temp$tree_obj_id[row_id]
+    #       , nearest_tree_obj_id = tree_obj_polys_temp$tree_obj_id[n_idx]
+    #       , nearest_dist_m = as.numeric(nearest_dist[1])
+    #     )
+    #     return(df_ret)
+    #   }) %>% 
+    #   purrr::list_rbind()
+    
+    # dist
+    dm_temp <- sf::st_distance(tree_obj_polys_temp)
+    # dm_temp
+    # self-dist to Inf ... and beyond!!
+    diag(dm_temp) <- Inf
+    # for each row, get min dist (max -dist)
+    nearest_idx_temp <- max.col(-dm_temp, ties.method = "first")
+    # make it a matrix for filtering the distance matrix
+    nearest_matrix_temp <- cbind(1:nrow(dm_temp), nearest_idx_temp)
+    # filter dist matrix for just min dist by row
+    dist_temp <- dm_temp[nearest_matrix_temp]
+    
+    # add it to the df
+    # return
+    ret_df <- 
+      tree_obj_polys_temp %>% 
+      # dplyr::left_join(nearest_df_temp, by = "tree_obj_id")
+      
+      dplyr::mutate(
+        # nearest
+        nearest_tree_obj_id = tree_obj_polys_temp$tree_obj_id[nearest_idx_temp]
+        # dist
+        , nearest_dist_m = as.numeric(dist_temp)
+      )
+    
+    return(ret_df)
+  }) %>% 
+  purrr::list_rbind()
+# add distance target
+tree_obj_polys <-
+  tree_obj_polys %>% 
+  dplyr::left_join(
+   unq_units_df %>% 
+      dplyr::filter(
+        stringr::str_starts(trtmnt_type, "uniform")
+      ) %>% 
+      dplyr::distinct(trtmnt_type) %>% 
+      dplyr::mutate(
+        target_nearest_dist_m = dplyr::case_when(
+          stringr::str_ends(trtmnt_type, "low") ~ 15/3.281
+          , stringr::str_ends(trtmnt_type, "high") ~ 30/3.281
+        )
+      ) 
+   , by = "trtmnt_type"
+  ) %>% 
+  dplyr::mutate(
+    target_nearest_dist_m = dplyr::coalesce(target_nearest_dist_m,-Inf)
+    , is_within_presc_dist = ifelse(nearest_dist_m>=target_nearest_dist_m, "meets prescription", "fails prescription") %>% factor()
+  )
+  # sf::st_drop_geometry() %>% dplyr::count(trtmnt_type,is_within_presc_dist)
+# huh?
+# tree_obj_polys %>% dplyr::glimpse()
+
+```
+
+let's check that out for a single unit with the tree objects colored by the distance to their nearest neighbor
+
+```{r}
+unit_temp <- unq_units_df %>% 
+  dplyr::filter(
+    # stringr::str_starts(trtmnt_type, "uniform")
+    trtmnt_type == "uniform- high"
+  ) %>% 
+  dplyr::slice(1)
+tree_obj_polys %>% 
+  dplyr::inner_join(
+    unit_temp
+    , by = names(unq_units_df)
+  ) %>% 
+  ggplot2::ggplot() +
+  ggplot2::geom_sf(
+    data = 
+      stand_boundary %>%
+        dplyr::filter(
+          unit==unit_temp$trtmnt_unit
+          , block==unit_temp$trtmnt_block
+          , tolower(stringr::str_squish(tretmnt))==unit_temp$trtmnt_type
+        ) %>% 
+        sf::st_transform(sf::st_crs(tree_obj_polys))
+    , fill = NA
+    , color = "black"
+  ) +
+  ggplot2::geom_sf(mapping = ggplot2::aes(fill = nearest_dist_m), lwd = 0.2) +
+  ggplot2::scale_fill_distiller(palette = "Greys", direction = 1) +
+  ggplot2::labs(
+    fill = "distance to\nnearest tree (m)"
+  ) +
+  ggplot2::theme_void()
+
+```
+
+let's plot each "uniform" treatment unit coloring the post-treatment tree objects by the distance to their nearest neighbor and highlight those closer than the prescription target distance
+
+```{r}
+pal_meets_presc <- c(
+    RColorBrewer::brewer.pal(n=11,"PuOr")[1]
+    , RColorBrewer::brewer.pal(n=11,"PuOr")[11]
+  ) %>% 
+  setNames(c("fails prescription","meets prescription"))
+# plt fn
+plt_fn_temp <- function(x) {
+  unit_temp <- unq_units_df %>% dplyr::slice(x)
+  
+  plt_tit <- paste0(
+      unit_temp$trtmnt_type
+      , " | block "
+      , unit_temp$trtmnt_block
+      , " | "
+      , unit_temp$trtmnt_unit
+    )
+  
+  # get around empty levels that causes problems in the legend of ggplot
+    blank_df <- 
+      dplyr::tibble(
+        is_within_presc_dist = levels(tree_obj_polys$is_within_presc_dist) %>% 
+          factor(levels = levels(tree_obj_polys$is_within_presc_dist))
+        , nearest_dist_m = as.numeric(NA)
+        , target_nearest_dist_m = as.numeric(NA)
+        , geometry = rep("GEOMETRYCOLLECTION EMPTY", length(levels(tree_obj_polys$is_within_presc_dist))) %>% 
+          sf::st_as_sfc(crs = sf::st_crs(tree_obj_polys))
+      ) %>% 
+      sf::st_as_sf()
+
+  tree_obj_polys_temp <- tree_obj_polys %>% 
+    dplyr::inner_join(
+      unit_temp
+      , by = names(unq_units_df)
+    ) %>% 
+    dplyr::select(is_within_presc_dist,nearest_dist_m,target_nearest_dist_m) %>% 
+    dplyr::bind_rows(blank_df)
+  
+    # plt
+    tree_obj_polys_temp %>% 
+      ggplot2::ggplot() +
+      ggplot2::geom_sf(
+        data = 
+          stand_boundary %>%
+            dplyr::filter(
+              unit==unit_temp$trtmnt_unit
+              , block==unit_temp$trtmnt_block
+              , tolower(stringr::str_squish(tretmnt))==unit_temp$trtmnt_type
+            ) %>% 
+            sf::st_transform(sf::st_crs(tree_obj_polys))
+        , fill = NA
+        , color = "black"
+      ) +
+      ggplot2::geom_sf(
+        mapping = ggplot2::aes(fill = nearest_dist_m,color=is_within_presc_dist)
+        , lwd = 0.8
+        , key_glyph = draw_key_rect
+      ) +
+      ggplot2::scale_color_manual(
+        values = pal_meets_presc
+        , guide = ggplot2::guide_legend(
+          override.aes = list(
+            shape = 15
+            , size = 6
+            , fill = pal_meets_presc
+            , stroke = 0
+          )
+          , theme = ggplot2::theme(
+            legend.key = ggplot2::element_blank()
+          )
+        )
+      ) +
+      ggplot2::scale_fill_gradientn(
+        colors = c(
+          RColorBrewer::brewer.pal(n=11,"PuOr")[1:4] # purple
+          , RColorBrewer::brewer.pal(n=11,"PuOr")[8:11] # orange
+        )
+        # RColorBrewer::brewer.pal(n=8,"PuOr")
+        , rescaler = ~ scales::rescale_mid(.x, mid = tree_obj_polys_temp$target_nearest_dist_m[1])
+      ) + 
+      ggplot2::labs(
+        fill = "distance to\nnearest tree (m)"
+        , color = ""
+        , title = plt_tit
+        , subtitle = paste0("*tree spacing target: ", scales::comma(tree_obj_polys_temp$target_nearest_dist_m[1],accuracy=0.1,suffix=" m"))
+      ) +
+      ggplot2::theme_void() +
+      ggplot2::theme(
+        # , plot.title = ggtext::element_markdown(size = 10, hjust = 0.5)
+        plot.title = ggplot2::element_text(size = 9, hjust = 0.5, face = "bold")
+        , plot.subtitle = ggplot2::element_text(size = 7, hjust = 0.5)
+        # , plot.caption = ggplot2::element_text(size = 7)
+      )
+  
+}
+# map
+```
+
+***Uniform - High***
+
+let's plot the post-treatment uniform high group which had a target distance between the remaining trees of `r scales::comma(tree_obj_polys %>% dplyr::filter(trtmnt_type == "uniform- high") %>% dplyr::slice(1) %>% dplyr::pull(target_nearest_dist_m), accuracy = 0.1, suffix = " m")` (`r scales::comma(tree_obj_polys %>% dplyr::filter(trtmnt_type == "uniform- high") %>% dplyr::slice(1) %>% dplyr::pull(target_nearest_dist_m) %>% `*`(3.281), accuracy = 0.1, suffix = " ft")`)
+
+```{r,eval=F,purl=FALSE, results=F, fig.show='asis', fig.height=7, fig.width=8}
+# get id's
+unq_units_df %>% 
+  dplyr::mutate(rn = dplyr::row_number()) %>% 
+  dplyr::filter(
+    # stringr::str_starts(trtmnt_type, "uniform")
+    trtmnt_type == "uniform- high"
+  ) %>% 
+  dplyr::pull(rn) %>% 
+  # .[1] %>% 
+  purrr::map(plt_fn_temp)
+```
+
+***Uniform - Low***
+
+let's plot the post-treatment uniform low group which had a target distance between the remaining trees of `r scales::comma(tree_obj_polys %>% dplyr::filter(trtmnt_type == "uniform- low") %>% dplyr::slice(1) %>% dplyr::pull(target_nearest_dist_m), accuracy = 0.1, suffix = " m")` (`r scales::comma(tree_obj_polys %>% dplyr::filter(trtmnt_type == "uniform- low") %>% dplyr::slice(1) %>% dplyr::pull(target_nearest_dist_m) %>% `*`(3.281), accuracy = 0.1, suffix = " ft")`)
+
+```{r,eval=F,purl=FALSE, results=F, fig.show='asis', fig.height=7, fig.width=8}
+# get id's
+unq_units_df %>% 
+  dplyr::mutate(rn = dplyr::row_number()) %>% 
+  dplyr::filter(
+    # stringr::str_starts(trtmnt_type, "uniform")
+    trtmnt_type == "uniform- low"
+  ) %>% 
+  dplyr::pull(rn) %>% 
+  # .[1] %>% 
+  purrr::map(plt_fn_temp)
+```
+
+
+```{r, warning=FALSE, message=FALSE, echo=FALSE, include=FALSE}
+remove(list = ls()[grep("_temp",ls())])
+gc()
+```
