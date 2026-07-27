@@ -1305,7 +1305,7 @@ take that thing for a spin for a single plot.
 
 To account for tree lean and potential slight spatial misalignment between the UAS point clouds and the ground-based field coordinates along the unit boundary, UAS-predicted trees located outside the boundary but within half the horizontal matching threshold were permitted to qualify as true positives, though unmatched exterior trees were excluded from false positive counts. 
 
-```{r, include=F, eval=F}
+```{r, purl=F, include=F, eval=F}
 plt_temp <- validation_plots %>% 
   dplyr::slice(33) %>% 
   dplyr::pull(plot)
@@ -1628,7 +1628,7 @@ agg_ground_truth_match <- function(ground_truth_prediction_match_ans) {
 }
 ```
 
-```{r, include = F, eval = F}
+```{r,purl=FALSE, include = F, eval = F}
 rp_temp <- reference_prediction_match(
   pred_data = 
     treetops_sf %>% 
@@ -1749,7 +1749,7 @@ There is a lot going on in our `agg_ground_truth_match()` function but it's appl
 
 we already demonstrated minimum use of the `agg_ground_truth_match()` function to get detection accuracy metrics, now we'll demonstrate the physical measurement accuracy metrics by keeping the `diff_*` and `pct_diff_*` columns calculated with the `ground_truth_prediction_match()` function
 
-```{r,include=F,eval=F}
+```{r, purl=F,include=F,eval=F}
 gt_temp %>% 
   # remove FP that were outside boundary since we included them to allow for edge reference trees to be matched
   dplyr::left_join(
@@ -1800,7 +1800,7 @@ remove(list = ls()[grep("_temp",ls())])
 gc()
 ```
 
-```{r, include=F, eval=FALSE}
+```{r, purl=F, include=F, eval=FALSE}
 # test a bunch of different variable window sizes within `lidR::lmf()` 
 # that cover a range of possibilities and function shapes including linear, concave up, and concave down
 # empty list

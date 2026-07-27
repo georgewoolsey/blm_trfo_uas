@@ -589,12 +589,12 @@ since we also have imperial units let's see TPA
 plt_metric_violin_fn(unit_sum_df,"trees_per_ac",metric_label = "trees ac⁻¹")
 ```
 
-```{r, include=FALSE, eval=FALSE}
+```{r, purl=F, include=FALSE, eval=FALSE}
 # and basal area in square meters per hectare
 plt_metric_violin_fn(unit_sum_df,"basal_area_m2_per_ha",metric_label = "basal area ($m^{2} ha^{-1}$)")
 ```
 
-```{r, include=FALSE, eval=FALSE}
+```{r, purl=F, include=FALSE, eval=FALSE}
 # but also basal area in square feet per acre
 plt_metric_violin_fn(unit_sum_df,"basal_area_ft2_per_ac",metric_label = "basal area ($ft^{2} ac^{-1}$)")
 ```
@@ -675,7 +675,7 @@ treetops_sf %>%
   )
 ```
 
-```{r, fig.height=8, include = F, eval = F}
+```{r,purl=FALSE, fig.height=8, include = F, eval = F}
 # and in imperial units
 treetops_sf %>% 
   sf::st_drop_geometry() %>% 
@@ -796,7 +796,7 @@ summary statistics of selected tree metrics by treatment type
 
 *metric* units
 
-```{r, include=F, eval=F}
+```{r, purl=F, include=F, eval=F}
 crwn_temp <- 
   treetops_sf %>% 
   sf::st_drop_geometry() %>% 
@@ -911,7 +911,7 @@ tbl_df_temp %>%
   )
 ```
 
-```{r, eval = F, include=FALSE}
+```{r, purl=F, eval = F, include=FALSE}
 # *imperial* units
 # table metric
 tbl_df_temp %>% 
@@ -969,7 +969,7 @@ tbl_df_temp %>%
 
 another common thing to look at are binned tree size distributions
 
-```{r, include = F, eval = F}
+```{r,purl=FALSE, include = F, eval = F}
 # what does this look like from WTT?
 unit_sum_df %>% 
   dplyr::slice(1) %>% 
@@ -1096,7 +1096,7 @@ treetops_sf %>%
 ggplot2::ggsave("../data/explt.jpg", height = 11, width = 10.5, dpi = "print")
 ```
 
-```{r, include=F, eval=F}
+```{r, purl=F, include=F, eval=F}
 # we'll start with DBH bins
 # make ggplot2::cut_* bins pretty
 # plot 
