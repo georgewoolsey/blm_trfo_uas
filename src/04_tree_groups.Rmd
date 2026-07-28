@@ -826,6 +826,23 @@ treetops_sf %>%
 
 we zoomed in on a `r scales::comma(as.numeric(sf::st_area(aoi_temp))/10000, accuracy = 0.01)` ha area and show the distance from the nearest tree crown with the tree crowns and tree top points overlaid and unique clump groups encircled. notice that even if the crowns are not directly touching, trees within `r my_buffer` m of one another are still grouped together in the same clump group.
 
+```{r, include=FALSE, eval=F, purl=FALSE}
+clump_polys %>% 
+  dplyr::inner_join(
+    unq_units_df %>% 
+      dplyr::filter(trtmnt_block=="3",trtmnt_type=="uniform- low")
+    , by = dplyr::join_by(trtmnt_type,trtmnt_block,trtmnt_unit)
+  ) %>% 
+  dplyr::select(clump_n_trees_grp) %>% 
+  terra::vect() %>% 
+  terra::plot()
+crowns_sf %>% 
+  dplyr::filter(trtmnt_block=="3",trtmnt_type=="uniform- low") %>% 
+  dplyr::select(treeID) %>% 
+  terra::vect() %>% 
+  terra::plot()
+```
+
 now we'll overlay the tree clump groups on the distance raster for all units
 
 ```{r,eval=F,purl=FALSE, results=F, fig.show='asis', fig.height=9.5, fig.width=9.5}
@@ -2565,6 +2582,7 @@ tree_obj_spacing_targets_df <-
   sf::st_drop_geometry() %>% 
   dplyr::distinct(trtmnt_type,target_nearest_dist_m) %>% 
   dplyr::mutate(target_nearest_dist_m = ifelse(is.infinite(target_nearest_dist_m ),NA,target_nearest_dist_m ))
+
 # plt
 tree_obj_polys %>% 
   # dplyr::filter(trtmnt_type!="control") %>% 
@@ -2659,118 +2677,7 @@ tree_obj_polys %>%
   )
 ```
 
-table the summary statistics of the opening sizes
-
-```{r, purl=FALSE, include=F, eval=F}
-xxx_temp <-
-  tree_obj_polys %>% 
-  dplyr::slice_max(n = 1, order_by = nearest_dist_m, with_ties = F) 
-  # dplyr::slice(2)
-
-c_temp <- crowns_sf %>% sf::st_intersection(xxx_temp)
-c_temp %>% dplyr::glimpse()
-
-crowns_sf %>% 
-  dplyr::inner_join(
-      c_temp %>% 
-      sf::st_drop_geometry() %>% 
-      dplyr::distinct(trtmnt_unit,trtmnt_block,trtmnt_type)
-    , by = dplyr::join_by(trtmnt_unit,trtmnt_block,trtmnt_type)
-  ) %>% 
-  ggplot2::ggplot() +
-  ggplot2::geom_sf(color = NA) +
-  ggplot2::geom_sf(
-    data = c_temp %>% sf::st_centroid()    
-    , color = "blue"
-  ) +
-  ggplot2::theme_void()
-
-bad_temp <- c(
-"282101_710512.3_4192391.4"
-,"250612_710251.3_4192666.7"
-)
-search_dir_final_detected_ans_temp <- cloud2trees:::search_dir_final_detected(dir = "d:/BLM_CO_SWDF_DawsonFuelsTreatment/point_cloud_processing_delivery/")
-(crowns_flist_temp <- search_dir_final_detected_ans_temp$crowns_flist)
-# read it to get the full list of tree polygons
-crowns_temp <- sf::st_read(
-        dsn = crowns_flist_temp[2]
-        , quiet = T
-      )
-crowns_flist_temp[2]
-
-crowns_temp %>% dplyr::filter(treeID %in% bad_temp) %>% dplyr::glimpse()
-
-crowns_temp %>% 
-  dplyr::filter(treeID %in% bad_temp[1]) %>% 
-  # dplyr::select(tree_height_m) %>% plot()
-  sf::st_intersection(
-    treetops_sf %>% 
-      dplyr::filter(treeID %in% bad_temp[1]) %>%
-      sf::st_buffer(5)
-  ) %>% 
-  ggplot() + geom_sf() +
-  geom_sf(
-    data = 
-      treetops_sf %>% 
-      dplyr::filter(treeID %in% bad_temp[1]) %>%
-      sf::st_buffer(5)
-    , fill = NA, color = "blue"
-  )
-crowns_temp %>% 
-  dplyr::filter(treeID %in% bad_temp[2]) %>% 
-  # dplyr::select(tree_height_m) %>% plot()
-  sf::st_intersection(
-    treetops_sf %>% 
-      dplyr::filter(treeID %in% bad_temp[2]) %>%
-      sf::st_buffer(5)
-  ) %>% 
-  ggplot() + geom_sf() +
-  geom_sf(
-    data = 
-      treetops_sf %>% 
-      dplyr::filter(treeID %in% bad_temp[2]) %>%
-      sf::st_buffer(5)
-    , fill = NA, color = "blue"
-  )
-
-crowns_temp %>% dplyr::glimpse()
-crowns_temp %>% 
-  dplyr::filter(!treeID %in% bad_temp) %>% 
-  dplyr::bind_rows(
-    crowns_temp %>% 
-      dplyr::filter(treeID %in% bad_temp[1]) %>% 
-      # dplyr::select(tree_height_m) %>% plot()
-      sf::st_intersection(
-        treetops_sf %>% 
-          dplyr::filter(treeID %in% bad_temp[1]) %>%
-          sf::st_buffer(5) %>% 
-          dplyr::mutate(xxx = 1) %>% 
-          dplyr::select(xxx)
-      ) %>% 
-      dplyr::select(-xxx) %>% 
-      dplyr::mutate(crown_area_m2 = sf::st_area(.) %>% as.numeric)
-      # dplyr::glimpse()
-  ) %>% 
-  dplyr::bind_rows(
-    crowns_temp %>% 
-      dplyr::filter(treeID %in% bad_temp[2]) %>% 
-      # dplyr::select(tree_height_m) %>% plot()
-      sf::st_intersection(
-        treetops_sf %>% 
-          dplyr::filter(treeID %in% bad_temp[2]) %>%
-          sf::st_buffer(5) %>% 
-          dplyr::mutate(xxx = 1) %>% 
-          dplyr::select(xxx)
-      ) %>% 
-      dplyr::select(-xxx) %>% 
-      dplyr::mutate(crown_area_m2 = sf::st_area(.) %>% as.numeric)
-      # dplyr::glimpse()
-  ) %>% 
-  # dplyr::glimpse()
-  sf::st_write(dsn = crowns_flist_temp[2], append = F)
-
-
-```
+table the summary statistics of the post-treatment nearest neighbor distance
 
 ```{r}
 # open_temp$pct_open %>% summary()
@@ -3096,7 +3003,7 @@ plt_high_temp <- fnl_plt_fn_temp(which_type = "uniform- high", seed = 1)
 
 #### Visual Examples: Uniform - High
 
-here are some zoomed-in examples on the RGB imagery with the example tree object shaded and the neighboring trees within the treatment unit outlined.
+here are some zoomed-in examples on the RGB imagery for the uniform high group which had a target distance between the remaining trees of `r scales::comma(tree_obj_polys %>% dplyr::filter(trtmnt_type == "uniform- high") %>% dplyr::slice(1) %>% dplyr::pull(target_nearest_dist_m), accuracy = 0.1, suffix = " m")` (`r scales::comma(tree_obj_polys %>% dplyr::filter(trtmnt_type == "uniform- high") %>% dplyr::slice(1) %>% dplyr::mutate(target_nearest_dist_m=target_nearest_dist_m*3.281) %>% dplyr::pull(target_nearest_dist_m), accuracy = 0.1, suffix = " ft")`). The example tree object is shaded and the neighboring trees within the treatment unit are outlined. 
 
 ```{r, fig.width=9.9, fig.height=10, fig.show='asis'}
 print(plt_high_temp)
@@ -3104,7 +3011,7 @@ print(plt_high_temp)
 
 #### Visual Examples: Uniform - Low
 
-here are some zoomed-in examples on the RGB imagery with the example tree object shaded and the neighboring trees within the treatment unit outlined.
+here are some zoomed-in examples on the RGB imagery for the uniform low group which had a target distance between the remaining trees of `r scales::comma(tree_obj_polys %>% dplyr::filter(trtmnt_type == "uniform- low") %>% dplyr::slice(1) %>% dplyr::pull(target_nearest_dist_m), accuracy = 0.1, suffix = " m")` (`r scales::comma(tree_obj_polys %>% dplyr::filter(trtmnt_type == "uniform- low") %>% dplyr::slice(1) %>% dplyr::mutate(target_nearest_dist_m=target_nearest_dist_m*3.281) %>% dplyr::pull(target_nearest_dist_m), accuracy = 0.1, suffix = " ft")`). The example tree object is shaded and the neighboring trees within the treatment unit are outlined. 
 
 ```{r, fig.width=9.9, fig.height=10, fig.show='asis'}
 print(plt_low_temp)
@@ -3233,7 +3140,7 @@ contrast_nn_df_temp %>%
   )
 ```
 
-## Prescription Target Threshold Testing
+#### Prescription Target Threshold Testing
 
 Finally, let's perform a one-sided hypothesis test to determine if specific spacing targets were successfully met for the uniform treatments. Rather than comparing treatments to each other, this analysis evaluates each individual treatment's estimated marginal mean (accounting for both unit size and block variation) against the prescription tree spacing target. The null hypothesis is that the true average tree spacing is less than or equal to the target. A statistically significant upper-tail p-value (p < 0.05) provides evidence that a given treatment reliably met the prescription spacing target
 

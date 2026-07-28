@@ -74,8 +74,11 @@ list.files(f, pattern = ".*\\.(laz|las)$")[1:3]
 
 what information does `lidR` read from the catalog?
 
-```{r,eval=F,purl=FALSE}
+```{r,eval=F,purl=FALSE,results=F}
 ctg_temp <- lidR::readLAScatalog(f)
+```
+
+```{r,eval=F,purl=FALSE}
 ctg_temp
 ```
 
@@ -325,15 +328,15 @@ plt_ws_fn
 Let's define our own custom linear function that slightly decreases the window size for the shortest trees but increases the window for taller trees compared to the default linear function.
 
 ```{r}
-my_lin_fn <- function (x) {
-      y <- dplyr::case_when(
-        is.na(x) ~ 0.001
-        , x < 0 ~ 0.001
-        , x > (5.3-0.51)/0.21 ~ 5.3
-        , TRUE ~ 0.51 + (x * 0.21)
-      )
-      return(y)
-}
+my_custom_ws_fn <- 
+  function(x){
+    dplyr::case_when(
+      is.na(x) ~ 0.5
+      , (0.5 + ((6 - 0.5) * x)/(7.39224 + x)) < 0.5 ~ 0.5
+      , (0.5 + ((6 - 0.5) * x)/(7.39224 + x)) > 6 ~ 6
+      , TRUE ~ (0.5 + ((6 - 0.5) * x)/(7.39224 + x))
+    )
+  }
 ```
 
 add to the plot
@@ -342,8 +345,8 @@ add to the plot
 # plt
 plt_ws_fn +
   ggplot2::geom_function(
-    fun = my_lin_fn
-    , mapping = ggplot2::aes(color = "my_lin_fn")
+    fun = my_custom_ws_fn
+    , mapping = ggplot2::aes(color = "my_custom_ws_fn")
     , lwd = 2
   )
 ```
@@ -357,7 +360,7 @@ itd_tuning_ans2 <- cloud2trees::itd_tuning(
   , ws_fn_list = list(
     lin_fn = itd_tuning_ans$ws_fn_list$lin_fn
     , log_fn = itd_tuning_ans$ws_fn_list$log_fn
-    , my_lin_fn = my_lin_fn
+    , my_custom_ws_fn = my_custom_ws_fn
   )
 )
 ```
@@ -528,7 +531,7 @@ plt_rgb_rast_itd_crowns(sample_nmbr = 1, rgb_rast = pj_rgb_rast, itd_crowns = it
     itd_tuning_ans2$crowns %>%
       cloud2trees::simplify_multipolygon_crowns() %>%
       dplyr::ungroup() %>%
-      dplyr::filter(sample_number == 1 & ws_fn == "my_lin_fn") %>%
+      dplyr::filter(sample_number == 1 & ws_fn == "my_custom_ws_fn") %>%
       sf::st_transform(terra::crs(rgb_rast_temp)) %>%
       terra::vect()
     , add = T, border = "brown", col = NA, lwd = 1.6
@@ -557,7 +560,7 @@ plt_rgb_rast_itd_crowns(sample_nmbr = 1, rgb_rast = pj_rgb_rast, itd_crowns = it
       dplyr::ungroup() %>%
       cloud2trees::simplify_multipolygon_crowns() %>%
       sf::st_make_valid() %>%
-      dplyr::filter(sample_number == 1 & ws_fn == "my_lin_fn")
+      dplyr::filter(sample_number == 1 & ws_fn == "my_custom_ws_fn")
 
   mapview::mapview(xxx, zcol = "tree_height_m")
   remove(xxx)
@@ -572,7 +575,7 @@ plt_rgb_rast_itd_crowns(sample_nmbr = 1, rgb_rast = pj_rgb_rast, itd_crowns = it
       dplyr::ungroup() %>%
       cloud2trees::simplify_multipolygon_crowns() %>%
       sf::st_make_valid() %>%
-      dplyr::filter(sample_number == 1 & ws_fn == "my_lin_fn") %>%
+      dplyr::filter(sample_number == 1 & ws_fn == "my_custom_ws_fn") %>%
       dplyr::filter(
         # treeID %in% c("68_708803.7_4193239.3", "67_708804.9_4193239.9" , "69_708804.9_4193237.9", "66_708803.9_4193240.3")
         # treeID %in% c("6_708811.3_4193258.3")
@@ -645,16 +648,15 @@ this is only moderately helpful as the tree density in tree clumps is difficult 
 
 ```{r}
 # michellis-menton growth function
-my_ws_fn <- 
-  function(x){
-    dplyr::case_when(
-      is.na(x) ~ 0.5
-      , (0.5 + ((6 - 0.5) * x)/(7.39224 + x)) < 0.5 ~ 0.5
-      , (0.5 + ((6 - 0.5) * x)/(7.39224 + x)) > 6 ~ 6
-      , TRUE ~ (0.5 + ((6 - 0.5) * x)/(7.39224 + x))
-    )
-  }
-  # cloud2trees::itd_ws_functions()[["lin_fn"]]
+my_ws_fn <- my_custom_ws_fn
+  # function(x){
+  #   dplyr::case_when(
+  #     is.na(x) ~ 0.5
+  #     , (0.5 + ((6 - 0.5) * x)/(7.39224 + x)) < 0.5 ~ 0.5
+  #     , (0.5 + ((6 - 0.5) * x)/(7.39224 + x)) > 6 ~ 6
+  #     , TRUE ~ (0.5 + ((6 - 0.5) * x)/(7.39224 + x))
+  #   )
+  # }
 ```
 
 ```{r, include=F, eval=F}
@@ -868,7 +870,7 @@ Tree extraction over **`r scales::comma((m2_temp/10000), accuracy = 0.1)`** hect
 
 ```{r, warning=FALSE, message=FALSE, echo=FALSE, include=FALSE}
 remove(list = ls()[grep("_temp",ls())])
-remove(my_lin_fn, my_ws_fn, plt_rgb_rast_itd_crowns, raw_las_ctg_info, processing_data, plt_ws_fn, pj_rgb_rast)
+remove(my_custom_ws_fn, my_ws_fn, plt_rgb_rast_itd_crowns, raw_las_ctg_info, processing_data, plt_ws_fn, pj_rgb_rast)
 gc()
 ```
 
@@ -1949,4 +1951,3 @@ remove(list = ls()[grep("_temp",ls())])
 remove(trees_biomass_ans)
 gc()
 ```
-

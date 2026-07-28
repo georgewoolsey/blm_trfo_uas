@@ -6,6 +6,50 @@ first, let's read in the UAS-delineated tree crown polygons as well so we have t
 
 ```{r do-the-crown-stuff}
 # ```{r,eval=F,purl=FALSE}
+# function to clean geometry collections
+clean_geometry_collections <- function(df, target_type = "POLYGON") {
+  # any?
+  geom_types <- as.character(sf::st_geometry_type(df))
+  has_gc <- any(geom_types == "GEOMETRYCOLLECTION")
+  
+  # orig
+  if (!has_gc) {
+    return(df)
+  }
+  
+  # temp id
+  df_temp <- df %>% dplyr::mutate(temp_orig_row_id = dplyr::row_number())
+  
+  # split the data
+  gc_df <- df_temp %>% dplyr::filter(as.character(sf::st_geometry_type(df_temp)) == "GEOMETRYCOLLECTION")
+  good_df <- df_temp %>% dplyr::filter(as.character(sf::st_geometry_type(df_temp)) != "GEOMETRYCOLLECTION")
+  
+  # get only the type and make it a "multi" geom
+  gc_multi_df <- 
+    gc_df %>%
+    sf::st_collection_extract(type = target_type) %>%
+    dplyr::select(temp_orig_row_id) %>% 
+    dplyr::group_by(temp_orig_row_id) %>%
+    # collapse into a single multi-part geometry
+    dplyr::summarise(.groups = "drop")
+  
+  # combine
+  final_df <- 
+    good_df %>% 
+    dplyr::bind_rows(
+      gc_multi_df %>% 
+        dplyr::inner_join(
+          gc_df %>% 
+            sf::st_drop_geometry()
+          , by = "temp_orig_row_id"
+        )
+    ) %>%
+    dplyr::arrange(temp_orig_row_id) %>%
+    dplyr::select(-temp_orig_row_id)
+  
+  return(final_df)
+}
+# read crowns and get crown measurements
 crowns_sf <-
   cloud2trees:::search_dir_final_detected(dir = c2t_process_dir)[["crowns_flist"]] %>% 
   purrr::map(function(x){
@@ -35,7 +79,9 @@ crowns_sf <-
     if(!has_cols){
       # get the crown data
       crowns_sf_temp <- 
-        crowns_sf_temp %>% 
+        crowns_sf_temp %>%
+        clean_geometry_collections(target_type = "POLYGON") %>% 
+        sf::st_make_valid() %>% 
         cloud2trees::simplify_multipolygon_crowns() %>% 
         dplyr::mutate(
           crown_area_m2 = sf::st_area(.) %>% as.numeric()
@@ -88,6 +134,173 @@ treetops_sf <-
         , crown_diameter_m
       )
     , by = "treeID"
+  )
+```
+
+```{r, purl=FALSE, include=F, eval=F}
+x_temp <- cloud2trees:::search_dir_final_detected(dir = c2t_process_dir)[["crowns_flist"]][1]
+xxx_temp <- 
+  sf::st_read(
+    dsn = x_temp, quiet = TRUE
+    , query = 
+      sprintf(
+        "SELECT * FROM %s WHERE treeID IN (%s)"
+        , basename(x_temp) %>% stringr::str_remove("^.*/") %>% stringr::str_remove("\\.[^.]+$")
+        , stringr::str_c("'", unique(treetops_sf$treeID), "'", collapse = ", ")
+      )
+  ) %>% 
+  # throw in hey_xxxxxxxxxx to test it works if we include non-existant columns
+  dplyr::select( dplyr::any_of(c(
+    "hey_xxxxxxxxxx"
+    , "treeID"
+    , "crown_area_m2"
+    , "crown_diameter_m"
+    , "tree_height_m"
+    , "tree_x"
+    , "tree_y"
+  )))
+xxx_temp %>% dplyr::glimpse()
+xxx_temp %>% sf::st_geometry_type() %>% table()
+xxx_temp %>% clean_geometry_collections(target_type = "POLYGON") %>% sf::st_make_valid() %>% sf::st_geometry_type() %>% table()
+xxx_temp %>% clean_geometry_collections(target_type = "POLYGON") %>% sf::st_make_valid() %>% cloud2trees::simplify_multipolygon_crowns() %>% sf::st_geometry_type() %>% table()
+
+
+treetops_temp <- file.path("../data/point_cloud_processing_delivery/","final_detected_tree_tops_attr.gpkg") %>% 
+  sf::st_read(quiet = TRUE)
+  # sf::st_read(dsn = treetops_fnm, quiet = TRUE)
+
+search_dir_final_detected_ans_temp <- cloud2trees:::search_dir_final_detected(dir = "d:/BLM_CO_SWDF_DawsonFuelsTreatment/point_cloud_processing_delivery/")
+(crowns_flist_temp <- search_dir_final_detected_ans_temp$crowns_flist)
+crowns_temp <- 
+  crowns_flist_temp %>% 
+  purrr::map(function(x){
+    # read it
+    crowns_sf_temp <- sf::st_read(
+      dsn = x, quiet = TRUE
+    ) %>% 
+    dplyr::mutate(f_dsn = x)
+    
+    return(crowns_sf_temp)
+    
+  }) %>% 
+  purrr::list_rbind()
+crowns_temp %>% dplyr::glimpse()
+# parts
+crowns_parts_temp <- 
+  crowns_temp %>% 
+  dplyr::ungroup() %>% 
+  # # sf::st_drop_geometry() %>% dplyr::count(treeID) %>% dplyr::filter(n>1)
+  # dplyr::slice_sample(n = 1111) %>%
+  sf::st_cast("POLYGON") %>% 
+  dplyr::group_by(treeID) %>%
+  dplyr::mutate(treeID_polyid = dplyr::row_number()) %>%
+  dplyr::ungroup() 
+# crowns_parts_temp %>% dplyr::group_by(treeID) %>% dplyr::mutate(n=dplyr::n()) %>% dplyr::ungroup() %>% dplyr::arrange(desc(n),treeID,treeID_polyid) %>% dplyr::glimpse()
+# crowns_temp %>% 
+#   dplyr::filter(treeID=="291207_707324.9_4192328.4") %>% 
+#   dplyr::select(treeID) %>% 
+#   terra::vect() %>% 
+#   terra::plot()
+# treetops_temp %>% 
+#   dplyr::filter(treeID=="291207_707324.9_4192328.4") %>% 
+#   dplyr::select(treeID) %>% 
+#   terra::vect() %>% 
+#   terra::plot(add=T, col = "red")
+# get only top polys
+crowns_tops_temp <-
+  crowns_parts_temp %>% 
+  sf::st_join(
+    treetops_temp %>% 
+      dplyr::mutate(is_top=T) %>% 
+      dplyr::select(treeID,is_top) %>% 
+      dplyr::rename(treeID_top = treeID)
+    , join = sf::st_intersects
+    , left = FALSE
+  ) %>% 
+  dplyr::filter(treeID==treeID_top) %>% 
+  dplyr::group_by(treeID) %>% 
+  dplyr::slice(1) %>% 
+  dplyr::ungroup() %>% 
+  sf::st_set_geometry("geometry") %>% 
+  dplyr::mutate(top_poly = geometry) %>%
+  sf::st_drop_geometry() %>%
+  dplyr::select(treeID, treeID_polyid, is_top, top_poly)
+crowns_tops_temp %>% dplyr::glimpse()
+# group touching polygons
+grp_poly_temp <-
+  crowns_temp %>% 
+  dplyr::ungroup() %>% 
+  # dplyr::filter(treeID %in% unique(crowns_parts_temp$treeID)) %>%
+  sf::st_union() %>% 
+  sf::st_cast("POLYGON") %>% 
+  sf::st_as_sf() %>%
+  dplyr::mutate(grp_poly_id = dplyr::row_number())
+# start with parts, left join tops, spatial join with grps, keep only parts that are in the same grp as the top, re-make as mulipart
+cleaned_polys_temp <-
+  crowns_parts_temp %>% 
+  sf::st_intersection(grp_poly_temp) %>% 
+  dplyr::left_join(crowns_tops_temp, by = dplyr::join_by(treeID,treeID_polyid)) %>% 
+  dplyr::mutate(is_top = dplyr::coalesce(is_top,F)) %>% 
+  dplyr::group_by(treeID) %>% 
+  dplyr::mutate(
+    tree_proper_grp_poly_id = max(ifelse(is_top,grp_poly_id,NA), na.rm = T)
+  ) %>% 
+  dplyr::ungroup() %>% 
+  dplyr::filter(
+    is_top 
+    | ( tree_proper_grp_poly_id == grp_poly_id & !is_top )
+  ) %>% 
+  dplyr::select(treeID) %>% 
+  dplyr::group_by(treeID) %>% 
+  dplyr::summarise(
+    # dplyr::across(dplyr::everything(), ~ dplyr::first(.))
+    .groups = "drop"
+  )
+  # dplyr::filter(treeID=="291207_707324.9_4192328.4") %>% dplyr::glimpse()
+  # dplyr::filter(treeID=="291207_707324.9_4192328.4") %>% dplyr::select(treeID) %>% terra::plot()
+  # dplyr::filter(treeID=="291207_707324.9_4192328.4") %>% sf::st_geometry_type()
+
+crowns_temp %>% 
+  dplyr::ungroup() %>% 
+  dplyr::filter(treeID %in% c("291207_707324.9_4192328.4")) %>% # "167520_707534.5_4193298.3" # 130920_709655.9_4193502.7
+  dplyr::filter(treeID %in% unique(crowns_parts_temp$treeID)) %>%
+  sf::st_union() %>% 
+  terra::vect() %>% 
+  terra::plot(border = "red", col = NA, lwd = 4)
+cleaned_polys_temp %>% 
+  dplyr::filter(treeID %in% c("291207_707324.9_4192328.4")) %>% # "167520_707534.5_4193298.3" # 130920_709655.9_4193502.7
+  sf::st_union() %>% 
+  terra::vect() %>% 
+  terra::plot(col = "blue", border = NA, add = T)
+
+cleaned_polys_temp %>% nrow()
+crowns_temp %>% nrow()
+cleaned_polys_temp$treeID %>% unique() %>% length()
+crowns_temp$treeID %>% unique() %>% length()
+
+cleaned_polys_temp %>% 
+      dplyr::inner_join(
+        crowns_temp %>% 
+          sf::st_drop_geometry() %>% 
+          dplyr::filter(f_dsn==crowns_temp$f_dsn[255555]) %>% 
+          dplyr::select(-f_dsn)
+        , by = "treeID"
+      ) %>% 
+# dplyr::glimpse()
+  sf::st_centroid() %>% terra::vect() %>% terra::plot(cex = 0.4, alpha = 0.5, axes=F)
+
+unique(crowns_temp$f_dsn) %>% 
+  purrr::map(
+    \(x)
+    cleaned_polys_temp %>% 
+      dplyr::inner_join(
+        crowns_temp %>% 
+          sf::st_drop_geometry() %>% 
+          dplyr::filter(f_dsn==x) %>% 
+          dplyr::select(-f_dsn)
+        , by = "treeID"
+      ) %>% 
+      sf::st_write(dsn = x, append = F)
   )
 ```
 
