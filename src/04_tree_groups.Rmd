@@ -646,19 +646,19 @@ plt_dist_rast_fn <-
 
 here is the distance raster without the trees
 
-```{r,eval=F,purl=FALSE, fig.height = 8, fig.width = 10.5}
+```{r,eval=T,purl=FALSE, fig.height = 8, fig.width = 10.5}
 # one unit
 plt_dist_rast_fn(3, add_clumps = F)
 ```
 
 and here is the distance raster with the tree clump groups overlaid
 
-```{r,eval=F,purl=FALSE, fig.height = 8, fig.width = 10.5}
+```{r,eval=T,purl=FALSE, fig.height = 8, fig.width = 10.5}
 p_temp <- plt_dist_rast_fn(3, add_clumps = T)
 p_temp
 ```
 
-```{r,eval=F,purl=FALSE, warning=FALSE, message=FALSE, echo=FALSE, include=FALSE}
+```{r,eval=T,purl=FALSE, warning=FALSE, message=FALSE, echo=FALSE, include=FALSE}
 ggplot2::ggsave(
   "../data/plt_dist_rast_ex.jpg"
   , plot = 
@@ -865,7 +865,7 @@ crowns_sf %>%
 
 now we'll overlay the tree clump groups on the distance raster for all units
 
-```{r,eval=F,purl=FALSE, results=F, fig.show='asis', fig.height=9.5, fig.width=9.5}
+```{r,eval=T,purl=FALSE, results=F, fig.show='asis', fig.height=9.5, fig.width=9.5}
 # mapping
 plt_blk_temp <- function(blk, add = F, save = F) {
   # which idx
@@ -1075,19 +1075,19 @@ plt_openings_vect_fn <-
 ```
 
 
-```{r,eval=F,purl=FALSE, fig.height = 8, fig.width = 10.5}
+```{r,eval=T,purl=FALSE, fig.height = 8, fig.width = 10.5}
 # one unit
 plt_openings_vect_fn(3, add_clumps = F)
 ```
 
 and here are the openings with the tree clump groups overlaid
 
-```{r,eval=F,purl=FALSE, fig.height = 8, fig.width = 10.5}
+```{r,eval=T,purl=FALSE, fig.height = 8, fig.width = 10.5}
 p_temp <- plt_openings_vect_fn(3, add_clumps = T)
 p_temp
 ```
 
-```{r,eval=F,purl=FALSE, warning=FALSE, message=FALSE, echo=FALSE, include=FALSE}
+```{r,eval=T,purl=FALSE, warning=FALSE, message=FALSE, echo=FALSE, include=FALSE}
 ggplot2::ggsave(
   "../data/plt_openings_ex.jpg"
   , plot = 
@@ -1103,7 +1103,7 @@ ggplot2::ggsave(
 
 now we'll overlay the tree clump groups on the openings data for all units
 
-```{r,eval=F,purl=FALSE, results=F, fig.show='asis', fig.height=9.5, fig.width=9.5}
+```{r,eval=T,purl=FALSE, results=F, fig.show='asis', fig.height=9.5, fig.width=9.5}
 # mapping
 plt_blk_temp <- function(blk, add = F, save = F) {
   # which idx
@@ -2745,7 +2745,7 @@ plt_grid_fn_temp <- function(plot_list, ncol = 2, line_color = "lightgray", line
 
 let's plot the post-treatment uniform high group which had a target distance between the remaining trees of `r scales::comma(tree_obj_polys %>% dplyr::filter(trtmnt_type == "uniform- high") %>% dplyr::slice(1) %>% dplyr::pull(target_nearest_dist_m), accuracy = 0.1, suffix = " m")` (`r scales::comma(tree_obj_polys %>% dplyr::filter(trtmnt_type == "uniform- high") %>% dplyr::slice(1) %>% dplyr::mutate(target_nearest_dist_m=target_nearest_dist_m*3.281) %>% dplyr::pull(target_nearest_dist_m), accuracy = 0.1, suffix = " ft")`)
 
-```{r,eval=F,purl=FALSE, results=F, fig.show='asis', fig.height=7, fig.width=8}
+```{r,eval=T,purl=FALSE, results=F, fig.show='asis', fig.height=7, fig.width=8}
 # get id's
 pl_temp <-
   unq_units_df %>% 
@@ -2760,7 +2760,7 @@ pl_temp <-
 print(pl_temp)
 ```
 
-```{r,eval=F,purl=FALSE, warning=FALSE, message=FALSE, echo=FALSE, include=FALSE}
+```{r,eval=T,purl=FALSE, warning=FALSE, message=FALSE, echo=FALSE, include=FALSE}
 ggplot2::ggsave(
   "../data/plt_tree_dist_ex.jpg"
   , plot = 
@@ -2795,7 +2795,7 @@ for (i in 1:length(plot_list)) {
 }
 ```
 
-```{r,eval=F,purl=FALSE, results=F, fig.show='asis', fig.height=7, fig.width=8}
+```{r,eval=T,purl=FALSE, results=F, fig.show='asis', fig.height=7, fig.width=8}
 # get id's
 pl_temp <-
   unq_units_df %>% 
