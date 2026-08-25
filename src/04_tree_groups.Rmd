@@ -499,12 +499,12 @@ get_clump_dist_rast_ans <-
 
 let's check out the distance raster for the same example unit we looked at above
 
-```{r, results=F, fig.show='asis'}
+```{r, results=F, fig.show='asis', fig.height = 8, fig.width = 10.5}
 # color the grps
 plt_dist_rast_fn <- 
   function(x, add_clumps = F, max_dist = NA){
     plt_tit <- paste0(
-      unq_units_df %>% dplyr::slice(x) %>% dplyr::pull(trtmnt_type)
+      unq_units_df %>% dplyr::slice(x) %>% recode_treatment_type_fn() %>% dplyr::pull(trtmnt_type)
       , " | block "
       , unq_units_df %>% dplyr::slice(x) %>% dplyr::pull(trtmnt_block)
       , " | "
@@ -642,14 +642,34 @@ plt_dist_rast_fn <-
     }
     return(plt_rast)
   }
+```
+
+here is the distance raster without the trees
+
+```{r,eval=F,purl=FALSE, fig.height = 8, fig.width = 10.5}
 # one unit
 plt_dist_rast_fn(3, add_clumps = F)
 ```
 
 and here is the distance raster with the tree clump groups overlaid
 
-```{r}
-plt_dist_rast_fn(3, add_clumps = T)
+```{r,eval=F,purl=FALSE, fig.height = 8, fig.width = 10.5}
+p_temp <- plt_dist_rast_fn(3, add_clumps = T)
+p_temp
+```
+
+```{r,eval=F,purl=FALSE, warning=FALSE, message=FALSE, echo=FALSE, include=FALSE}
+ggplot2::ggsave(
+  "../data/plt_dist_rast_ex.jpg"
+  , plot = 
+    p_temp+
+    ggplot2::theme(
+      plot.subtitle = ggplot2::element_blank()
+      , plot.title = ggplot2::element_blank()
+      , axis.title.x =ggplot2::element_blank()
+    )
+  , height = 8, width = 10.5, dpi = "print"
+)
 ```
 
 ```{r, purl=F, include=F, eval=F}
@@ -912,7 +932,7 @@ let's check out the openings for the same example unit we looked at above
 plt_openings_vect_fn <- 
   function(x, add_clumps = F, max_area = NA){
     plt_tit <- paste0(
-      unq_units_df %>% dplyr::slice(x) %>% dplyr::pull(trtmnt_type)
+      unq_units_df %>% dplyr::slice(x) %>% recode_treatment_type_fn() %>% dplyr::pull(trtmnt_type)
       , " | block "
       , unq_units_df %>% dplyr::slice(x) %>% dplyr::pull(trtmnt_block)
       , " | "
@@ -1052,14 +1072,33 @@ plt_openings_vect_fn <-
     }
     return(plt_open)
   }
+```
+
+
+```{r,eval=F,purl=FALSE, fig.height = 8, fig.width = 10.5}
 # one unit
 plt_openings_vect_fn(3, add_clumps = F)
 ```
 
 and here are the openings with the tree clump groups overlaid
 
-```{r}
-plt_openings_vect_fn(3, add_clumps = T)
+```{r,eval=F,purl=FALSE, fig.height = 8, fig.width = 10.5}
+p_temp <- plt_openings_vect_fn(3, add_clumps = T)
+p_temp
+```
+
+```{r,eval=F,purl=FALSE, warning=FALSE, message=FALSE, echo=FALSE, include=FALSE}
+ggplot2::ggsave(
+  "../data/plt_openings_ex.jpg"
+  , plot = 
+    p_temp+
+    ggplot2::theme(
+      plot.subtitle = ggplot2::element_blank()
+      , plot.title = ggplot2::element_blank()
+      , axis.title.x =ggplot2::element_blank()
+    )
+  , height = 8, width = 10.5, dpi = "print"
+)
 ```
 
 now we'll overlay the tree clump groups on the openings data for all units
@@ -1261,6 +1300,8 @@ clump_n_trees_grp_summary %>%
       , .fns = ~ scales::percent(.x, accuracy = 1)
     )
   ) %>% 
+  recode_treatment_type_fn(ordered = T) %>% 
+  dplyr::arrange(trtmnt_block,trtmnt_type) %>% 
   # dplyr::glimpse()
   # dplyr::slice_head(n=8) %>% 
   kableExtra::kbl(
@@ -1292,10 +1333,12 @@ that is so much information but some people like tables and they might be able t
 let's summarize the data by treatment type and plot it for those that prefer visualizations
 
 ```{r}
-clump_n_trees_grp_summary %>% 
+p_temp <- 
+  clump_n_trees_grp_summary %>% 
   dplyr::group_by(trtmnt_type, clump_n_trees_grp) %>% 
   dplyr::summarise(n = sum(n_trees)) %>% 
-  dplyr::ungroup() %>% 
+  dplyr::ungroup() %>%
+  recode_treatment_type_fn(ordered = T) %>% 
   # area by type
   dplyr::inner_join(
     unit_sum_df %>% 
@@ -1312,7 +1355,7 @@ clump_n_trees_grp_summary %>%
     , tph = n/trtmnt_unit_area_ha
     , lab = paste0(scales::comma(tph,accuracy=1), "\n",scales::percent(pct,accuracy=1) )
   ) %>% 
-  dplyr::ungroup() %>% 
+  dplyr::ungroup() %>%
   # dplyr::glimpse()
   ggplot2::ggplot(
     mapping = ggplot2::aes(y = tph, x = clump_n_trees_grp)
@@ -1324,7 +1367,7 @@ clump_n_trees_grp_summary %>%
   ) +
   ggplot2::geom_text(
     mapping = ggplot2::aes(label = lab)
-    , color = "black", size = 2.5, vjust = -0.2
+    , color = "black", size = 2.2, vjust = -0.2
   ) +
   ggplot2::scale_fill_brewer(palette = "Dark2") +
   ggplot2::scale_x_discrete(drop = F) + 
@@ -1353,13 +1396,30 @@ clump_n_trees_grp_summary %>%
     # , axis.text.y = ggplot2::element_blank()
     # , axis.ticks.y = ggplot2::element_blank()
   )
+p_temp
+```
+
+```{r, warning=FALSE, message=FALSE, echo=FALSE, include=FALSE, eval = T}
+ggplot2::ggsave(
+  "../data/plt_clump_tph_bars_by_trtmnt_type.jpg"
+  , plot = 
+    p_temp+
+    ggplot2::theme(
+      plot.subtitle = ggplot2::element_blank()
+      , plot.title = ggplot2::element_blank()
+      , axis.title.x =ggplot2::element_blank()
+    )
+  , height = 6.5, width = 9, dpi = "print"
+)
 ```
 
 the plot above represents an average across all of the smaller treatment units by treatment type. averaging across the different treatment units results in a loss of the underlying distribution. let's look at the range of outcomes by treatment type
 
 ```{r}
-clump_n_trees_grp_summary %>% 
+p_temp <- 
+  clump_n_trees_grp_summary %>% 
   dplyr::ungroup() %>% 
+  recode_treatment_type_fn(ordered = T) %>% 
   # dplyr::glimpse()
   ggplot2::ggplot(
     mapping = ggplot2::aes(y = trees_per_ha, x = clump_n_trees_grp)
@@ -1401,13 +1461,30 @@ clump_n_trees_grp_summary %>%
     # , axis.text.y = ggplot2::element_blank()
     # , axis.ticks.y = ggplot2::element_blank()
   )
+p_temp
 ```
 
-this is neat, let's check out the same type of plot but look at the proportion of unit-level trees within the different clump sizes
+```{r, warning=FALSE, message=FALSE, echo=FALSE, include=FALSE, eval = T}
+ggplot2::ggsave(
+  "../data/plt_clump_tph_boxes_by_trtmnt_type.jpg"
+  , plot = 
+    p_temp+
+    ggplot2::theme(
+      plot.subtitle = ggplot2::element_blank()
+      , plot.title = ggplot2::element_blank()
+      , axis.title.x =ggplot2::element_blank()
+    )
+  , height = 6.5, width = 9, dpi = "print"
+)
+```
+
+this is neat, let's check out the same type of plot but look at the *proportion* of unit-level trees within the different clump sizes
 
 ```{r}
-clump_n_trees_grp_summary %>% 
+p_temp <- 
+  clump_n_trees_grp_summary %>% 
   dplyr::ungroup() %>% 
+  recode_treatment_type_fn(ordered = T) %>% 
   # dplyr::glimpse()
   ggplot2::ggplot(
     mapping = ggplot2::aes(y = pct_stand_n_trees, x = clump_n_trees_grp)
@@ -1449,12 +1526,28 @@ clump_n_trees_grp_summary %>%
     # , axis.text.y = ggplot2::element_blank()
     # , axis.ticks.y = ggplot2::element_blank()
   )
+p_temp
 ```
 
-we can aggregate those proportions over all units in a given treatment type
+```{r, warning=FALSE, message=FALSE, echo=FALSE, include=FALSE, eval = T}
+ggplot2::ggsave(
+  "../data/plt_clump_props_boxes_by_trtmnt_type.jpg"
+  , plot = 
+    p_temp+
+    ggplot2::theme(
+      plot.subtitle = ggplot2::element_blank()
+      , plot.title = ggplot2::element_blank()
+      , axis.title.x =ggplot2::element_blank()
+    )
+  , height = 6.5, width = 9, dpi = "print"
+)
+```
+
+we can aggregate those proportions over all units in a given treatment type to get the mean value
 
 ```{r}
-clump_n_trees_grp_summary %>% 
+p_temp <- 
+  clump_n_trees_grp_summary %>% 
   dplyr::group_by(trtmnt_type, clump_n_trees_grp) %>% 
   dplyr::summarise(n = sum(n_trees)) %>% 
   dplyr::group_by(trtmnt_type) %>% 
@@ -1462,6 +1555,7 @@ clump_n_trees_grp_summary %>%
     pct = n/sum(n)
   ) %>% 
   dplyr::ungroup() %>% 
+  recode_treatment_type_fn(ordered = T) %>% 
   # dplyr::glimpse()
   ggplot2::ggplot(
     mapping = ggplot2::aes(y = pct, x = clump_n_trees_grp)
@@ -1473,7 +1567,7 @@ clump_n_trees_grp_summary %>%
   ) +
   ggplot2::geom_text(
     mapping = ggplot2::aes(label = scales::percent(pct,accuracy = 0.1))
-    , color = "black", size = 2.5, vjust = -0.2
+    , color = "black", size = 2.2, vjust = -0.2
   ) +
   ggplot2::scale_fill_brewer(palette = "Dark2") +
   ggplot2::scale_x_discrete(drop = F) + 
@@ -1490,7 +1584,7 @@ clump_n_trees_grp_summary %>%
     # , switch = "y"
   ) +
   ggplot2::labs(
-    x = "tree clump size", y = "proportion of trees¹", fill = ""
+    x = "tree clump size", y = "proportion of trees", fill = ""
     , subtitle = "Study-wide tree proportions by tree clump size"
   ) +
   ggplot2::theme_light() +
@@ -1502,11 +1596,27 @@ clump_n_trees_grp_summary %>%
     # , axis.text.y = ggplot2::element_blank()
     # , axis.ticks.y = ggplot2::element_blank()
   )
+p_temp
+```
+
+```{r, warning=FALSE, message=FALSE, echo=FALSE, include=FALSE, eval = T}
+ggplot2::ggsave(
+  "../data/plt_clump_props_bars_by_trtmnt_type.jpg"
+  , plot = 
+    p_temp+
+    ggplot2::theme(
+      plot.subtitle = ggplot2::element_blank()
+      , plot.title = ggplot2::element_blank()
+      , axis.title.x =ggplot2::element_blank()
+    )
+  , height = 6.5, width = 9, dpi = "print"
+)
 ```
 
 we can look at that same data in a slightly different way
 
 ```{r}
+p_temp <- 
 clump_n_trees_grp_summary %>% 
   dplyr::group_by(trtmnt_type, clump_n_trees_grp) %>% 
   dplyr::summarise(n = sum(n_trees)) %>% 
@@ -1526,6 +1636,8 @@ clump_n_trees_grp_summary %>%
       , "black"
     )
   ) %>% 
+  recode_treatment_type_fn(ordered = T) %>% 
+  dplyr::mutate(trtmnt_type=forcats::fct_rev(trtmnt_type)) %>% 
 ggplot2::ggplot(
   mapping = ggplot2::aes(x = pct, y = trtmnt_type, fill=clump_n_trees_grp, group=clump_n_trees_grp)
 ) +
@@ -1568,6 +1680,20 @@ ggplot2::ggplot(
       # , override.aes = list(alpha = 0.9)
     )
   )
+p_temp
+```
+
+```{r, warning=FALSE, message=FALSE, echo=FALSE, include=FALSE, eval = T}
+ggplot2::ggsave(
+  "../data/plt_clump_props_by_trtmnt_type.jpg"
+  , plot = 
+    p_temp+
+    ggplot2::theme(
+      plot.subtitle = ggplot2::element_blank()
+      , plot.title = ggplot2::element_blank()
+    )
+  , height = 9, width = 8.5, dpi = "print"
+)
 ```
 
 ```{r, purl=F, eval=F, include=F}
@@ -1627,6 +1753,7 @@ crowns_sf %>%
   sf::st_drop_geometry() %>% 
   dplyr::ungroup() %>%
   dplyr::select(trtmnt_type, clump_n_trees_grp, tree_height_m) %>% 
+  recode_treatment_type_fn(ordered = T) %>% 
   # calc_imperial_units_fn() %>% 
   # dplyr::glimpse()
   ggplot2::ggplot(
@@ -1715,6 +1842,7 @@ cc_df_temp <-
               stringr::str_squish()
           ) %>% 
           dplyr::rename_with(.fn = ~paste0("trtmnt_", .x, recycle0 = T)) %>% 
+          recode_treatment_type_fn(ordered = T) %>% 
           dplyr::inner_join(
             unit_sum_df %>% dplyr::slice(x) %>% 
               dplyr::select(trtmnt_type,trtmnt_block,trtmnt_unit)
@@ -1751,6 +1879,7 @@ open_temp <-
     , .groups = "drop_last"
   ) %>% 
   dplyr::ungroup() %>% 
+  recode_treatment_type_fn(ordered = T) %>% 
   dplyr::inner_join(
     unit_sum_df %>% 
       dplyr::select(trtmnt_unit_area_ha,trtmnt_type,trtmnt_block,trtmnt_unit)
@@ -1794,7 +1923,8 @@ open_temp %>%
 based on these unit-level data, we can look at the distribution of the proportion of the stand that is open
 
 ```{r}
-open_temp %>% 
+p_temp <- 
+  open_temp %>% 
   ggplot2::ggplot(mapping = ggplot2::aes(x=pct_open)) +
   ggplot2::geom_violin(
     mapping = ggplot2::aes(y = 0, fill=trtmnt_type)
@@ -1821,6 +1951,20 @@ open_temp %>%
     , axis.text.x = ggplot2::element_text(size = 9)
     , plot.subtitle = ggplot2::element_text(margin = ggplot2::margin(t = -20, unit = "pt"))
   )
+p_temp
+```
+
+```{r, warning=FALSE, message=FALSE, echo=FALSE, include=FALSE, eval = T}
+ggplot2::ggsave(
+  "../data/plt_open_by_trtmnt_type.jpg"
+  , plot = 
+    p_temp+
+    ggplot2::theme(
+      plot.subtitle = ggplot2::element_blank()
+      , plot.title = ggplot2::element_blank()
+    )
+  , height = 9, width = 8.5, dpi = "print"
+)
 ```
 
 this is what we expected based on the treatment type prescriptions.
@@ -1828,7 +1972,8 @@ this is what we expected based on the treatment type prescriptions.
 let's also look at the distribution of canopy cover based on that UAS-delineated tree crowns in these different treatments
 
 ```{r}
-open_temp %>% 
+p_temp <- 
+  open_temp %>% 
   ggplot2::ggplot(mapping = ggplot2::aes(x=canopy_cov_pct)) +
   ggplot2::geom_violin(
     mapping = ggplot2::aes(y = 0, fill=trtmnt_type)
@@ -1855,11 +2000,25 @@ open_temp %>%
     , axis.text.x = ggplot2::element_text(size = 9)
     , plot.subtitle = ggplot2::element_text(margin = ggplot2::margin(t = -20, unit = "pt"))
   )
+p_temp
+```
+
+```{r, warning=FALSE, message=FALSE, echo=FALSE, include=FALSE, eval = T}
+ggplot2::ggsave(
+  "../data/plt_cancov_by_trtmnt_type.jpg"
+  , plot = 
+    p_temp+
+    ggplot2::theme(
+      plot.subtitle = ggplot2::element_blank()
+      , plot.title = ggplot2::element_blank()
+    )
+  , height = 9, width = 8.5, dpi = "print"
+)
 ```
 
 let's look at the proportion of canopy cover and open area together for each treatment unit. note, that the total of canopy cover and opening area will not comprise the entire unit area with the remaining space accounted for in the form of intermediate required spacing of `r my_buffer` m between tree crowns and open space as well as very small enclosed, openings with an area less than 40.5 square meters (0.01 acres) which was required for classification as an actual treeless opening
 
-```{r}
+```{r, fig.height=8, fig.width=7.8}
 open_temp %>% 
   ggplot2::ggplot(mapping = ggplot2::aes(x=pct_open,y=canopy_cov_pct,color=trtmnt_type)) +
   ggplot2::geom_function(
@@ -1882,7 +2041,6 @@ open_temp %>%
     , axis.text.y = ggplot2::element_text(size = 8)
     , axis.text.x = ggplot2::element_text(size = 8)
   )
-
 ```
 
 the variability within the different treatment types is interesting
@@ -1982,10 +2140,76 @@ open_temp %>%
   kableExtra::column_spec(c(3,8), border_right = TRUE, include_thead = TRUE) 
 ```
 
+and table the summary of canopy cover by treatment type
+
+```{r}
+# open_temp$canopy_cov_pct %>% summary()
+open_temp %>% 
+  dplyr::select(
+    trtmnt_type
+    , trtmnt_unit_area_ha
+    , canopy_cov_pct
+  ) %>% 
+  dplyr::group_by(trtmnt_type) %>% 
+  dplyr::summarise(
+    dplyr::across(
+      c(canopy_cov_pct)
+      , .fns = list(
+        q25 = ~quantile(.x,na.rm=T,probs=0.25)
+        , median = ~median(.x,na.rm=T)
+        , mean = ~mean(.x,na.rm=T)
+        , q75 = ~quantile(.x,na.rm=T,probs=0.75)
+        # , q10 = ~quantile(.x,na.rm=T,probs=0.1)
+        # , q50 = ~quantile(.x,na.rm=T,probs=0.5)
+        # , q90 = ~quantile(.x,na.rm=T,probs=0.9)
+        # , min = ~min(.x,na.rm=T)
+        # , max = ~max(.x,na.rm=T)
+        , range = ~paste0(
+          scales::percent(min(.x,na.rm=T), accuracy = 0.1)
+          ,"-"
+          , scales::percent(max(.x,na.rm=T), accuracy = 0.1)
+        )
+      )
+    )
+    , n = dplyr::n()
+    , trtmnt_unit_area_ha = mean(trtmnt_unit_area_ha, na.rm=T)
+  ) %>% 
+  dplyr::ungroup() %>% 
+  dplyr::mutate(
+    n = scales::comma(n,accuracy=1)
+    , trtmnt_unit_area_ha = scales::comma(trtmnt_unit_area_ha,accuracy=.1)
+    , dplyr::across(.cols = dplyr::where(is.numeric), ~scales::percent(.x,accuracy=0.1) )
+  ) %>% 
+  dplyr::arrange(trtmnt_type) %>% 
+  dplyr::relocate(trtmnt_type,n,trtmnt_unit_area_ha) %>% 
+  kableExtra::kbl(
+    caption = "canopy cover by treatment type"
+    , col.names = c(
+      "type","# units","mean unit area (ha)"
+      , "1st Qu."
+      , "median"
+      , "mean"
+      , "3rd Qu."
+      , "range"
+    )
+    , escape = F
+    # , digits = 2
+  ) %>% 
+  kableExtra::kable_styling(font_size = 10.6) %>% 
+  kableExtra::add_header_above(c(
+    " "=3
+    # , "Detection" = 3
+    # , "Area" = 3
+    , "% canopy cover" = 5
+  )) %>% 
+  kableExtra::column_spec(c(3,8), border_right = TRUE, include_thead = TRUE) 
+```
+
 let's check out the raw size areas of the individual openings even though there is variation in the size of the treatment units which influences how large an opening can be
 
 ```{r}
 open_full_temp %>% 
+  recode_treatment_type_fn(ordered=T) %>% 
   ggplot2::ggplot(mapping = ggplot2::aes(x=openining_area_m2)) +
   ggplot2::geom_violin(
     mapping = ggplot2::aes(y = 0, fill=trtmnt_type)
@@ -2018,6 +2242,7 @@ wow. that may not be very informative...let's use a log scale on the x-axis
 
 ```{r}
 open_full_temp %>% 
+  recode_treatment_type_fn(ordered=T) %>% 
   ggplot2::ggplot(mapping = ggplot2::aes(x=openining_area_m2)) +
   ggplot2::geom_violin(
     mapping = ggplot2::aes(y = 0, fill=trtmnt_type)
@@ -2050,7 +2275,6 @@ open_full_temp %>%
 table the summary statistics of the opening sizes
 
 ```{r}
-# open_temp$pct_open %>% summary()
 open_full_temp %>% 
   dplyr::select(
     trtmnt_type
@@ -2085,6 +2309,7 @@ open_full_temp %>%
     n = scales::comma(n,accuracy=1)
     , dplyr::across(.cols = dplyr::where(is.numeric), ~scales::comma(.x,accuracy=0.1) )
   ) %>% 
+  recode_treatment_type_fn(ordered=T) %>% 
   dplyr::arrange(trtmnt_type) %>% 
   dplyr::relocate(trtmnt_type,n) %>% 
   kableExtra::kbl(
@@ -2155,10 +2380,12 @@ tree_obj_polys <-
     
     stand_temp <- 
       stand_boundary %>%
+      dplyr::rename(trtmnt_type=tretmnt) %>% 
+      recode_treatment_type_fn() %>% 
       dplyr::filter(
         unit==unt_temp$trtmnt_unit
         , block==unt_temp$trtmnt_block
-        , tolower(stringr::str_squish(tretmnt))==unt_temp$trtmnt_type
+        , as.character(trtmnt_type)==as.character(unt_temp$trtmnt_type)
       ) %>% 
       sf::st_transform(sf::st_crs(crowns_sf)) %>% 
       dplyr::mutate(xxx=1) %>% 
@@ -2167,6 +2394,7 @@ tree_obj_polys <-
     tree_obj_polys_temp <- 
       crowns_sf %>% 
       dplyr::ungroup() %>% 
+      recode_treatment_type_fn(ordered=T) %>% 
       dplyr::inner_join(
         unt_temp %>% dplyr::select(trtmnt_type,trtmnt_block,trtmnt_unit)
         , by = dplyr::join_by(trtmnt_type,trtmnt_block,trtmnt_unit)
@@ -2239,25 +2467,27 @@ tree_obj_polys <-
 # add distance target
 tree_obj_polys <-
   tree_obj_polys %>% 
+  # dplyr::pull(trtmnt_type) %>% levels()
   dplyr::left_join(
    unq_units_df %>% 
       dplyr::filter(
-        stringr::str_starts(trtmnt_type, "uniform")
+        stringr::str_starts(tolower(trtmnt_type), "uniform")
       ) %>% 
       dplyr::distinct(trtmnt_type) %>% 
       dplyr::mutate(
         target_nearest_dist_m = dplyr::case_when(
-          stringr::str_ends(trtmnt_type, "low") ~ 15/3.281
-          , stringr::str_ends(trtmnt_type, "high") ~ 30/3.281
+          stringr::str_ends(tolower(trtmnt_type), "low") ~ 15/3.281
+          , stringr::str_ends(tolower(trtmnt_type), "high") ~ 30/3.281
         )
-      ) 
+      ) %>% 
+      recode_treatment_type_fn(ordered = T)
    , by = "trtmnt_type"
   ) %>% 
   dplyr::mutate(
     target_nearest_dist_m = dplyr::coalesce(target_nearest_dist_m,-Inf)
     , is_within_presc_dist = ifelse(nearest_dist_m>=target_nearest_dist_m, "meets prescription", "fails prescription") %>% factor()
   )
-  # sf::st_drop_geometry() %>% dplyr::count(trtmnt_type,is_within_presc_dist)
+  # sf::st_drop_geometry() %>% dplyr::count(trtmnt_type, target_nearest_dist_m,is_within_presc_dist)
 # huh?
 tree_obj_polys %>% dplyr::glimpse()
 
@@ -2269,9 +2499,11 @@ let's check that out for a single unit with the tree objects colored by the dist
 unit_temp <- unq_units_df %>% 
   dplyr::filter(
     # stringr::str_starts(trtmnt_type, "uniform")
-    trtmnt_type == "uniform- high"
+    tolower(trtmnt_type) == "uniform- high"
   ) %>% 
-  dplyr::slice(1)
+  dplyr::slice(1) %>% 
+  recode_treatment_type_fn(ordered = T)
+
 tree_obj_polys %>% 
   dplyr::inner_join(
     unit_temp
@@ -2322,7 +2554,7 @@ pal_meets_presc <- c(
   setNames(c("fails prescription","meets prescription"))
 # plt fn
 plt_fn_temp <- function(x) {
-  unit_temp <- unq_units_df %>% dplyr::slice(x)
+  unit_temp <- unq_units_df %>% recode_treatment_type_fn(ordered = T) %>% dplyr::slice(x)
   
   plt_tit <- paste0(
       unit_temp$trtmnt_type
@@ -2515,21 +2747,32 @@ let's plot the post-treatment uniform high group which had a target distance bet
 
 ```{r,eval=F,purl=FALSE, results=F, fig.show='asis', fig.height=7, fig.width=8}
 # get id's
-# pl_temp <-
+pl_temp <-
   unq_units_df %>% 
   dplyr::mutate(rn = dplyr::row_number()) %>% 
   dplyr::filter(
     # stringr::str_starts(trtmnt_type, "uniform")
-    trtmnt_type == "uniform- high"
+    tolower(trtmnt_type) == "uniform- high"
   ) %>% 
   dplyr::pull(rn) %>% 
   # .[1] %>%
   purrr::map(plt_fn_temp)
+print(pl_temp)
 ```
 
-```{r,purl=FALSE, include = F, eval = F}
-plt_grid_fn_temp(pl_temp, ncol = 3, line_thickness = 0.001)
-ggplot2::ggsave("../data/tempxxx.jpg", height = 11, width = 10, dpi = "print")
+```{r,eval=F,purl=FALSE, warning=FALSE, message=FALSE, echo=FALSE, include=FALSE}
+ggplot2::ggsave(
+  "../data/plt_tree_dist_ex.jpg"
+  , plot = 
+    pl_temp[[1]]+
+    ggplot2::theme(
+      plot.subtitle = ggplot2::element_blank()
+      , plot.title = ggplot2::element_blank()
+      , axis.title.x =ggplot2::element_blank()
+      , legend.position = "top"
+    )
+  , height = 8, width = 10.5, dpi = "print"
+)
 ```
 
 #### Uniform - Low
@@ -2554,17 +2797,18 @@ for (i in 1:length(plot_list)) {
 
 ```{r,eval=F,purl=FALSE, results=F, fig.show='asis', fig.height=7, fig.width=8}
 # get id's
-unq_units_df %>% 
+pl_temp <-
+  unq_units_df %>% 
   dplyr::mutate(rn = dplyr::row_number()) %>% 
   dplyr::filter(
     # stringr::str_starts(trtmnt_type, "uniform")
-    trtmnt_type == "uniform- low"
+    tolower(trtmnt_type) == "uniform- low"
   ) %>% 
   dplyr::pull(rn) %>% 
   # .[6] %>%
   purrr::map(plt_fn_temp)
+print(pl_temp)
 ```
-
 
 ```{r, warning=FALSE, message=FALSE, echo=FALSE, include=FALSE}
 remove(list = ls()[grep("_temp",ls())])
@@ -2584,7 +2828,14 @@ tree_obj_spacing_targets_df <-
   dplyr::mutate(target_nearest_dist_m = ifelse(is.infinite(target_nearest_dist_m ),NA,target_nearest_dist_m ))
 
 # plt
-tree_obj_polys %>% 
+p_temp <- 
+  tree_obj_polys %>% 
+  
+  ###### this makes sure the long tail isn't plotted :/
+  dplyr::ungroup() %>%
+  dplyr::filter(nearest_dist_m< quantile(tree_obj_polys$nearest_dist_m, probs=0.9999, na.rm=T)) %>%
+  ###### this makes sure the long tail isn't plotted :/
+  
   # dplyr::filter(trtmnt_type!="control") %>% 
   ggplot2::ggplot(mapping = ggplot2::aes(x=nearest_dist_m)) +
   ggplot2::geom_vline(
@@ -2614,7 +2865,7 @@ tree_obj_polys %>%
   # ggplot2::scale_x_log10(labels = scales::comma) +
   ggplot2::scale_y_continuous(NULL,breaks=NULL) +
   ggplot2::labs(
-    fill="",x="distance to\nnearest tree (m)",y=""
+    fill="",x="distance to nearest tree (m)",y=""
     , title = "distribution of post-treatment tree spacing distance to nearest neighbor"
     , subtitle = "\nby treatment type"
   ) +
@@ -2625,6 +2876,20 @@ tree_obj_polys %>%
     , axis.text.x = ggplot2::element_text(size = 9)
     , plot.subtitle = ggplot2::element_text(margin = ggplot2::margin(t = -20, unit = "pt"))
   )
+p_temp
+```
+
+```{r, warning=FALSE, message=FALSE, echo=FALSE, include=FALSE, eval = T}
+ggplot2::ggsave(
+  "../data/plt_tree_dist_by_trtmnt_type.jpg"
+  , plot = 
+    p_temp+
+    ggplot2::theme(
+      plot.subtitle = ggplot2::element_blank()
+      , plot.title = ggplot2::element_blank()
+    )
+  , height = 9, width = 8.5, dpi = "print"
+)
 ```
 
 interesting, at least one of those treatment types has a tree or few trees that are much further away than is typical for post-treatment conditions.
@@ -2634,6 +2899,10 @@ let's allow for an independent x-axis range by treatment type
 ```{r}
 tree_obj_polys %>% 
   # dplyr::filter(trtmnt_type!="control") %>% 
+  ###### this makes sure the long tail isn't plotted :/
+  dplyr::ungroup() %>%
+  dplyr::filter(nearest_dist_m< quantile(tree_obj_polys$nearest_dist_m, probs=0.9999, na.rm=T)) %>%
+  ###### this makes sure the long tail isn't plotted :/
   ggplot2::ggplot(mapping = ggplot2::aes(x=nearest_dist_m)) +
   ggplot2::geom_vline(
     data = tree_obj_spacing_targets_df
@@ -2663,7 +2932,7 @@ tree_obj_polys %>%
   # ggplot2::scale_x_log10(labels = scales::comma) +
   ggplot2::scale_y_continuous(NULL,breaks=NULL) +
   ggplot2::labs(
-    fill="",x="distance to\nnearest tree (m)",y=""
+    fill="",x="distance to nearest tree (m)",y=""
     , title = "distribution of post-treatment tree spacing distance to nearest neighbor"
     , subtitle = "\nby treatment type"
     , caption = "*note, independent x-axis range for each treatment type"
@@ -2789,6 +3058,7 @@ terra_plt_fn_temp <- function(rgb, this_poly, other_poly, all_polys, plot_title=
 
 
 # for a single record in the validation plot data
+# tree_obj_polys %>% dplyr::glimpse()
 plt_crown_pairs_temp <- function(whichrow, b){
     # this crwn
     this_poly_temp <- tree_obj_polys %>% dplyr::slice(whichrow)
@@ -2872,7 +3142,7 @@ plt_crown_pairs_temp <- function(whichrow, b){
 #     dplyr::pull(nearest_dist_m)
 # )
 
-fnl_plt_fn_temp <- function(which_type = "uniform- low", seed = 11){
+fnl_plt_fn_temp <- function(which_type = "uniform-low", seed = 11){
   set.seed(seed)
 
       which_trt_dta_temp <- 
@@ -2884,7 +3154,7 @@ fnl_plt_fn_temp <- function(which_type = "uniform- low", seed = 11){
         ) %>% 
         dplyr::filter(
           # stringr::str_starts(trtmnt_type, "uniform")
-          trtmnt_type == which_type
+          tolower(as.character(trtmnt_type)) == tolower(as.character(which_type))
         )
       
       max_dist_temp <- 
@@ -2953,27 +3223,27 @@ fnl_plt_fn_temp <- function(which_type = "uniform- low", seed = 11){
             , " to "
             , scales::number(as.numeric(quantile(which_trt_dta_temp$nearest_dist_m,0.25)),accuracy = 0.01, suffix = " m")
           )
-          , fontface = 'bold', x = 0.5, hjust = 0.5, size = 10
+          , fontface = 'bold', x = 0.5, hjust = 0.5, size = 9.6
         )
       tit2_temp <- cowplot::ggdraw() + 
         cowplot::draw_label(
           paste0(
-            "nn distance: "
+            "nearest distance: "
             , scales::number(as.numeric(quantile(which_trt_dta_temp$nearest_dist_m,0.45)),accuracy = 0.01)
             , " to "
             , scales::number(as.numeric(quantile(which_trt_dta_temp$nearest_dist_m,0.65)),accuracy = 0.01, suffix = " m")
           )
-          , fontface = 'bold', x = 0.5, hjust = 0.5, size = 10
+          , fontface = 'bold', x = 0.5, hjust = 0.5, size = 9.6
         )
       tit3_temp <- cowplot::ggdraw() + 
         cowplot::draw_label(
           paste0(
-            "nn distance: "
+            "nearest distance: "
             , scales::number(as.numeric(quantile(which_trt_dta_temp$nearest_dist_m,0.75)),accuracy = 0.01)
             , " to "
             , scales::number(as.numeric(quantile(which_trt_dta_temp$nearest_dist_m,0.95)),accuracy = 0.01, suffix = " m")
           )
-          , fontface = 'bold', x = 0.5, hjust = 0.5, size = 10
+          , fontface = 'bold', x = 0.5, hjust = 0.5, size = 9.6
         )
       plt_tit_temp <- cowplot::plot_grid(tit1_temp, tit2_temp, tit3_temp, ncol = 3)
       # plt_tit_temp
@@ -2996,8 +3266,8 @@ fnl_plt_fn_temp <- function(which_type = "uniform- low", seed = 11){
   
 }
 
-plt_low_temp <- fnl_plt_fn_temp(which_type = "uniform- low", seed = 33)
-plt_high_temp <- fnl_plt_fn_temp(which_type = "uniform- high", seed = 1)
+plt_low_temp <- fnl_plt_fn_temp(which_type = "uniform-low", seed = 33)
+plt_high_temp <- fnl_plt_fn_temp(which_type = "uniform-high", seed = 1)
 
 ```
 
@@ -3052,6 +3322,7 @@ joint_tests_temp %>% knitr::kable(format = "markdown")
 ```{r, include=FALSE, eval=TRUE}
 p_temp <-
   joint_tests_temp$p.value[which(joint_tests_temp$`model term` %in% c("trtmnt_type"))]
+# p_temp
 ```
 
 the p-value for treatment type of `r scales::comma(p_temp, accuracy=0.0001)` indicates that the nearest-neighbor spacing `r ifelse(p_temp<0.05,"differs", "does not differ")` significantly across the treatments after accounting for block variations and unit size
@@ -3106,15 +3377,16 @@ contrast_nn_df_temp <-
 
 a few interpretations: 
 
-* The *heterogenous* treatment `r contrast_nn_df_temp %>% dplyr::filter(contrast=="heterogenous - control") %>% dplyr::pull(estimate) %>% {dplyr::case_when(.>=0 ~ "increased", T ~ "decreased")}` tree spacing by `r contrast_nn_df_temp %>% dplyr::filter(contrast=="heterogenous - control") %>% dplyr::pull(estimate) %>% scales::comma(accuracy=0.01, suffix = " m")` on average compared to the *control*, which is a statistically `r contrast_nn_df_temp %>% dplyr::filter(contrast=="heterogenous - control") %>% dplyr::pull(p.value) %>% {dplyr::case_when(.<=0.05 ~ "significant", T ~ "insignificant")}` change (p-value of `r contrast_nn_df_temp %>% dplyr::filter(contrast=="heterogenous - control") %>% dplyr::pull(p.value) %>% scales::comma(accuracy=0.0001)`)
-* The *uniform- high* treatment `r contrast_nn_df_temp %>% dplyr::filter(contrast=="(uniform- high) - control") %>% dplyr::pull(estimate) %>% {dplyr::case_when(.>=0 ~ "increased", T ~ "decreased")}` tree spacing by `r contrast_nn_df_temp %>% dplyr::filter(contrast=="(uniform- high) - control") %>% dplyr::pull(estimate) %>% scales::comma(accuracy=0.01, suffix = " m")` on average compared to the *control*, which is a statistically `r contrast_nn_df_temp %>% dplyr::filter(contrast=="(uniform- high) - control") %>% dplyr::pull(p.value) %>% {dplyr::case_when(.<=0.05 ~ "significant", T ~ "insignificant")}` change (p-value of `r contrast_nn_df_temp %>% dplyr::filter(contrast=="(uniform- high) - control") %>% dplyr::pull(p.value) %>% scales::comma(accuracy=0.0001)`)
-* The *uniform- low* treatment `r contrast_nn_df_temp %>% dplyr::filter(contrast=="(uniform- low) - control") %>% dplyr::pull(estimate) %>% {dplyr::case_when(.>=0 ~ "increased", T ~ "decreased")}` tree spacing by `r contrast_nn_df_temp %>% dplyr::filter(contrast=="(uniform- low) - control") %>% dplyr::pull(estimate) %>% scales::comma(accuracy=0.01, suffix = " m")` on average compared to the *control*, which is a statistically `r contrast_nn_df_temp %>% dplyr::filter(contrast=="(uniform- low) - control") %>% dplyr::pull(p.value) %>% {dplyr::case_when(.<=0.05 ~ "significant", T ~ "insignificant")}` change (p-value of `r contrast_nn_df_temp %>% dplyr::filter(contrast=="(uniform- low) - control") %>% dplyr::pull(p.value) %>% scales::comma(accuracy=0.0001)`)
+* The *Heterogenous* treatment `r contrast_nn_df_temp %>% dplyr::filter(contrast=="Heterogenous - Control") %>% dplyr::pull(estimate) %>% {dplyr::case_when(.>=0 ~ "increased", T ~ "decreased")}` tree spacing by `r contrast_nn_df_temp %>% dplyr::filter(contrast=="Heterogenous - Control") %>% dplyr::pull(estimate) %>% scales::comma(accuracy=0.01, suffix = " m")` on average compared to the *Control*, which is a statistically `r contrast_nn_df_temp %>% dplyr::filter(contrast=="Heterogenous - Control") %>% dplyr::pull(p.value) %>% {dplyr::case_when(.<=0.05 ~ "significant", T ~ "insignificant")}` change (p-value of `r contrast_nn_df_temp %>% dplyr::filter(contrast=="Heterogenous - Control") %>% dplyr::pull(p.value) %>% scales::comma(accuracy=0.0001)`)
+* The *Uniform-Low* treatment `r contrast_nn_df_temp %>% dplyr::filter(contrast=="(Uniform-Low) - Control") %>% dplyr::pull(estimate) %>% {dplyr::case_when(.>=0 ~ "increased", T ~ "decreased")}` tree spacing by `r contrast_nn_df_temp %>% dplyr::filter(contrast=="(Uniform-Low) - Control") %>% dplyr::pull(estimate) %>% scales::comma(accuracy=0.01, suffix = " m")` on average compared to the *Control*, which is a statistically `r contrast_nn_df_temp %>% dplyr::filter(contrast=="(Uniform-Low) - Control") %>% dplyr::pull(p.value) %>% {dplyr::case_when(.<=0.05 ~ "significant", T ~ "insignificant")}` change (p-value of `r contrast_nn_df_temp %>% dplyr::filter(contrast=="(Uniform-Low) - Control") %>% dplyr::pull(p.value) %>% scales::comma(accuracy=0.0001)`)
+* The *Uniform-High* treatment `r contrast_nn_df_temp %>% dplyr::filter(contrast=="(Uniform-High) - Control") %>% dplyr::pull(estimate) %>% {dplyr::case_when(.>=0 ~ "increased", T ~ "decreased")}` tree spacing by `r contrast_nn_df_temp %>% dplyr::filter(contrast=="(Uniform-High) - Control") %>% dplyr::pull(estimate) %>% scales::comma(accuracy=0.01, suffix = " m")` on average compared to the *Control*, which is a statistically `r contrast_nn_df_temp %>% dplyr::filter(contrast=="(Uniform-High) - Control") %>% dplyr::pull(p.value) %>% {dplyr::case_when(.<=0.05 ~ "significant", T ~ "insignificant")}` change (p-value of `r contrast_nn_df_temp %>% dplyr::filter(contrast=="(Uniform-High) - Control") %>% dplyr::pull(p.value) %>% scales::comma(accuracy=0.0001)`)
 
 visualize that
 
 ```{r}
 # plot pairwise contrasts
-contrast_nn_df_temp %>% 
+p_temp <- 
+  contrast_nn_df_temp %>% 
   ggplot2::ggplot(mapping = ggplot2::aes(x = estimate, y = contrast)) +
   ggplot2::geom_vline(xintercept = 0, linetype = "dashed", color = "black", lwd = 1.1) +
   ggplot2::geom_errorbar(
@@ -3138,6 +3410,21 @@ contrast_nn_df_temp %>%
     , axis.text.y = ggplot2::element_text(face="bold", size = 10)
     , panel.grid.minor = ggplot2::element_blank()
   )
+p_temp
+```
+
+```{r, warning=FALSE, message=FALSE, echo=FALSE, include=FALSE, eval = T}
+ggplot2::ggsave(
+  "../data/plt_tree_dist_pairwise_comp.jpg"
+  , plot = 
+    p_temp+
+    ggplot2::theme(
+      plot.subtitle = ggplot2::element_blank()
+      , plot.title = ggplot2::element_blank()
+      , plot.caption = ggplot2::element_blank()
+    )
+  , height = 9, width = 8.5, dpi = "print"
+)
 ```
 
 #### Prescription Target Threshold Testing
@@ -3145,24 +3432,25 @@ contrast_nn_df_temp %>%
 Finally, let's perform a one-sided hypothesis test to determine if specific spacing targets were successfully met for the uniform treatments. Rather than comparing treatments to each other, this analysis evaluates each individual treatment's estimated marginal mean (accounting for both unit size and block variation) against the prescription tree spacing target. The null hypothesis is that the true average tree spacing is less than or equal to the target. A statistically significant upper-tail p-value (p < 0.05) provides evidence that a given treatment reliably met the prescription spacing target
 
 ```{r}
+# tree_obj_spacing_targets_df %>% dplyr::glimpse()
 high_target_test_temp <-
  emmeans::test(
    emm_nn_temp
-   , null = tree_obj_spacing_targets_df %>% dplyr::filter(trtmnt_type=="uniform- high") %>% dplyr::pull(target_nearest_dist_m)
+   , null = tree_obj_spacing_targets_df %>% dplyr::filter(trtmnt_type=="Uniform-High") %>% dplyr::pull(target_nearest_dist_m)
    , side = ">"
   )
 # high_target_test_temp
 low_target_test_temp <-
  emmeans::test(
    emm_nn_temp
-   , null = tree_obj_spacing_targets_df %>% dplyr::filter(trtmnt_type=="uniform- low") %>% dplyr::pull(target_nearest_dist_m)
+   , null = tree_obj_spacing_targets_df %>% dplyr::filter(trtmnt_type=="Uniform-Low") %>% dplyr::pull(target_nearest_dist_m)
    , side = ">"
   )
 
 target_df_temp <-
   dplyr::bind_rows(
-    dplyr::tibble(high_target_test_temp) %>% dplyr::filter(trtmnt_type=="uniform- high")
-    , dplyr::tibble(low_target_test_temp) %>% dplyr::filter(trtmnt_type=="uniform- low")
+    dplyr::tibble(high_target_test_temp) %>% dplyr::filter(trtmnt_type=="Uniform-High")
+    , dplyr::tibble(low_target_test_temp) %>% dplyr::filter(trtmnt_type=="Uniform-Low")
   ) %>% 
   dplyr::mutate(trtmnt_type=as.character(trtmnt_type)) %>% 
   dplyr::inner_join(
@@ -3177,6 +3465,7 @@ summary table of one-sided hypothesis test to determine if specific spacing targ
 ```{r}
 target_df_temp %>% 
   dplyr::select(-c(target_nearest_dist_m,df)) %>% 
+  dplyr::arrange(emmean) %>% 
   kableExtra::kbl(
     caption = "hypothesis test: are block-adjusted tree spacings significantly greater than target spacing?"
     , digits = 3
@@ -3204,8 +3493,8 @@ target_df_temp %>%
 
 a few interpretations: 
 
-* The *uniform- high* treatment resulted in post-treatment tree objects spaced `r target_df_temp %>% dplyr::filter(trtmnt_type=="uniform- high") %>% dplyr::pull(emmean) %>% scales::comma(accuracy=0.01, suffix = " m")` apart on average (after accounting for both unit size and block variation) compared to the target prescription spacing of `r target_df_temp %>% dplyr::filter(trtmnt_type=="uniform- high") %>% dplyr::pull(null) %>% scales::comma(accuracy=0.01, suffix = " m")`. Based on this data, a one-sided hypothesis test indicates that we *`r target_df_temp %>% dplyr::filter(trtmnt_type=="uniform- high") %>% dplyr::pull(p.value) %>% {dplyr::case_when(.<=0.05 ~ "reject", T ~ "fail to reject")}`* the null hypothesis that the average tree spacing is less than or equal to the target (p-value of `r target_df_temp %>% dplyr::filter(trtmnt_type=="uniform- high") %>% dplyr::pull(p.value) %>% scales::comma(accuracy=0.0001)`)
-* The *uniform- low* treatment resulted in post-treatment tree objects spaced `r target_df_temp %>% dplyr::filter(trtmnt_type=="uniform- low") %>% dplyr::pull(emmean) %>% scales::comma(accuracy=0.01, suffix = " m")` apart on average (after accounting for both unit size and block variation) compared to the target prescription spacing of `r target_df_temp %>% dplyr::filter(trtmnt_type=="uniform- low") %>% dplyr::pull(null) %>% scales::comma(accuracy=0.01, suffix = " m")`. Based on this data, a one-sided hypothesis test indicates that we *`r target_df_temp %>% dplyr::filter(trtmnt_type=="uniform- low") %>% dplyr::pull(p.value) %>% {dplyr::case_when(.<=0.05 ~ "reject", T ~ "fail to reject")}`* the null hypothesis that the average tree spacing is less than or equal to the target (p-value of `r target_df_temp %>% dplyr::filter(trtmnt_type=="uniform- low") %>% dplyr::pull(p.value) %>% scales::comma(accuracy=0.0001)`)
+* The *Uniform-Low* treatment resulted in post-treatment tree objects spaced `r target_df_temp %>% dplyr::filter(trtmnt_type=="Uniform-Low") %>% dplyr::pull(emmean) %>% scales::comma(accuracy=0.01, suffix = " m")` apart on average (after accounting for both unit size and block variation) compared to the target prescription spacing of `r target_df_temp %>% dplyr::filter(trtmnt_type=="Uniform-Low") %>% dplyr::pull(null) %>% scales::comma(accuracy=0.01, suffix = " m")`. Based on this data, a one-sided hypothesis test indicates that we *`r target_df_temp %>% dplyr::filter(trtmnt_type=="Uniform-Low") %>% dplyr::pull(p.value) %>% {dplyr::case_when(.<=0.05 ~ "reject", T ~ "fail to reject")}`* the null hypothesis that the average tree spacing is less than or equal to the target (p-value of `r target_df_temp %>% dplyr::filter(trtmnt_type=="Uniform-Low") %>% dplyr::pull(p.value) %>% scales::comma(accuracy=0.0001)`)
+* The *Uniform-High* treatment resulted in post-treatment tree objects spaced `r target_df_temp %>% dplyr::filter(trtmnt_type=="Uniform-High") %>% dplyr::pull(emmean) %>% scales::comma(accuracy=0.01, suffix = " m")` apart on average (after accounting for both unit size and block variation) compared to the target prescription spacing of `r target_df_temp %>% dplyr::filter(trtmnt_type=="Uniform-High") %>% dplyr::pull(null) %>% scales::comma(accuracy=0.01, suffix = " m")`. Based on this data, a one-sided hypothesis test indicates that we *`r target_df_temp %>% dplyr::filter(trtmnt_type=="Uniform-High") %>% dplyr::pull(p.value) %>% {dplyr::case_when(.<=0.05 ~ "reject", T ~ "fail to reject")}`* the null hypothesis that the average tree spacing is less than or equal to the target (p-value of `r target_df_temp %>% dplyr::filter(trtmnt_type=="Uniform-High") %>% dplyr::pull(p.value) %>% scales::comma(accuracy=0.0001)`)
 
 visualize that
 
@@ -3213,7 +3502,7 @@ visualize that
 summary(emm_nn_temp) %>% 
   dplyr::as_tibble() %>% 
   dplyr::mutate(trtmnt_type=as.character(trtmnt_type)) %>% 
-  dplyr::filter(stringr::str_starts(trtmnt_type,"uniform")) %>% 
+  dplyr::filter(stringr::str_starts(tolower(trtmnt_type),"uniform")) %>% 
   dplyr::inner_join(
     tree_obj_spacing_targets_df %>% 
       dplyr::mutate(trtmnt_type=as.character(trtmnt_type))

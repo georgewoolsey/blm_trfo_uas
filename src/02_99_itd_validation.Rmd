@@ -2318,6 +2318,7 @@ agg_ground_truth_match_by_type_ans %>%
       , ~scales::percent(.x,accuracy=0.1)
     )
   ) %>% 
+  recode_treatment_type_fn(ordered = T) %>% 
   dplyr::arrange(trtmnt_type) %>% 
   kableExtra::kbl(
     caption = "Detection Accuracy by Treatment Type"
@@ -2354,15 +2355,74 @@ make_bins_pretty <- function(bin_factor, suffix = "") {
   forcats::fct_reorder(factor(clean_labels), as.numeric(bin_factor))
 }
 
-ground_truth_prediction_match_ans %>%
+# quantile(ground_truth_prediction_match_ans$ref_tree_height_m ,probs=seq(from=0.05,to=1,by=0.05),na.rm=T)
+# quantile(ground_truth_prediction_match_ans$ref_tree_height_m,probs=0.8,na.rm=T) %>% round()
+# seq(
+#   from = 0
+#   , to = quantile(ground_truth_prediction_match_ans$ref_tree_height_m,probs=0.8,na.rm=T)
+#   , by = (quantile(ground_truth_prediction_match_ans$ref_tree_height_m,probs=0.8,na.rm=T)/2) %>% round()
+# )
+
+
+# # ?base::cut()
+# ggplot2::cut_number(ground_truth_prediction_match_ans$ref_tree_height_m,n=3,closed="left",boundary = 0) %>% 
+#   levels()
+#   # c("[2,4.4]", "(4.4,5.5]", "(5.5,10.3]")  
+
+parse_cut_levels <- function(l) {
+  
+  cut_points <- 
+    stringr::str_remove_all(l, "[\\[\\]() ]") %>% 
+    stringr::str_split_fixed(",", 2) %>% 
+    as.numeric() %>% 
+    unique() %>% 
+    sort()
+  
+  final_breaks <- cut_points
+  final_breaks[1] <- 0
+  final_breaks[length(cut_points)] <- Inf
+  # final_breaks <- c(0, cut_points, Inf)
+  
+  return(sort(unique(final_breaks)))
+}
+# ggplot2::cut_number(ground_truth_prediction_match_ans$ref_tree_height_m,n=3,closed="left",boundary = 0) %>% 
+#   levels() %>% 
+#   parse_cut_levels
+
+ground_truth_prediction_match_ans %>% 
   sf::st_drop_geometry() %>% 
   dplyr::filter(match_grp %in% c("true positive","omission")) %>% 
   # dplyr::glimpse()
   # metric cuts/bins
   dplyr::mutate(
-    tree_height_m_bin = ggplot2::cut_width(ref_tree_height_m, width = 3, boundary = 0, closed = "left") %>% 
-      make_bins_pretty(suffix = "m") %>% 
-      forcats::fct_relabel(~ stringr::str_replace(.x, "^0-", paste0(min_tree_ht_m,"-")) )
+    tree_height_m_bin = 
+      base::cut(
+        ref_tree_height_m
+        , breaks = 
+          ggplot2::cut_number(ground_truth_prediction_match_ans$ref_tree_height_m,n=3,closed="left",boundary = 0) %>% 
+          levels() %>% 
+          parse_cut_levels()
+      ) %>% 
+      # ggplot2::cut_width(
+      #   ref_tree_height_m
+      #   , width = 
+      #     3
+      #     # quantile(ground_truth_prediction_match_ans$ref_tree_height_m,probs=0.2,na.rm=T) %>% round()
+      #   , boundary = 0
+      #   , closed = "left"
+      # ) %>% 
+      make_bins_pretty(suffix = "m") %>%
+      forcats::fct_relabel(
+        ~ stringr::str_replace(.x, "^0-", paste0(min_tree_ht_m,"-")) %>%  
+          stringr::str_replace(
+            "Inf m$"
+            , paste0(
+              max(ground_truth_prediction_match_ans$ref_tree_height_m,na.rm=T) %>% 
+                round(1)
+              , " m"
+            )
+          )
+      )
     , is_detected = match_grp %in% c("true positive")
     , is_detected = as.numeric(is_detected)
   ) %>% 
@@ -2408,7 +2468,7 @@ ground_truth_prediction_match_ans %>%
   ) +
   ggplot2::labs(
     x = "tree height", y = "", fill = ""
-    , subtitle = "Recall rate by tree height bin"
+    , subtitle = "Recall rate by reference tree height bin"
   ) +
   ggplot2::theme_light()+
   ggplot2::theme(
@@ -2431,9 +2491,34 @@ ground_truth_prediction_match_ans %>%
   # dplyr::glimpse()
   # metric cuts/bins
   dplyr::mutate(
-    tree_height_m_bin = ggplot2::cut_width(pred_tree_height_m, width = 3, boundary = 0, closed = "left") %>% 
-      make_bins_pretty(suffix = "m") %>% 
-      forcats::fct_relabel(~ stringr::str_replace(.x, "^0-", paste0(min_tree_ht_m,"-")) )
+    tree_height_m_bin = 
+      base::cut(
+        pred_tree_height_m
+        , breaks = 
+          ggplot2::cut_number(ground_truth_prediction_match_ans$ref_tree_height_m,n=3,closed="left",boundary = 0) %>% 
+          levels() %>% 
+          parse_cut_levels()
+      ) %>% 
+      # ggplot2::cut_width(
+      #   ref_tree_height_m
+      #   , width = 
+      #     3
+      #     # quantile(ground_truth_prediction_match_ans$ref_tree_height_m,probs=0.2,na.rm=T) %>% round()
+      #   , boundary = 0
+      #   , closed = "left"
+      # ) %>% 
+      make_bins_pretty(suffix = "m") %>%
+      forcats::fct_relabel(
+        ~ stringr::str_replace(.x, "^0-", paste0(min_tree_ht_m,"-")) %>%  
+          stringr::str_replace(
+            "Inf m$"
+            , paste0(
+              max(ground_truth_prediction_match_ans$pred_tree_height_m,na.rm=T) %>% 
+                round(1)
+              , " m"
+            )
+          )
+      )
     , is_detected = match_grp %in% c("true positive")
     , is_detected = as.numeric(is_detected)
   ) %>% 
@@ -2480,7 +2565,7 @@ ground_truth_prediction_match_ans %>%
   ) +
   ggplot2::labs(
     x = "tree height", y = "", fill = ""
-    , subtitle = "Commission rate by tree height bin"
+    , subtitle = "Commission rate by predicted tree height bin"
   ) +
   ggplot2::theme_light()+
   ggplot2::theme(
@@ -3299,6 +3384,7 @@ validation_plots_polygons %>%
     , dplyr::across(c(plot_area_ha),~scales::number(.x,accuracy=0.1))
     , dplyr::across(dplyr::where(is.numeric),~scales::number(.x,accuracy=1))
   ) %>% 
+  recode_treatment_type_fn(ordered = T) %>% 
   kableExtra::kbl(
     caption = "Canopy Cover Across all Measured Plots"
     , col.names = c(
@@ -3498,7 +3584,7 @@ cowplot::save_plot(
 print(plt_temp)
 ```
 
-interesting. we see that the UAS crowns (orange) generally align with the green areas that appear to be trees from the aerial perspective and,the individual crowns segmented using the UAS method do not overlap. By contrast, the field-measured stems and the assumed circular crowns (red) overlap with each other and are not always spatially aligned with the green areas in the aerial imagery. This slight misalignment is the result of variations in the location recording systems used on the ground and the UAS system in addition to the stems of trees not being positioned directly under the crown due to real-world tree lean. We can also see a few examples of field-measured tree stems that are very near each other so that the simulated circular crowns have high or even complete overlap.
+interesting. we see that the UAS crowns (orange) generally align with the green areas that appear to be trees from the aerial perspective and the individual crowns segmented using the UAS method do not overlap. By contrast, the field-measured stems and the assumed circular crowns (red) overlap with each other and are not always spatially aligned with the green areas in the aerial imagery. This slight misalignment is the result of variations in the location recording systems used on the ground and the UAS system in addition to the stems of trees not being positioned directly under the crown due to real-world tree lean. We can also see a few examples of field-measured tree stems that are very near each other so that the simulated circular crowns have high or even complete overlap.
 
 We can move beyond summary canopy cover percentages and evaluate the spatial overlap of the crown footprints using the Intersection over Union (IoU) metric. The IoU index provides a spatial assessment by measuring the geographic alignment between the UAS crown polygons and circular field crowns. To quantify the spatial agreement between your UAS-delineated crowns and the field-calculated circular crowns, IoU is calculated by dividing the area of overlap between the two crown layers by the total combined area of both layers:
 
@@ -3693,7 +3779,7 @@ cowplot::save_plot(
 print(fnl_plt_temp)
 ```
 
-there are certainly some interesting things going on with these visuals...
+there are certainly some interesting things going on in these visual examples...
 
 finally, let's check out the distribution of crown IoU by treatment type
 
@@ -3701,9 +3787,7 @@ finally, let's check out the distribution of crown IoU by treatment type
 validation_plots_polygons %>% 
   dplyr::ungroup() %>% 
   sf::st_drop_geometry() %>% 
-  dplyr::mutate(
-    trtmnt_type = ordered(trtmnt_type)
-  ) %>% 
+  recode_treatment_type_fn(ordered = T) %>% 
   ggplot2::ggplot(mapping = ggplot2::aes(x=crown_pred_ref_iou,fill=trtmnt_type)) +
   ggplot2::geom_point(mapping = ggplot2::aes(y=0), color = "gray") +
   ggplot2::geom_violin(

@@ -316,6 +316,7 @@ treetops_sf %>%
     , n = scales::comma(n,accuracy=1)
     , trees_per_ha = scales::comma(trees_per_ha,accuracy=0.1)
   ) %>% 
+  recode_treatment_type_fn(ordered = T) %>% 
   kableExtra::kbl(
     caption = "count trees by treatment unit"
     , col.names = c(
@@ -334,9 +335,11 @@ treetops_sf %>%
 where are these units in space?
 
 ```{r}
+stand_boundary %>% 
+  dplyr::rename(trtmnt_type=tretmnt) %>% 
+  recode_treatment_type_fn(ordered = T) %>% 
 ggplot2::ggplot(
-    data = stand_boundary
-    , ggplot2::aes(color = ordered(block), fill = ordered(tolower(tretmnt)))
+    ggplot2::aes(color = ordered(block), fill = trtmnt_type)
   )+
   ggplot2::geom_sf(lwd = 2, alpha = 0.8) +
   ggplot2::scale_fill_brewer(palette = "Dark2") +
@@ -582,6 +585,7 @@ unit_sum_df <-
       )
   }) %>% 
   dplyr::bind_rows() %>% 
+  recode_treatment_type_fn(ordered = T) %>% 
   dplyr::mutate(
     my_fct = forcats::fct_cross(trtmnt_type,trtmnt_block,trtmnt_unit)
   ) %>% 
@@ -831,6 +835,7 @@ treetops_sf %>%
       , "crown_diameter_m" ~ "crown diam. (m)"
     )
   ) %>% 
+  recode_treatment_type_fn(ordered = T) %>% 
   ggplot2::ggplot(
     mapping = ggplot2::aes(fill = trtmnt_type)
   ) +
@@ -856,7 +861,8 @@ treetops_sf %>%
             , "crown_area_m2" ~ "crown area (m²)"
             , "crown_diameter_m" ~ "crown diam. (m)"
           )
-        )
+        ) %>% 
+        recode_treatment_type_fn(ordered = T)
     , mapping = ggplot2::aes(xintercept = value)
     , linetype = "dashed", lwd = 1, color = "gray33"
   ) +
@@ -1085,6 +1091,8 @@ tbl_df_temp %>%
       , ~scales::comma(.x,accuracy=0.1)
     )
   ) %>% 
+  recode_treatment_type_fn(ordered = T) %>% 
+  dplyr::arrange(trtmnt_type) %>% 
   # ncol()
   kableExtra::kbl(
     caption = paste0(
@@ -1399,6 +1407,7 @@ treetops_sf %>%
   ) %>% 
   dplyr::count(trtmnt_type, tree_height_m_bin) %>% 
   dplyr::ungroup() %>% 
+  recode_treatment_type_fn(ordered = T) %>% 
   # area by type
   dplyr::inner_join(
     unit_sum_df %>% 
@@ -1426,6 +1435,7 @@ treetops_sf %>%
   dplyr::filter(min(cum)<0.998) %>%
   dplyr::ungroup() %>%
   ###### this makes sure the long tail isn't plotted :/
+  
   
   # dplyr::glimpse()
   ggplot2::ggplot(
@@ -1487,6 +1497,7 @@ treetops_sf %>%
   ) %>% 
   dplyr::count(trtmnt_type, tree_height_ft_bin) %>% 
   dplyr::ungroup() %>% 
+  recode_treatment_type_fn(ordered = T) %>% 
   # area by type
   dplyr::inner_join(
     unit_sum_df %>% 
@@ -1628,7 +1639,7 @@ terra_plt_ortho <- function(
 
 plot example unit
 
-```{r,eval=F,purl=FALSE, results=F, fig.show='asis', fig.height=10.1}
+```{r,eval=F,purl=FALSE, results=F, fig.show='asis', fig.height = 8, fig.width = 10.5}
 plt_single_temp <- function(x, add = T){
     unit_temp <- stand_boundary %>% 
       dplyr::filter(
@@ -1651,7 +1662,7 @@ plt_single_temp <- function(x, add = T){
       , boundary = unit_temp
       , add_crowns = add
       , title = paste0(
-        unq_units_df %>% dplyr::slice(x) %>% dplyr::pull(trtmnt_type)
+        unq_units_df %>% dplyr::slice(x) %>% recode_treatment_type_fn() %>% dplyr::pull(trtmnt_type)
         , " | block "
         , unq_units_df %>% dplyr::slice(x) %>% dplyr::pull(trtmnt_block)
         , " | "
@@ -1659,9 +1670,13 @@ plt_single_temp <- function(x, add = T){
       )
     )
     
-  }
+}
 # map over it 
-plt_single_temp(1)
+unq_units_df %>% 
+  dplyr::mutate(rn=dplyr::row_number()) %>% 
+  dplyr::filter(trtmnt_block==1,tolower(trtmnt_type)=="uniform- high",tolower(trtmnt_unit)=="u10") %>% 
+  dplyr::pull(rn) %>% 
+  plt_single_temp()
 ```
 
 zoom in
