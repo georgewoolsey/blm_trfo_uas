@@ -55,6 +55,7 @@ stand_boundary <-
     # , dplyr::across(c(type,block,unit),ordered)
   )
 # stand_boundary %>% dplyr::glimpse()
+stand_boundary$type %>% unique()
 ```
 
 what treatments are there?
@@ -289,6 +290,23 @@ piles_workflow_ans <-
   dplyr::mutate(
     is_in_trtmnt_unit = ifelse(is.na(trtmnt_type) | trtmnt_type=="control",F,T)
   )
+### make a function to get clean factor labels for the treatment type
+recode_treatment_type_fn <- function(df, short_labels = FALSE, ordered = FALSE) {
+  raw_levels <- c("control", "heterogenous", "uniform- low", "uniform- high")
+  labels_full <- c("Control", "Heterogenous", "Uniform-Low", "Uniform-High")
+  labels_short <- c("C", "H", "UL", "UH")
+  
+  target_labels <- if (short_labels) labels_short else labels_full
+
+  df %>% 
+    dplyr::mutate(
+      trtmnt_type = trtmnt_type %>% 
+        stringr::str_to_lower() %>% 
+        stringr::str_trim() %>% 
+        factor(levels = raw_levels, ordered = ordered) %>% 
+        forcats::fct_relabel(~ target_labels)
+    )
+}
 ```
 
 quick summary by treatment type
@@ -296,6 +314,7 @@ quick summary by treatment type
 ```{r}
 piles_workflow_ans %>% 
   sf::st_drop_geometry() %>% 
+  recode_treatment_type_fn() %>% 
   dplyr::count(is_in_trtmnt_unit, trtmnt_type)
 ```
 
@@ -544,7 +563,8 @@ let's aggregate the detected slash pile information by treatment unit
 
 ```{r}
 # hey
-pile_sum_temp <- piles_workflow_ans %>% 
+pile_sum_temp <-
+  piles_workflow_ans %>% 
   sf::st_drop_geometry() %>% 
   dplyr::filter(
     is_in_trtmnt_unit
@@ -562,6 +582,7 @@ pile_sum_temp <- piles_workflow_ans %>%
   ) %>% 
   dplyr::ungroup() %>% 
   dplyr::mutate(piles_per_ha = n_piles/trtmnt_unit_area_ha) %>% 
+  recode_treatment_type_fn(ordered=T) %>%
   dplyr::arrange(trtmnt_type,trtmnt_block,trtmnt_unit )
 ```
 
@@ -605,10 +626,13 @@ pile_sum_temp %>%
 plot piles per ha by treatment unit
 
 ```{r}
+# scales::show_col(scales::hue_pal()(4)) # not color-blind friendly 
+# scales::show_col(RColorBrewer::brewer.pal(n=4,name="Dark2")) # yes color-blind friendly 
+
 pile_sum_temp %>% 
   dplyr::ungroup() %>% 
   dplyr::mutate(
-    dplyr::across(c(trtmnt_type,trtmnt_block,trtmnt_unit),as.ordered)
+    dplyr::across(c(trtmnt_block,trtmnt_unit),as.ordered)
     , my_fct = forcats::fct_cross(trtmnt_type,trtmnt_block,trtmnt_unit)
   ) %>% 
   dplyr::arrange(desc(trtmnt_type),piles_per_ha) %>% 

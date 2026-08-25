@@ -354,10 +354,12 @@ let's plot the field trees on the study unit boundaries
 
 ```{r}
 mapview::mapview(
-  stand_boundary %>% dplyr::select(type,block,unit)
+  stand_boundary %>% dplyr::select(type,block,unit) %>% 
+    dplyr::rename(trtmnt_type=type) %>% 
+    recode_treatment_type_fn()
   # , color = "blue"
   , lwd = 1
-  , zcol = "type"
+  , zcol = "trtmnt_type"
   , col.regions = RColorBrewer::brewer.pal(n=length(unique(stand_boundary$type)),name="Dark2")
   , alpha.regions = 0.5
   , label = F
@@ -405,10 +407,7 @@ we aggregated the field-measured plot data. let's look at the TPH to make sure i
 validation_plots %>% 
   dplyr::ungroup() %>% 
   sf::st_drop_geometry() %>% 
-  dplyr::mutate(
-    trtmnt_type = ordered(trtmnt_type)
-    # , my_fct = forcats::fct_cross(trtmnt_type,trtmnt_block,trtmnt_unit)
-  ) %>% 
+  recode_treatment_type_fn(ordered=T) %>%
   # dplyr::arrange(desc(trtmnt_type),trees_per_ha) %>% 
   # dplyr::mutate(my_fct = forcats::fct_reorder(my_fct, trees_per_ha)) %>% 
   ggplot2::ggplot(mapping = ggplot2::aes(x=trees_per_ha,fill=trtmnt_type)) +
@@ -466,6 +465,7 @@ validation_plots %>%
     )
   ) %>% 
   dplyr::select(-plot_area_m2) %>% 
+  recode_treatment_type_fn(ordered=T) %>%
   kableExtra::kbl(
     caption = "Field-Measured tree density by treatment type"
     , col.names = c(
@@ -721,9 +721,7 @@ let's check out the distribution of canopy cover by treatment type
 validation_plots_polygons %>% 
   dplyr::ungroup() %>% 
   sf::st_drop_geometry() %>% 
-  dplyr::mutate(
-    trtmnt_type = ordered(trtmnt_type)
-  ) %>% 
+  recode_treatment_type_fn(ordered=T) %>%
   ggplot2::ggplot(mapping = ggplot2::aes(x=ref_canopy_cov_pct,fill=trtmnt_type)) +
   ggplot2::geom_point(mapping = ggplot2::aes(y=0), color = "gray") +
   ggplot2::geom_violin(
