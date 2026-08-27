@@ -1742,7 +1742,54 @@ There is a lot going on in our `agg_ground_truth_match()` function but it's appl
   - interpretation of the ME is enhanced if these "diff_" columns are calculated as the predicted value minus the actual value (e.g. `pred_diameter_m - gt_diameter_m`) 
 * Optionally, if the data contain columns with the prefix "pct_diff_" the mean absolute percent error (MAPE) is calculated for those columns with the return having the suffix "_mape"
   - these "pct_diff_" columns are calculated as the actual value minus the predicted value divided by the actual value (e.g. `(gt_diameter_m - pred_diameter_m)/gt_diameter_m`) 
-  
+
+For plot-level accuracy evaluations of tree density (TPH) and canopy cover (%), we will also calculate Relative Root Mean Square Error (RRMSE) which relativizes the RMSE to the average of the reference values, making it a dimensionless percentage that allows for accuracy comparisons across different units.
+
+$$
+\textrm{RRMSE} = \frac{\sqrt{ \frac{  \sum_{i=1}^{N} (y_{i} - \hat{y_{i}})^{2}}{N}}}{\bar{y}}
+$$
+
+where $\bar{y}$ is the mean (average) of all reference values ($y_{i}$)
+
+```{r, include=F,eval=F}
+# When your data is already measured in percentages, interpreting these metrics requires a bit of extra care to avoid confusing percentage points with relative percentages.
+# Here is how the interpretation changes between a physical unit like meters and an abstract unit like percentages:
+# ------------------------------
+# ## 1. Interpretation with Metric Units (e.g., Meters)
+# When your data is in meters, the interpretation is highly intuitive because the scales of absolute and relative error are completely distinct.
+# 
+# * RMSE (Absolute): If your RMSE is 3 meters, it means your model's predictions are, on average, about 3 meters away from the actual values. The error is in the exact same physical unit as your data.
+# * RRMSE (Relative): If your average actual measurement is 30 meters, an RMSE of 3 meters gives an RRMSE of 10% ($3 / 30$). This tells you that your average error size is 10% of the typical object's size.
+# 
+# ------------------------------
+# ## 2. Interpretation with Percentage Units (e.g., Interest Rates, Market Share)
+# When your target variable is already a percentage, RMSE is measured in percentage points, while RRMSE is a relative percentage of those points.
+# ## RMSE in Percentages
+# The RMSE does not represent a relative percentage error; it represents an absolute error measured in percentage points.
+# 
+# * Example: If a model predicts a company's market share, and the actual share is 20% while the prediction is 23%, the absolute error is 3 percentage points (not 3%).
+# * If your final RMSE is 3.5, your model's predictions are off by an average of 3.5 percentage points.
+# 
+# ## RRMSE in Percentages
+# The RRMSE standardizes this error by dividing the percentage point error by the average actual percentage. This can sometimes feel less intuitive because it is a percentage of a percentage.
+# 
+# * Example: Let's say your model predicts a country's economic growth rate. The average actual growth rate is 4%, and your model's RMSE is 1 percentage point.
+# * Your RRMSE would be:
+# $$RRMSE = \frac{1\%}{4\%} = 0.25 = \mathbf{25\%}$$ 
+# * Interpretation: Even though an error of 1 percentage point sounds small (RMSE = 1), your average error size is actually 25% of the overall average growth rate (RRMSE = 25%). This signals that the model might not be as accurate as the low RMSE suggests, because the baseline numbers are so small.
+# 
+# ------------------------------
+# ## Summary Direct Comparison
+# 
+# | Metric | Data in Meters | Data in Percentages |
+# |---|---|---|
+# | RMSE | Meters (e.g., "Off by an average of 3 meters") | Percentage Points (e.g., "Off by an average of 3 percentage points") |
+# | RRMSE | Relative % of the length (e.g., "The error is 10% of the total target length") | Relative % of the baseline percentage (e.g., "The error represents 25% of the average baseline rate") |
+# 
+# When dealing with percentage data, RRMSE is highly valuable because an RMSE of "2 percentage points" is excellent if your data centers around 80%, but terrible if your data centers around 3%. RRMSE exposes that difference immediately.
+
+```
+
 ### Example: Physical measurement Accuracy
 
 we already demonstrated minimum use of the `agg_ground_truth_match()` function to get detection accuracy metrics, now we'll demonstrate the physical measurement accuracy metrics by keeping the `diff_*` and `pct_diff_*` columns calculated with the `ground_truth_prediction_match()` function
@@ -1793,7 +1840,7 @@ this result if for just a single plot as an example...below we'll use the data f
 
 nice, that could be useful for evaluation
 
-```{r, warning=FALSE, message=FALSE}
+```{r, warning=FALSE, message=FALSE, echo=FALSE, include=FALSE}
 remove(list = ls()[grep("_temp",ls())])
 gc()
 ```
@@ -3048,13 +3095,30 @@ ground_truth_prediction_match_ans %>%
 
 that is also neat
 
-## Stand-Level Accuracy Results{#stand_acc}
+```{r, warning=FALSE, message=FALSE, echo=FALSE, include=FALSE}
+remove(list = ls()[grep("_temp",ls())])
+gc()
+```
 
-In addition to the tree-level accuracy metrics (e.g. height RMSE and MAPE), we can also calculate stand-level accuracy metrics by aggregating estimates from the reference (ground truth) and predicted trees irrespective of whether or not they were matched (i.e. true positive) during instance matching. 
+## Plot-Level Accuracy Results{#stand_acc}
 
-*for this data, "stand-level" refers to the combined area covered by all field plots*
+In this section, we'll shift our focus from individual trees to plot-level predictions by aggregating tree-level UAS predictions and field-reference values irrespective of individual instance matches. Because individual tree prediction errors can cancel out at the plot scale with omission errors balancing commission errors, for example, evaluating these aggregate forest inventory metrics helps us understand how accurately the UAS data captures broader forest structural metrics like tree density (TPH) and canopy cover.
 
-```{r}
+We'll utilize the plot-level field reference data to evaluate the performance of the UAS method across the entire study area and to determine how different treatments influenced prediction accuracy. Specifically, we assess UAS prediction accuracy at two spatial scales:
+
+1) Overall Study Site: Aggregating data across all field-measured plots to evaluate site-wide performance.
+2) Treatment Level: Aggregating data within the field-measured plots associated with each specific treatment, including the control units.
+
+To evaluate these structural metrics, we utilize Mean Error (ME) to detect directional bias, Root Mean Square Error (RMSE) to capture absolute error magnitude, and Relative RMSE (RRMSE) to relativize these errors against the reference means values.
+
+```{r, include=FALSE, eval=FALSE}
+############################################################################
+############################################################################
+# OLD AF
+############################################################################
+############################################################################
+
+# validation_plots_polygons %>% dplyr::glimpse()
 # uas trees in plots
 pred_trees_temp <-
   treetops_sf %>% 
@@ -3133,11 +3197,9 @@ stand_temp <-
     , pct_diff_basal_area_m2 = (pred_basal_area_m2-ref_basal_area_m2)/ref_basal_area_m2
     , pct_diff_basal_area_m2_per_ha = (pred_basal_area_m2_per_ha-ref_basal_area_m2_per_ha)/ref_basal_area_m2_per_ha
   )
-```
 
-let's table the stand-level measurement error
+# let's table the overall study site measurement error
 
-```{r}
 stand_temp %>% 
   dplyr::select(
     area_ha,n_plots
@@ -3199,15 +3261,58 @@ stand_temp %>%
   kableExtra::column_spec( c(2,seq(4,10,by=3) ), border_right = TRUE, include_thead = TRUE) %>% 
   kableExtra::collapse_rows(columns = c(1), valign = "top")
 
+
+# Should we even be calculating basal area for pinyon-juniper systems? Traditional silvicultural metrics like basal area and volume are not particularly useful for managing these woodlands because the trees/shrubs feature highly irregular, multi-stemmed growth forms. Furthermore, field inventories like FIA measure diameter at root collar (DRC) instead of standard diameter at breast height (DBH) and then convert those metrics using regional allometric equations. Because of this, it is probably inappropriate for us to quantify the accuracy of UAS-predicted DBH, which is modeled using a height-to-DBH equation from local FIA data, against field-calculated DBH values derived from converted DRC measurements. Instead, modern management evaluations in these pinyon-juniper systems prioritize tree density measurements and canopy clump configurations to analyze structural and spatial patterns. This focus on horizontal canopy architecture, tracking trees per hectare and interspace connectivity, provides a much more direct and ecologically meaningful way to evaluate ecosystem health and fire risk across these arid landscapes.
 ```
 
-Should we even be calculating basal area for pinyon-juniper systems? Traditional silvicultural metrics like basal area and volume are not particularly useful for managing these woodlands because the trees/shrubs feature highly irregular, multi-stemmed growth forms. Furthermore, field inventories like FIA measure diameter at root collar (DRC) instead of standard diameter at breast height (DBH) and then convert those metrics using regional allometric equations. Because of this, it is probably inappropriate for us to quantify the accuracy of UAS-predicted DBH, which is modeled using a height-to-DBH equation from local FIA data, against field-calculated DBH values derived from converted DRC measurements. Instead, modern management evaluations in these pinyon-juniper systems prioritize tree density measurements and canopy clump configurations to analyze structural and spatial patterns. This focus on horizontal canopy architecture, tracking trees per hectare and interspace connectivity, provides a much more direct and ecologically meaningful way to evaluate ecosystem health and fire risk across these arid landscapes.
+### Canopy Cover Evaluation{#cc_eval}
 
-## Canopy Cover Evaluation{#cc_eval}
-
-Let's shift our focus to evaluating UAS-predicted canopy cover compared to field-measured values. Recall that [to obtain field-measured canopy cover](#ref_field_dta), we averaged the field-recorded horizontal crown length and width to approximate a circular diameter, used that diameter to calculate a 2D circular crown area for each tree, and determined the proportion of each plot covered by these assumed circular crowns. For each plot, we'll compare this proportion to the canopy cover predicted by the UAS using trees whose tree-top points fall within the plot boundaries irrespective of if a tree was matched as a true positive in our instance matching evaluation. Requiring the tree-top point to fall within the plot mimics the field technique of only measuring stems located inside the plot boundaries. The main caveats attached to this canopy cover accuracy evaluation are that measuring crown dimensions accurately using manual ground techniques is notoriously difficult, and the simple circular shape assumption rarely matches the irregular crown morphologies found in the real-world ([Rautiainen et al. 2008](https://doi.org/10.14214/sf.261); [Gallardo-Salazar & Pompa-García 2020](https://doi.org/10.3390/rs12244144); [Ren et al. 2024](https://doi.org/10.1111/2041-210X.14401)).
+We'll start by evaluating UAS-predicted canopy cover compared to field-measured values. Recall that [to obtain field-measured canopy cover](#ref_field_dta), we averaged the field-recorded horizontal crown length and width to approximate a circular diameter, used that diameter to calculate a 2D circular crown area for each tree, and determined the proportion of each plot covered by these assumed circular crowns. For each plot, we'll compare this proportion to the canopy cover predicted by the UAS using trees whose tree-top points fall within the plot boundaries irrespective of if a tree was matched as a true positive in our instance matching evaluation. Requiring the tree-top point to fall within the plot mimics the field technique of only measuring stems located inside the plot boundaries. The main caveats attached to this canopy cover accuracy evaluation are that measuring crown dimensions accurately using manual ground techniques is notoriously difficult, and the simple circular shape assumption rarely matches the irregular crown morphologies found in the real-world ([Rautiainen et al. 2008](https://doi.org/10.14214/sf.261); [Gallardo-Salazar & Pompa-García 2020](https://doi.org/10.3390/rs12244144); [Ren et al. 2024](https://doi.org/10.1111/2041-210X.14401)).
 
 ```{r}
+# validation_plots_polygons %>% dplyr::glimpse()
+# validation_plots_polygons %>% nrow()
+# validation_plots_polygons$plot %>% unique() %>% length()
+
+# uas trees in plots
+pred_trees_temp <-
+  treetops_sf %>% 
+  sf::st_intersection(
+    validation_plots_polygons %>% 
+      dplyr::ungroup() %>% 
+      dplyr::select(plot) %>% 
+      sf::st_transform(terra::crs(treetops_sf))
+  )
+  # # DON'T just take the first plot by treeID if goes to multiple plots
+  # # b/c the plots overlap and are not spatially distinct
+  # sf::st_drop_geometry() %>%
+  # dplyr::group_by(treeID) %>%
+  # dplyr::slice(1) %>% 
+  # dplyr::ungroup()
+
+# pred_trees_temp %>% dplyr::glimpse()
+
+# huh_temp <- 
+#   pred_trees_temp %>% 
+#   dplyr::group_by(treeID) %>% 
+#   dplyr::filter(dplyr::n()>1)
+# ggplot2::ggplot() +
+#   ggplot2::geom_sf(
+#     data = treetops_sf %>% dplyr::filter(treeID %in% huh_temp$treeID[1])
+#   ) +
+#   ggplot2::geom_sf(
+#     data = validation_plots_polygons %>% 
+#       dplyr::filter(
+#         plot %in%
+#           (huh_temp %>% 
+#           dplyr::filter(treeID %in% huh_temp$treeID[1]) %>% 
+#           dplyr::pull(plot))
+#       )
+#     , mapping = ggplot2::aes(color = trtmnt_type)
+#     , fill = NA
+#   ) +
+#   ggplot2::theme_void()
+
 # read crowns
 pred_crowns_temp <- 
   cloud2trees:::search_dir_final_detected(dir = c2t_process_dir)[["crowns_flist"]] %>% 
@@ -3229,7 +3334,10 @@ pred_crowns_temp <-
 # pred_trees_temp %>% nrow()
 # pred_crowns_temp %>% nrow()
 # attach predicted cc to plot data
-validation_plots_polygons <- plot_crowns_cc_fn(
+
+# validation_plots_polygons %>% dplyr::glimpse()
+validation_plots_polygons <-
+  plot_crowns_cc_fn(
     plots_sf = validation_plots_polygons
     , crowns_sf = pred_crowns_temp
   ) %>% 
@@ -3237,11 +3345,23 @@ validation_plots_polygons <- plot_crowns_cc_fn(
     .cols = tidyselect::starts_with("canopy_")
     , ~ paste0("pred_",.x,recycle0 = T)
   ) %>% 
+  # add tree counts based on tree top point intersection with plot
+  dplyr::rename_with(
+    .cols = c("n_trees","trees_per_ha")
+    , ~ paste0("ref_",.x,recycle0 = T)
+  ) %>% 
+  dplyr::left_join(
+    pred_trees_temp %>% 
+      sf::st_drop_geometry() %>% 
+      dplyr::count(plot) %>% 
+      dplyr::rename(pred_n_trees=n)
+    , by = "plot"
+  ) %>% 
   dplyr::mutate(
-    diff_canopy_cov_pct = pred_canopy_cov_pct-ref_canopy_cov_pct
-    , diff_canopy_cov_area_m2 = pred_canopy_cov_area_m2-ref_canopy_cov_area_m2
+    pred_trees_per_ha = pred_n_trees/(plot_area_m2/10000)
+    , diff_canopy_cov_pct = pred_canopy_cov_pct-ref_canopy_cov_pct
+    , diff_trees_per_ha = pred_trees_per_ha-ref_trees_per_ha
   )
-
 # validation_plots_polygons %>% dplyr::glimpse()
 ```
 
@@ -3288,26 +3408,118 @@ patchwork::wrap_plots(plts_temp, ncol = 4)
 let's check the relationship between the UAS and reference field plot-level canopy cover measurements
 
 ```{r}
-cc_agg_temp <- validation_plots_polygons %>% 
-  sf::st_drop_geometry() %>% 
-  dplyr::ungroup() %>% 
-  dplyr::summarise(
-    sq = sum(diff_canopy_cov_pct^2, na.rm = T)
-    , mean = mean(diff_canopy_cov_pct, na.rm = T)
-    , sumabs = sum(abs(diff_canopy_cov_pct), na.rm = T)
-    , nomiss = sum(!is.na(diff_canopy_cov_pct))
-  ) %>% 
-  dplyr::ungroup() %>% 
-  dplyr::mutate(
-    rmse = dplyr::case_when(
-      dplyr::coalesce(nomiss,0)==0 ~ as.numeric(NA)
-      , T ~ sqrt(sq/nomiss)
-    )
-  ) %>% 
-  dplyr::select(mean,rmse) %>% 
-  dplyr::rename_with(
-    ~paste0("diff_canopy_cov_pct_",.x, recycle0 = T)
-  ) 
+# function to get aggregate accuracy metrics
+get_me_rmse_fn <- function(df_w_diffs) {
+
+  if(nrow(df_w_diffs)==0){return(NULL)}
+  
+  # check for difference columns (contains "_diff") and calc rmse for only those to return a single line df with colums for each diff_rmse
+  diffs_nms <- df_w_diffs %>% 
+    sf::st_drop_geometry() %>% 
+    dplyr::select(tidyselect::starts_with("diff_")) %>% 
+    names() %>% 
+    stringr::str_subset(pattern="^diff_")
+  
+  if(length(diffs_nms)==0){return(NULL)}
+  
+  # check for reference so that rrmse can be done
+  ref_nms <- diffs_nms %>% stringr::str_replace("^diff_", "ref_")
+  yes_ref_nms <- 
+    df_w_diffs %>% 
+    sf::st_drop_geometry() %>% 
+    dplyr::select(dplyr::any_of(ref_nms)) %>% 
+    names()
+  
+  # setdiff(ref_nms,yes_ref_nms)
+  
+  if(
+    length(setdiff(ref_nms,yes_ref_nms))>0
+  ){
+    stop(paste("missing", paste0(setdiff(ref_nms,yes_ref_nms), collapse = ","), "columns which are required for RRMSE" ))
+  }
+  # get rmse and mean difference/error for all columns with "_diff" but not "pct_diff"
+  # get mape for all columns with "pct_diff" but not "diff_"
+  rmse_df <- 
+    1:length(diffs_nms) %>% 
+    # this is all so that data can be grouped when it comes into the function
+    purrr::map(function(var_nm_idx){
+      df_w_diffs %>% 
+        sf::st_drop_geometry() %>% 
+        dplyr::mutate(
+          dplyr::across(
+            .cols = diffs_nms[var_nm_idx]
+            , .fns = ~.x
+            , .names = "xxxdiff"
+          )
+          , dplyr::across(
+            .cols = ref_nms[var_nm_idx]
+            , .fns = ~.x
+            , .names = "xxxref"
+          )
+        ) %>% 
+        dplyr::summarise(
+          sq_diff = sum(xxxdiff^2, na.rm = T)
+          , mean_diff = mean(xxxdiff, na.rm = T)
+          , nomiss_diff = sum(!is.na(xxxdiff))
+          , mean_ref = mean(xxxref, na.rm = T)
+          , nomiss_ref = sum(!is.na(xxxref))
+        ) %>% 
+        dplyr::mutate(
+          rmse = dplyr::case_when(
+            dplyr::coalesce(nomiss_diff,0)==0 ~ as.numeric(NA)
+            , T ~ sqrt(sq_diff/nomiss_diff)
+          )
+          , rrmse = dplyr::case_when(
+            dplyr::coalesce(nomiss_ref,0)==0 ~ as.numeric(NA)
+            , mean_ref==0 ~ rmse/(mean_ref+1e-10)
+            , T ~ rmse/mean_ref
+          )
+        ) %>% 
+        dplyr::rename(mean=mean_diff) %>% 
+        # dplyr::select(-c(sq_diff,nomiss_diff,mean_ref,nomiss_ref)) %>% 
+        dplyr::select(rmse,rrmse,mean) %>% 
+        dplyr::rename_with(
+          .cols = c(rmse,rrmse,mean)
+          , ~ paste0(diffs_nms[var_nm_idx],"_",.x)
+        )
+    }) %>% 
+    purrr::list_cbind()
+  # rmse_df %>% dplyr::glimpse()
+  # add back on grouping levels if data was grouped
+  return_df <- 
+    df_w_diffs %>% 
+    sf::st_drop_geometry() %>% 
+    dplyr::count() %>% 
+    dplyr::rename(n_obs_for_error_metrics = n)
+    
+      
+    if(
+      dplyr::coalesce(nrow(rmse_df),0)==0
+      || dplyr::coalesce(ncol(rmse_df),0)==0
+    ){
+      # empty df
+      rmse_df <- dplyr::tibble()
+    }
+  # return
+  return(return_df %>% dplyr::bind_cols(rmse_df))
+}
+
+validation_plots_polygons %>%
+  # dplyr::group_by(trtmnt_type) %>%
+  get_me_rmse_fn() %>%
+  dplyr::glimpse()
+validation_plots_polygons %>%
+  dplyr::group_by(trtmnt_type) %>%
+  get_me_rmse_fn() %>%
+  kableExtra::kbl() %>% 
+  kableExtra::kable_styling()
+
+
+
+cc_agg_temp <- validation_plots_polygons %>%
+  # dplyr::group_by(trtmnt_type) %>%
+  get_me_rmse_fn()
+
 # get the plottttttttttttttttttt
 validation_plots_polygons %>% 
   sf::st_drop_geometry() %>% 
@@ -3315,6 +3527,13 @@ validation_plots_polygons %>%
     cc_agg_temp    
   ) %>% 
   plt_scatter_fn(which_col = "canopy_cov_pct", title_lab = "Canopy Cover", x_lab = "reference Canopy Cover (%)", y_lab = "predicted Canopy Cover (%)")
+# get the plottttttttttttttttttt
+validation_plots_polygons %>% 
+  sf::st_drop_geometry() %>% 
+  dplyr::bind_cols(
+    cc_agg_temp    
+  ) %>% 
+  plt_scatter_fn(which_col = "n_trees", title_lab = "TPH", x_lab = "reference TPH", y_lab = "predicted TPH")
 
 
 ```
@@ -3470,7 +3689,7 @@ The higher canopy cover predictions by the UAS method compared to the field meth
 
 let's check out a visual representation of that phenomenon by looking as some example plots
 
-```{r, results=F, fig.show='hide'}
+```{r,eval=F,purl=FALSE, results=F, fig.show='hide'}
 # harrypotter::hp(n=2, option="hermionegranger") %>% scales::show_col()
 terra_plt_fn_temp <- function(rgb, rgb_square, plot_poly, ref_pt, ref_poly, pred_poly, plot_title="") {
   grDevices::dev.new()
@@ -3580,11 +3799,13 @@ cowplot::save_plot(
 )
 ```
 
-```{r, fig.width=10, fig.height=10, fig.show='asis'}
+```{r,eval=F,purl=FALSE, fig.width=10, fig.height=10, fig.show='asis'}
 print(plt_temp)
 ```
 
 interesting. we see that the UAS crowns (orange) generally align with the green areas that appear to be trees from the aerial perspective and the individual crowns segmented using the UAS method do not overlap. By contrast, the field-measured stems and the assumed circular crowns (red) overlap with each other and are not always spatially aligned with the green areas in the aerial imagery. This slight misalignment is the result of variations in the location recording systems used on the ground and the UAS system in addition to the stems of trees not being positioned directly under the crown due to real-world tree lean. We can also see a few examples of field-measured tree stems that are very near each other so that the simulated circular crowns have high or even complete overlap.
+
+#### Crown IoU
 
 We can move beyond summary canopy cover percentages and evaluate the spatial overlap of the crown footprints using the Intersection over Union (IoU) metric. The IoU index provides a spatial assessment by measuring the geographic alignment between the UAS crown polygons and circular field crowns. To quantify the spatial agreement between your UAS-delineated crowns and the field-calculated circular crowns, IoU is calculated by dividing the area of overlap between the two crown layers by the total combined area of both layers:
 
@@ -3681,7 +3902,7 @@ validation_plots_polygons %>%
 
 let's check out some examples of high, medium, and low crown overlap plots
 
-```{r, results=F, fig.show='hide'}
+```{r,eval=F,purl=FALSE, results=F, fig.show='hide'}
 set.seed(55)
 plts_temp <- 
   validation_plots_polygons %>% 
@@ -3775,7 +3996,7 @@ cowplot::save_plot(
 )
 ```
 
-```{r, fig.width=9.9, fig.height=10, fig.show='asis'}
+```{r,eval=F,purl=FALSE, fig.width=9.9, fig.height=10, fig.show='asis'}
 print(fnl_plt_temp)
 ```
 
@@ -3821,6 +4042,11 @@ validation_plots_polygons %>%
 ```
 
 treatment intensity seems to have minimal impact on the spatial agreement between the UAS crown polygons and circular field crowns
+
+### Tree Density Evaluation{#tph_eval}
+
+In addition to canopy cover and as part of our plot-level evaluation of the UAS tree detection methodology, we'll also evaluate the ability of the UAS to count individual trees within a bounded area. This comparison of aggregated trees by the UAS and field-reference data does not rely on individual instance matches because individual tree prediction errors can cancel out at the plot scale with omission errors balancing commission errors.
+
 
 ```{r, warning=FALSE, message=FALSE, echo=FALSE, include=FALSE}
 remove(list = ls()[grep("_temp",ls())])

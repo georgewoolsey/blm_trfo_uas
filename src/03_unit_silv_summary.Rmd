@@ -5,7 +5,7 @@ In this section, we're going to aggregate the UAS-detected trees within the trea
 first, let's read in the UAS-delineated tree crown polygons as well so we have them for visualization and such
 
 ```{r do-the-crown-stuff}
-# ```{r,eval=T,purl=FALSE}
+# ```{r,eval=F,purl=FALSE}
 # function to clean geometry collections
 clean_geometry_collections <- function(df, target_type = "POLYGON") {
   # any?
@@ -820,7 +820,7 @@ plt_metric_violin_fn(unit_sum_df,"basal_area_ft2_per_ac",metric_label = "basal a
 
 distribution of individual tree height by treatment type (this groups all trees under the same treatment type together)
 
-```{r,eval=T,purl=FALSE, fig.height=8}
+```{r,eval=F,purl=FALSE, fig.height=8}
 treetops_sf %>% 
   sf::st_drop_geometry() %>% 
   # dplyr::count(trtmnt_type, trtmnt_block)
@@ -970,7 +970,7 @@ treetops_sf %>%
 
 table it
 
-```{r,eval=T,purl=FALSE}
+```{r,eval=F,purl=FALSE}
 tbl_df_temp <-
   treetops_sf %>% 
   sf::st_drop_geometry() %>%
@@ -1074,7 +1074,7 @@ crnw_shp_temp %>%
 
 ```
 
-```{r,eval=T,purl=FALSE}
+```{r,eval=F,purl=FALSE}
 # table metric
 tbl_df_temp %>% 
   dplyr::select(
@@ -1639,7 +1639,7 @@ terra_plt_ortho <- function(
 
 plot example unit
 
-```{r,eval=T,purl=FALSE, results=F, fig.show='asis', fig.height = 8, fig.width = 10.5}
+```{r,eval=F,purl=FALSE, results=F, fig.show='asis', fig.height = 8, fig.width = 10.5}
 plt_single_temp <- function(x, add = T){
     unit_temp <- stand_boundary %>% 
       dplyr::filter(
@@ -1681,7 +1681,7 @@ unq_units_df %>%
 
 zoom in
 
-```{r,eval=T,purl=FALSE, results=F, fig.show='asis', fig.height=9.2}
+```{r,eval=F,purl=FALSE, results=F, fig.show='asis', fig.height=9.2}
 unit_temp <- stand_boundary %>% 
   dplyr::slice(4) %>% 
   sf::st_centroid() %>% 
@@ -1711,7 +1711,7 @@ terra_plt_ortho(
 
 how about on the CHM?
 
-```{r,eval=T,purl=FALSE, results=F, fig.show='asis', fig.height=9.2}
+```{r,eval=F,purl=FALSE, results=F, fig.show='asis', fig.height=9.2}
 chm_temp <- chm_rast %>% 
   terra::crop(unit_temp %>% sf::st_buffer(3) %>% terra::vect(), mask = T) %>% 
   cloud2trees:::adjust_raster_resolution(
@@ -1729,7 +1729,7 @@ terra_plt_ortho(
 
 let's check out some examples of the RGB by treatment block
 
-```{r,eval=T,purl=FALSE, results=F, fig.show='asis', fig.height=8, fig.width=9.5}
+```{r,eval=F,purl=FALSE, results=F, fig.show='asis', fig.height=8, fig.width=9.5}
 # mapping
 plt_blk_temp <- function(blk, add = F, save = F) {
   if(save){
