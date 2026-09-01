@@ -75,6 +75,315 @@ min_tree_ht_m <- 2
 treetops_sf <- treetops_sf %>% dplyr::filter(tree_height_m>=min_tree_ht_m)
 ```
 
+now, we'll read in the UAS-delineated tree crown polygons as well so we have them for visualization and get the crown diameter for each tree as the greatest distance across the UAS-delineated crown polygon
+
+we'll also add a flag for a prediction of if the tree is dead or not based on the [RGB spectral classification workflow](#pile_review) we described for slash pile identification
+
+```{r, include=F, eval = F}
+  crowns_sf_temp <- sf::st_read(
+      dsn = cloud2trees:::search_dir_final_detected(dir = c2t_process_dir)[["crowns_flist"]][2]
+      , quiet = TRUE
+      , query = 
+        sprintf(
+          "SELECT * FROM %s WHERE treeID IN (%s)"
+          , basename(cloud2trees:::search_dir_final_detected(dir = c2t_process_dir)[["crowns_flist"]][2]) %>% stringr::str_remove("^.*/") %>% stringr::str_remove("\\.[^.]+$")
+          , stringr::str_c("'", unique(treetops_sf$treeID), "'", collapse = ", ")
+        )
+    ) %>% 
+    # throw in hey_xxxxxxxxxx to test it works if we include non-existant columns
+    dplyr::select( dplyr::any_of(c(
+      "hey_xxxxxxxxxx"
+      , "treeID"
+      , "crown_area_m2"
+      , "crown_diameter_m"
+      , "tree_height_m"
+      , "tree_x"
+      , "tree_y"
+    )))
+  
+  # crowns_sf_temp %>% dplyr::glimpse()
+  # rgb_rast %>% terra::plotRGB()
+  crowns_sf_spectral_temp <- 
+    cloud2trees:::piles_spectral_filter(
+      sf_data = crowns_sf_temp %>% dplyr::slice_sample(n=44)
+      , rgb_rast = rgb_rast
+      # define the band index
+      , red_band_idx = 1
+      , green_band_idx = 2 
+      , blue_band_idx = 3
+      # return unfiltered or filtered
+      , filter_return = F
+    )
+  crowns_sf_spectral_temp <- crowns_sf_spectral_temp[["segs_sf"]]
+  crowns_sf_spectral_temp %>% dplyr::glimpse()
+  
+  
+# harrypotter::hp(n=2, option="hermionegranger") %>% scales::show_col()
+terra_plt_fn_temp <- function(rgb, rgb_square, pred_poly, plot_title="") {
+  grDevices::dev.new()
+  grDevices::dev.control("enable")
+  
+  terra::plotRGB(rgb)
+  # terra::plot(rgb_square, add = T, border = "white", col = NA, lwd = 2)
+  terra::plot(terra::vect(pred_poly %>% sf::st_transform(terra::crs(rgb)) ), add = T, border = harrypotter::hp(n=2, option="hermionegranger")[2], col = NA, lwd = 1.4)
+  
+  p <- grDevices::recordPlot()
+  grDevices::dev.off()
+  return(p)
+}
+
+# for a single record in the validation plot data
+plt_spectral_crown_polygons_temp <- function(x){
+    # plot
+    c_temp <- crowns_sf_spectral_temp %>% dplyr::slice(x)
+    # sq
+    rgb_sq_temp <- c_temp %>% 
+      sf::st_buffer(1.5) %>% 
+      sf::st_bbox() %>% 
+      sf::st_as_sfc() %>% 
+      sf::st_transform(terra::crs(rgb_rast)) %>% 
+      terra::vect()
+    # rgb
+    rgb_temp <- rgb_rast %>% 
+       terra::crop(
+          rgb_sq_temp
+        , mask=T
+      )
+    # pred polys
+    pred_poly_temp <- c_temp
+    # plt
+    plt <- terra_plt_fn_temp(
+      rgb = rgb_temp 
+      , rgb_square = rgb_sq_temp 
+      , pred_poly = c_temp
+      , plot_title = c_temp$inrange_th_votes[1]
+    )
+    return(plt)
+  }
+
+crowns_sf_spectral_temp %>% dplyr::glimpse()
+crowns_sf_spectral_temp %>% 
+  sf::st_drop_geometry() %>% 
+  dplyr::count(inrange_th_votes)
+
+plts_temp <-
+  crowns_sf_spectral_temp %>% 
+    dplyr::mutate(rn=dplyr::row_number()) %>% 
+    dplyr::group_by(inrange_th_votes) %>% 
+    dplyr::slice_sample(n=4) %>%
+    dplyr::ungroup() %>% 
+    dplyr::pull(rn) %>% 
+    purrr::map(plt_spectral_crown_polygons_temp)
+# unique(crowns_sf_spectral_temp$inrange_th_votes)[1]
+
+combine_plts_temp <- function(plot_list) {
+  n_plots <- length(plot_list)
+  n_cols <- min(n_plots, 4)
+  n_rows <- ceiling(n_plots / n_cols)
+  
+  grob_list <- purrr::map(plot_list, cowplot::as_grob)
+  
+  # grDevices::dev.new()
+  cowplot::plot_grid(
+    plotlist = grob_list
+    , ncol = n_cols
+    , nrow = n_rows
+  )  
+  # graphics::par(mfrow = c(n_rows, n_cols), mar = c(1, 1, 2, 1))
+  #   for (i in seq_len(n_plots)) {
+  #   grDevices::replayPlot(plot_list[[i]])
+  # }
+}
+
+plt_temp <- combine_plts_temp(plts_temp)
+cowplot::save_plot(
+  filename = "../data/crowns_spectral_inrange3.png"
+  , plot = plt_temp 
+  , base_width = 11
+  , base_height = 15
+  , ncol = 1
+  , nrow = 1
+  , dpi = 300
+  , bg = "white"
+)
+print(plt_temp)
+```
+
+
+```{r do-the-crown-stuff}
+# ```{r,eval=F,purl=FALSE}
+# function to clean geometry collections
+clean_geometry_collections <- function(df, target_type = "POLYGON") {
+  # any?
+  geom_types <- as.character(sf::st_geometry_type(df))
+  has_gc <- any(geom_types == "GEOMETRYCOLLECTION")
+  
+  # orig
+  if (!has_gc) {
+    return(df)
+  }
+  
+  # temp id
+  df_temp <- df %>% dplyr::mutate(temp_orig_row_id = dplyr::row_number())
+  
+  # split the data
+  gc_df <- df_temp %>% dplyr::filter(as.character(sf::st_geometry_type(df_temp)) == "GEOMETRYCOLLECTION")
+  good_df <- df_temp %>% dplyr::filter(as.character(sf::st_geometry_type(df_temp)) != "GEOMETRYCOLLECTION")
+  
+  # get only the type and make it a "multi" geom
+  gc_multi_df <- 
+    gc_df %>%
+    sf::st_collection_extract(type = target_type) %>%
+    dplyr::select(temp_orig_row_id) %>% 
+    dplyr::group_by(temp_orig_row_id) %>%
+    # collapse into a single multi-part geometry
+    dplyr::summarise(.groups = "drop")
+  
+  # combine
+  final_df <- 
+    good_df %>% 
+    dplyr::bind_rows(
+      gc_multi_df %>% 
+        dplyr::inner_join(
+          gc_df %>% 
+            sf::st_drop_geometry()
+          , by = "temp_orig_row_id"
+        )
+    ) %>%
+    dplyr::arrange(temp_orig_row_id) %>%
+    dplyr::select(-temp_orig_row_id)
+  
+  return(final_df)
+}
+# read crowns and get crown measurements
+crowns_sf <-
+  cloud2trees:::search_dir_final_detected(dir = c2t_process_dir)[["crowns_flist"]] %>% 
+  purrr::map(function(x){
+    # read it
+    crowns_sf_temp <- sf::st_read(
+      dsn = x, quiet = TRUE
+      , query = 
+        sprintf(
+          "SELECT * FROM %s WHERE treeID IN (%s)"
+          , basename(x) %>% stringr::str_remove("^.*/") %>% stringr::str_remove("\\.[^.]+$")
+          , stringr::str_c("'", unique(treetops_sf$treeID), "'", collapse = ", ")
+        )
+    ) %>% 
+    # throw in hey_xxxxxxxxxx to test it works if we include non-existant columns
+    dplyr::select( dplyr::any_of(c(
+      "hey_xxxxxxxxxx"
+      , "treeID"
+      , "crown_area_m2"
+      , "crown_diameter_m"
+      , "inrange_th_votes"
+      , "tree_height_m"
+      , "tree_x"
+      , "tree_y"
+    )))
+    # check if cols exist
+    has_cols <- all(c("crown_area_m2", "crown_diameter_m") %in% names(crowns_sf_temp))
+    
+    if(!has_cols){
+      # get the crown data
+      crowns_sf_temp <- 
+        crowns_sf_temp %>%
+        clean_geometry_collections(target_type = "POLYGON") %>% 
+        sf::st_make_valid() %>% 
+        cloud2trees::simplify_multipolygon_crowns() %>% 
+        dplyr::mutate(
+          crown_area_m2 = sf::st_area(.) %>% as.numeric()
+        ) %>% 
+        cloud2trees:::st_calculate_diameter() %>% 
+        dplyr::rename(crown_diameter_m=diameter_m)
+      #write....FYI: this replaces the raw data from cloud2trees and excludes trees outside of the treatment units...
+      sf::st_write(obj=crowns_sf_temp, dsn = x, quiet = T, append = F)
+    }
+    
+    
+    # check if spectral cols exist
+    has_cols <- all(c("inrange_th_votes") %in% names(crowns_sf_temp))
+    
+    if(!has_cols){
+      # get the crown data
+      # check for spectral
+        crowns_sf_spectral_temp <- 
+          cloud2trees:::piles_spectral_filter(
+            sf_data = crowns_sf_temp
+            , rgb_rast = rgb_rast
+            # define the band index
+            , red_band_idx = 1
+            , green_band_idx = 2 
+            , blue_band_idx = 3
+            # return unfiltered or filtered
+            , filter_return = F
+          )
+        crowns_sf_spectral_temp <- crowns_sf_spectral_temp[["segs_sf"]]
+        
+        crowns_sf_temp <- 
+          crowns_sf_temp %>% 
+          dplyr::left_join(
+            crowns_sf_spectral_temp %>% 
+              sf::st_drop_geometry() %>% 
+              dplyr::select(treeID, inrange_th_votes)
+            , by = "treeID"
+          )
+          
+      #write....FYI: this replaces the raw data from cloud2trees and excludes trees outside of the treatment units...
+      sf::st_write(obj=crowns_sf_temp, dsn = x, quiet = T, append = F)
+    }
+    
+    
+    # return data
+    crowns_sf_temp <- crowns_sf_temp %>% 
+      dplyr::select(
+        treeID
+        , crown_area_m2
+        , crown_diameter_m
+        , inrange_th_votes
+      ) %>% 
+      dplyr::inner_join(
+        treetops_sf %>% 
+        sf::st_drop_geometry() %>% 
+        # throw in hey_xxxxxxxxxx to test it works if we include non-existant columns
+        dplyr::select( -dplyr::any_of(c(
+          "hey_xxxxxxxxxx"
+          , "crown_area_m2"
+          , "crown_diameter_m"
+          , "inrange_th_votes"
+        )))
+        , by = "treeID"
+      )
+    return(crowns_sf_temp)
+    
+  }) %>% 
+  purrr::list_rbind()
+# crowns_sf %>% dplyr::glimpse()
+# crowns_sf %>% sf::st_drop_geometry() %>% dplyr::count(trtmnt_type)
+
+# add crown data to tree points
+treetops_sf <- 
+  treetops_sf %>% 
+  # throw in hey_xxxxxxxxxx to test it works if we include non-existant columns
+  dplyr::select( -dplyr::any_of(c(
+    "hey_xxxxxxxxxx"
+    , "crown_area_m2"
+    , "crown_diameter_m"
+    , "inrange_th_votes"
+  ))) %>% 
+  dplyr::left_join(
+    crowns_sf %>% 
+      sf::st_drop_geometry() %>% 
+      dplyr::select(
+        treeID
+        , crown_area_m2
+        , crown_diameter_m
+        , inrange_th_votes
+      )
+    , by = "treeID"
+  )
+```
+
+
 ```{r, warning=FALSE, message=FALSE, echo=FALSE, include=FALSE}
 remove(list = ls()[grep("_temp",ls())])
 gc()
@@ -1432,7 +1741,7 @@ now, i need one more palette that fits in the theme and has 3 distinct colors th
 
 ```{r}
 # custom palette
-pal_match_grp = c(
+pal_match_grp <- c(
   "omission"= "plum3" # viridis::cividis(3)[1]
   , "commission"= "gray77"
   , "true positive"= "darkgoldenrod2" # viridis::cividis(3)[3]
@@ -1984,7 +2293,7 @@ vws_functions[["concave_down_06"]]
 # }
 
 #### set up CHM for raster2trees
-agg_chm_rast <- terra::rast( file.path(c2t_process_dir, "chm_0.20m.tif") )
+agg_chm_rast <- terra::rast( file.path(c2t_process_dir, "chm_0.21m.tif") )
 if(!file.exists("../data/chm_rast_test.tif")){
   chm_rast_test <- 
     agg_chm_rast %>% 
@@ -2156,41 +2465,92 @@ because we have plot-level reference field data but a complete census of predict
 let's perform instance matching over each plot and then bring those results together after
 
 ```{r}
+# treetops_sf %>% sf::st_drop_geometry() %>% dplyr::count(inrange_th_votes)
 # make a temp function to map over each plot
 inst_match_fn_temp <- function(plt_id) {
-  # reference_prediction_match
-  rp_match_ans_temp <- reference_prediction_match(
-    pred_data = 
+  # identify possible pred trees to use based on intersection with plot+buffer
+  pred_trees_temp <- 
+    treetops_sf %>% 
+    dplyr::filter(
+      tree_height_m>=min_tree_ht_m
+      # , dplyr::coalesce(inrange_th_votes,0)<6
+    ) %>% 
+    sf::st_intersection(
+      validation_plots %>% 
+        dplyr::filter(plot==plt_id) %>%  
+        dplyr::mutate(plot_radius_m = plot_radius_m+1) %>% # 1 = 0.5*max_dist_m where max_dist_m=allowable search distance for TP match
+        sf::st_transform(sf::st_crs(treetops_sf)) %>% 
+        sf::st_buffer(.$plot_radius_m) %>% 
+        dplyr::select(plot_area_m2)
+    ) %>% 
+    dplyr::left_join(
       treetops_sf %>% 
-        dplyr::filter(tree_height_m>=min_tree_ht_m) %>% 
+        # clip to study boundary
         sf::st_intersection(
           validation_plots %>% 
             dplyr::filter(plot==plt_id) %>%  
-            dplyr::mutate(plot_radius_m = plot_radius_m+1) %>% # 1 = 0.5*max_dist_m where max_dist_m=allowable search distance for TP match
             sf::st_transform(sf::st_crs(treetops_sf)) %>% 
             sf::st_buffer(.$plot_radius_m) %>% 
-            dplyr::select(plot_area_m2)
+            dplyr::mutate(is_in_stand = T)
         ) %>% 
-        dplyr::left_join(
-          treetops_sf %>% 
-            # clip to study boundary
-            sf::st_intersection(
-              validation_plots %>% 
-                dplyr::filter(plot==plt_id) %>%  
-                sf::st_transform(sf::st_crs(treetops_sf)) %>% 
-                sf::st_buffer(.$plot_radius_m) %>% 
-                dplyr::mutate(is_in_stand = T)
-            ) %>% 
-            sf::st_drop_geometry() %>% 
-            dplyr::select(treeID, is_in_stand)
-          , by = "treeID"
-        ) %>% 
-        dplyr::mutate(
-          is_in_stand = dplyr::coalesce(is_in_stand,F)
-        )
+        sf::st_drop_geometry() %>% 
+        dplyr::select(treeID, is_in_stand)
+      , by = "treeID"
+    ) %>% 
+    dplyr::mutate(
+      is_in_stand = dplyr::coalesce(is_in_stand,F)
+    )
+  # # read crowns to get crown diameter
+  # pred_crowns_temp <- 
+  #   cloud2trees:::search_dir_final_detected(dir = c2t_process_dir)[["crowns_flist"]] %>% 
+  #   purrr::map(
+  #     \(x)
+  #     crowns_sf <- sf::st_read(
+  #       dsn = x, quiet = TRUE
+  #       , query = 
+  #         sprintf(
+  #           "SELECT * FROM %s WHERE treeID IN (%s)"
+  #           , basename(x) %>% stringr::str_remove("^.*/") %>% stringr::str_remove("\\.[^.]+$")
+  #           , stringr::str_c("'", unique(pred_trees_temp$treeID), "'", collapse = ", ")
+  #         )
+  #     ) %>% 
+  #     cloud2trees::simplify_multipolygon_crowns() %>% 
+  #     # throw in hey_xxxxxxxxxx to test it works if we include non-existant columns
+  #     dplyr::select( -dplyr::any_of(c(
+  #       "hey_xxxxxxxxxx"
+  #       , "diameter_m"
+  #       , "crown_diameter_m"
+  #     ))) %>% 
+  #     cloud2trees:::st_calculate_diameter() %>% 
+  #     dplyr::rename(crown_diameter_m=diameter_m)
+  #   ) %>% 
+  #   purrr::list_rbind()
+  
+  # pred_trees_temp <- 
+  #   pred_trees_temp %>% 
+  #   # throw in hey_xxxxxxxxxx to test it works if we include non-existant columns
+  #     dplyr::select( -dplyr::any_of(c(
+  #       "hey_xxxxxxxxxx"
+  #       , "diameter_m"
+  #       , "crown_diameter_m"
+  #     ))) %>% 
+  #   dplyr::left_join(
+  #     pred_crowns_temp %>% 
+  #       sf::st_drop_geometry() %>% 
+  #       dplyr::select(treeID, crown_diameter_m)
+  #     , by = "treeID"
+  #   )
+  
+  # reference_prediction_match
+  rp_match_ans_temp <- reference_prediction_match(
+    pred_data = pred_trees_temp
     , ref_data = 
       validation_trees %>% 
+        dplyr::ungroup() %>% 
         dplyr::filter(plot==plt_id) %>%
+        dplyr::mutate(
+          crown_diameter_m = pmax(crown_length_m,crown_width_m, na.rm=T)
+        ) %>% 
         dplyr::rename(tree_height_m=height_m, dbh_cm=dbh_cm, tree_cbh_m=cbh_m) %>% 
         sf::st_transform(sf::st_crs(treetops_sf))
     , max_dist_m = 2 # round(median(validation_trees$crown_width_m)/2)
@@ -2202,7 +2562,7 @@ inst_match_fn_temp <- function(plt_id) {
   
   gt_temp <- ground_truth_prediction_match(
     reference_prediction_match_ans = rp_match_ans_temp
-    , comp_cols = c("tree_height_m", "dbh_cm") #, "tree_cbh_m")
+    , comp_cols = c("tree_height_m", "crown_diameter_m") #, "dbh_cm")
   )
   
   if(!is.null(rp_match_ans_temp$pred_data) && nrow(rp_match_ans_temp$pred_data)>0){
@@ -2711,12 +3071,16 @@ agg_ground_truth_match_ans %>%
     # , "Detection" = 3
     # , "Area" = 3
     , "Height (m)" = 3
-    , "DBH (cm)" = 3
+    , "Crown Diam. (m)" = 3
   )) %>% 
   kableExtra::column_spec(seq(2,8,by=3), border_right = TRUE, include_thead = TRUE) 
 ```
 
-UAS-measured heights are highly accurate but those DBH measurements do not align very well. perhaps this is due to the fact that DBH wasn't actually measured in the field. instead, DRC (diameter at root crown) was measured and then we converted DRC to DBH using the Chojnacky & Rogers ([1999](https://doi.org/10.1093/wjaf/14.1.14)) model...therefore, it's probably best not to view these DBH metrics as measurements of "error" but as measurements of "comparison"
+```{r, include=F, eval=F}
+# UAS-measured heights are highly accurate but those DBH measurements do not align very well. perhaps this is due to the fact that DBH wasn't actually measured in the field. instead, DRC (diameter at root crown) was measured and then we converted DRC to DBH using the Chojnacky & Rogers ([1999](https://doi.org/10.1093/wjaf/14.1.14)) model...therefore, it's probably best not to view these DBH metrics as measurements of "error" but as measurements of "comparison"
+```
+
+UAS-measured heights are highly accurate but those crown diameter measurements do not align very well. perhaps this is due to challenges measuring horizontal crown dimensions in the field...therefore, it's probably best to view these crown diameter metrics not as measurements of "error" but as measurements of "comparison"
 
 and plot predicted versus reference values for correct predictions (TP)
 
@@ -2736,10 +3100,10 @@ dta_temp <-
 # plt fn temp
 plt_scatter_fn <- function(
     dta
-    , which_col = "dbh_cm"
-    , title_lab = "DBH"
-    , x_lab = "reference DBH (cm)" # latex2exp::TeX("reference area ($m^2$)")
-    , y_lab = "predicted DBH (cm)" # latex2exp::TeX("predicted area ($m^2$)")
+    , which_col = "crown_diameter_m"
+    , title_lab = "Crown Diameter"
+    , x_lab = "reference crown diam. (m)" # latex2exp::TeX("reference area ($m^2$)")
+    , y_lab = "predicted crown diam. (m)" # latex2exp::TeX("predicted area ($m^2$)")
 ){
     d <- dta
     # construct the formula: "y_var ~ x_var"
@@ -2866,9 +3230,16 @@ plt_scatter_fn <- function(
     }
   }
 # get the plottttttttttttttttttt
-dbh_plt_temp <-
-  plt_scatter_fn(dta_temp, which_col = "dbh_cm", title_lab = "DBH", x_lab = "reference DBH (cm)", y_lab = "predicted DBH (cm)")
-# dbh_plt_temp
+crwn_dia_plt_temp <-
+  plt_scatter_fn(
+    dta_temp
+    , which_col = "crown_diameter_m"
+    , title_lab = "Crown Diameter"
+    , x_lab = "reference crown diam. (m)"
+    , y_lab = "predicted crown diam. (m)"
+  )
+  # plt_scatter_fn(dta_temp, which_col = "dbh_cm", title_lab = "DBH", x_lab = "reference DBH (cm)", y_lab = "predicted DBH (cm)")
+# crwn_dia_plt_temp
 
 # get the plottttttttttttttttttt
 ht_plt_temp <-
@@ -2876,10 +3247,10 @@ ht_plt_temp <-
 # ht_plt_temp
 ```
 
-**DBH: predicted vs reference**
+**crown diameter: predicted vs reference**
 
 ```{r}
-dbh_plt_temp
+crwn_dia_plt_temp
 ```
 
 yikes. see comments on DBH above
@@ -2904,7 +3275,7 @@ ground_truth_prediction_match_ans %>%
   sf::st_drop_geometry() %>%
   dplyr::select(
     ref_tree_height_m, pred_tree_height_m
-    , ref_dbh_cm, pred_dbh_cm
+    , ref_crown_diameter_m, pred_crown_diameter_m
   ) %>% 
   tidyr::pivot_longer(
     cols = dplyr::everything()
@@ -2921,16 +3292,16 @@ ground_truth_prediction_match_ans %>%
       ordered()
     , tree_metric = metric %>% 
       stringr::str_remove("(_rmse|_rrmse|_mean|_mape)$") %>% 
-      stringr::str_extract("(height|dbh)") %>% 
+      stringr::str_extract("(height|crown_diameter)") %>% 
       factor(
         ordered = T
         , levels = c(
           "height"
-          , "dbh"
+          , "crown_diameter"
         )
         , labels = c(
           "Height (m)"
-          , "DBH (cm)"
+          , "Crown Diam. (m)"
         )
       )
   ) %>% 
@@ -2963,7 +3334,7 @@ ground_truth_prediction_match_ans %>%
 
 let's shift our focus to relative error (MAPE) while providing absolute context (RMSE and ME) as text or secondary metrics to look into the penalty we face due to inaccuracies in DBH for small stems. for example, a 3 cm error on a 6 cm small tree is a 50% relative error while that same 3 cm error on a 30 cm merchantable tree is a minor 10% error.
 
-let's look into the DBH prediction error over the range of tree sizes and use LOESS smoothing to highlight the trend in relative prediction error
+let's look into the crown diameter prediction error over the range of tree sizes and use LOESS smoothing to highlight the trend in relative prediction error
 
 ```{r}
 # Data trends (dashed) are visualized using a LOESS (locally weighted scatterplot smoothing) regression. 
@@ -2975,13 +3346,13 @@ let's look into the DBH prediction error over the range of tree sizes and use LO
 ground_truth_prediction_match_ans %>%
   dplyr::mutate(
     # swap the error calc
-    pct_diff_dbh_cm = (pred_dbh_cm-ref_dbh_cm)/ref_dbh_cm
+    pct_diff_crown_diameter_m = (pred_crown_diameter_m-ref_crown_diameter_m)/ref_crown_diameter_m
   ) %>%
   sf::st_drop_geometry() %>%
   dplyr::filter(match_grp %in% c("true positive")) %>% 
   # dplyr::glimpse()
   ggplot2::ggplot(
-    mapping = ggplot2::aes(y = pct_diff_dbh_cm, x = ref_dbh_cm)
+    mapping = ggplot2::aes(y = pct_diff_crown_diameter_m, x = ref_crown_diameter_m)
   ) +
   ggplot2::geom_hline(yintercept = 0, color = "gray33", lwd = 1) +
   ggplot2::geom_point(color = "brown", alpha = 0.7, size = 0.7) +
@@ -3021,8 +3392,8 @@ ground_truth_prediction_match_ans %>%
     , labels = scales::percent
   ) +
   ggplot2::labs(
-    x = "field reference DBH (cm)", y = "relative DBH error"
-    , subtitle = "relative DBH error (%) by reference tree DBH"
+    x = "field reference Crown Diam. (m)", y = "relative Crown Diam. error"
+    , subtitle = "relative Crown Diam. error (%) by reference tree Crown Diam."
   ) +
   ggplot2::theme_light()
 ```
@@ -3277,6 +3648,11 @@ We'll start by evaluating UAS-predicted canopy cover compared to field-measured 
 # uas trees in plots
 pred_trees_temp <-
   treetops_sf %>% 
+  dplyr::filter(
+    tree_height_m>=min_tree_ht_m
+    # , dplyr::coalesce(inrange_th_votes,0)<6
+    # , dplyr::coalesce(inrange_th_votes,0)<5
+  ) %>% 
   sf::st_intersection(
     validation_plots_polygons %>% 
       dplyr::ungroup() %>% 
@@ -3315,21 +3691,10 @@ pred_trees_temp <-
 
 # read crowns
 pred_crowns_temp <- 
-  cloud2trees:::search_dir_final_detected(dir = c2t_process_dir)[["crowns_flist"]] %>% 
-  purrr::map(
-    \(x)
-    crowns_sf <- sf::st_read(
-      dsn = x, quiet = TRUE
-      , query = 
-        sprintf(
-          "SELECT * FROM %s WHERE treeID IN (%s)"
-          , basename(x) %>% stringr::str_remove("^.*/") %>% stringr::str_remove("\\.[^.]+$")
-          , stringr::str_c("'", unique(pred_trees_temp$treeID), "'", collapse = ", ")
-        )
-    ) %>% 
-    cloud2trees::simplify_multipolygon_crowns()
-  ) %>% 
-  purrr::list_rbind()
+  crowns_sf %>% 
+  dplyr::filter(
+    treeID %in% unique(pred_trees_temp$treeID)
+  )
 # pred_crowns_temp %>% dplyr::glimpse()
 # pred_trees_temp %>% nrow()
 # pred_crowns_temp %>% nrow()
@@ -3363,6 +3728,10 @@ validation_plots_polygons <-
     , diff_trees_per_ha = pred_trees_per_ha-ref_trees_per_ha
   )
 # validation_plots_polygons %>% dplyr::glimpse()
+# validation_plots_polygons %>% 
+#   ggplot2::ggplot(mapping = ggplot2::aes(x=ref_trees_per_ha,y=pred_trees_per_ha)) +
+#   ggplot2::geom_abline() +
+#   ggplot2::geom_point()
 ```
 
 quickly, we'll look at a sample of the UAS-detected crowns within the plot locations and the percent canopy cover for those plots
@@ -3504,37 +3873,37 @@ get_me_rmse_fn <- function(df_w_diffs) {
   return(return_df %>% dplyr::bind_cols(rmse_df))
 }
 
-validation_plots_polygons %>%
-  # dplyr::group_by(trtmnt_type) %>%
-  get_me_rmse_fn() %>%
-  dplyr::glimpse()
-validation_plots_polygons %>%
-  dplyr::group_by(trtmnt_type) %>%
-  get_me_rmse_fn() %>%
-  kableExtra::kbl() %>% 
-  kableExtra::kable_styling()
+# validation_plots_polygons_ %>%
+#   # dplyr::group_by(trtmnt_type) %>%
+#   get_me_rmse_fn() %>%
+#   dplyr::glimpse()
+# validation_plots_polygons %>%
+#   dplyr::group_by(trtmnt_type) %>%
+#   get_me_rmse_fn() %>%
+#   kableExtra::kbl() %>% 
+#   kableExtra::kable_styling()
 
 
 
-cc_agg_temp <- validation_plots_polygons %>%
-  # dplyr::group_by(trtmnt_type) %>%
-  get_me_rmse_fn()
-
-# get the plottttttttttttttttttt
-validation_plots_polygons %>% 
-  sf::st_drop_geometry() %>% 
-  dplyr::bind_cols(
-    cc_agg_temp    
-  ) %>% 
-  plt_scatter_fn(which_col = "canopy_cov_pct", title_lab = "Canopy Cover", x_lab = "reference Canopy Cover (%)", y_lab = "predicted Canopy Cover (%)")
-# get the plottttttttttttttttttt
-validation_plots_polygons %>% 
-  sf::st_drop_geometry() %>% 
-  dplyr::bind_cols(
-    cc_agg_temp    
-  ) %>% 
-  plt_scatter_fn(which_col = "n_trees", title_lab = "TPH", x_lab = "reference TPH", y_lab = "predicted TPH")
-
+# cc_agg_temp <- validation_plots_polygons %>%
+#   # dplyr::group_by(trtmnt_type) %>%
+#   get_me_rmse_fn()
+# 
+# # get the plottttttttttttttttttt
+# validation_plots_polygons %>% 
+#   sf::st_drop_geometry() %>% 
+#   dplyr::bind_cols(
+#     cc_agg_temp    
+#   ) %>% 
+#   plt_scatter_fn(which_col = "canopy_cov_pct", title_lab = "Canopy Cover", x_lab = "reference Canopy Cover (%)", y_lab = "predicted Canopy Cover (%)")
+# # get the plottttttttttttttttttt
+# validation_plots_polygons %>% 
+#   sf::st_drop_geometry() %>% 
+#   dplyr::bind_cols(
+#     cc_agg_temp    
+#   ) %>% 
+#   plt_scatter_fn(which_col = "trees_per_ha", title_lab = "TPH", x_lab = "reference TPH", y_lab = "predicted TPH")
+# ggsave(filename = "../data/wtf_tph_plotrmse.jpg",height = 8, width = 8)
 
 ```
 
@@ -3592,7 +3961,7 @@ validation_plots_polygons %>%
     n_plots = sum(!is.na(diff_canopy_cov_pct))
     , plot_area_ha = sum(plot_area_m2)/10000
     , dplyr::across(
-      .cols = c(n_trees,ref_canopy_cov_pct,pred_canopy_cov_pct,diff_canopy_cov_pct)
+      .cols = c(ref_n_trees,ref_canopy_cov_pct,pred_canopy_cov_pct,diff_canopy_cov_pct)
       , mean
     )
   ) %>% 
@@ -3639,7 +4008,7 @@ validation_plots_polygons %>%
   sf::st_drop_geometry() %>% 
   # dplyr::glimpse()
   ggplot2::ggplot(
-    mapping = ggplot2::aes(y = diff_canopy_cov_pct, x = trees_per_ha)
+    mapping = ggplot2::aes(y = diff_canopy_cov_pct, x = ref_trees_per_ha)
   ) + 
   ggplot2::geom_hline(yintercept = 0, color = "gray33", lwd = 1) +
   ggplot2::geom_point(color = "brown", alpha = 0.7, size = 0.7) +
@@ -3687,7 +4056,7 @@ validation_plots_polygons %>%
 
 The higher canopy cover predictions by the UAS method compared to the field method is a logical outcome of how crown boundaries are defined by each method. The UAS approach delineates crowns from an aerial perspective and utilizes a segmentation routine that prevents any two crowns from overlapping. Conversely, the field method assumes a perfectly circular crown extending symmetrically from the tree stem. In dense stands, this circular geometry causes field-calculated crowns to overlap in 2D space which may artificially reduce the total canopy cover. In reality, tree branches grow asymmetrically. For example, extending away from competitors to capture available sunlight. The UAS captures this irregular, outward branch expansion which may explain why it results in larger (and more realistic) canopy cover measurements than the field-based method.
 
-let's check out a visual representation of that phenomenon by looking as some example plots
+let's check out a visual representation of that phenomenon by looking as some example plots after we define a plotting function
 
 ```{r,eval=F,purl=FALSE, results=F, fig.show='hide'}
 # harrypotter::hp(n=2, option="hermionegranger") %>% scales::show_col()
@@ -3734,9 +4103,14 @@ plt_validation_plots_polygons_temp <- function(x){
       sf::st_buffer(.$crown_radius_m)
     # pred polys
     pred_poly_temp <- 
-      pred_crowns_temp %>% 
+      crowns_sf %>% 
         dplyr::inner_join(
           treetops_sf %>% 
+            dplyr::filter(
+              tree_height_m>=min_tree_ht_m
+              # , dplyr::coalesce(inrange_th_votes,0)<6
+              # , dplyr::coalesce(inrange_th_votes,0)<5
+            ) %>% 
             sf::st_intersection(plot_temp %>% sf::st_transform(sf::st_crs(treetops_sf)) ) %>% 
             sf::st_drop_geometry() %>% 
             dplyr::select(treeID)
@@ -3755,7 +4129,128 @@ plt_validation_plots_polygons_temp <- function(x){
     return(plt)
   }
 
-# get individual plots
+# # get individual plots
+# validation_plots_polygons %>% dplyr::glimpse()
+# cc_agg_temp %>% dplyr::glimpse()
+# 
+# validation_plots_polygons %>% 
+#   dplyr::mutate(rn = dplyr::row_number()) %>% 
+#   dplyr::slice_max(order_by = diff_trees_per_ha, n = 12, with_ties = F, na_rm = T) %>% 
+#   dplyr::glimpse()
+# plts_temp <-
+#   validation_plots_polygons %>%
+#   dplyr::mutate(rn = dplyr::row_number()) %>%
+#   dplyr::slice_max(order_by = diff_trees_per_ha, n = 12, with_ties = F, na_rm = T) %>%
+#   dplyr::pull(rn) %>%
+#   purrr::map(plt_validation_plots_polygons_temp)
+# pred_crowns_temp %>% 
+#   dplyr::inner_join(
+#     treetops_sf %>% 
+#       sf::st_intersection(
+#         validation_plots_polygons %>% 
+#           dplyr::slice(1) %>% 
+#           sf::st_transform(sf::st_crs(treetops_sf)) 
+#       ) %>% 
+#       sf::st_drop_geometry() %>% 
+#       dplyr::select(treeID)
+#     , by = "treeID"
+#   ) %>% 
+#   dplyr::glimpse()
+```
+
+```{r, include = F, eval = F}
+library(plotly)
+p_temp <- 
+  validation_plots_polygons_th0 %>%
+  ggplot2::ggplot(mapping = ggplot2::aes(x=ref_trees_per_ha,y=pred_trees_per_ha, color = factor(plot))) +
+  ggplot2::geom_abline() +
+  ggplot2::geom_point() +
+  ggplot2::theme_void() +
+  ggplot2::theme(legend.position = "none")
+plotly::ggplotly(p_temp)
+
+validation_plots_polygons_th0 %>% 
+  dplyr::mutate(
+    xxx = abs(diff_trees_per_ha/ref_trees_per_ha)
+  ) %>% 
+  # dplyr::pull(xxx) %>% summary()
+  dplyr::filter(
+    xxx > 0.7
+  ) %>% 
+  dplyr::glimpse()
+
+# for a single record in the validation plot data
+plt_validation_plots_polygons_temp <- function(x){
+    # plot
+    plot_temp <- validation_plots_polygons_th6 %>% dplyr::slice(x)
+    # sq
+    rgb_sq_temp <- plot_temp %>% 
+      sf::st_buffer(1.5) %>% 
+      sf::st_bbox() %>% 
+      sf::st_as_sfc() %>% 
+      sf::st_transform(terra::crs(rgb_rast)) %>% 
+      terra::vect()
+    # rgb
+    rgb_temp <- rgb_rast %>% 
+       terra::crop(
+          rgb_sq_temp
+        , mask=T
+      )
+    # ref pts
+    ref_pt_temp <- validation_trees %>% dplyr::filter(plot==plot_temp$plot)
+    # ref polys
+    ref_poly_temp <- 
+      ref_pt_temp %>% 
+      dplyr::mutate(crown_radius_m=crown_diam_m/2) %>% 
+      sf::st_buffer(.$crown_radius_m)
+    # pred polys
+    pred_poly_temp <- 
+      crowns_sf %>% 
+        dplyr::inner_join(
+          treetops_sf %>% 
+            dplyr::filter(
+              tree_height_m>=min_tree_ht_m
+              , dplyr::coalesce(inrange_th_votes,0)<6
+              # , dplyr::coalesce(inrange_th_votes,0)<5
+            ) %>% 
+            sf::st_intersection(plot_temp %>% sf::st_transform(sf::st_crs(treetops_sf)) ) %>% 
+            sf::st_drop_geometry() %>% 
+            dplyr::select(treeID)
+          , by = "treeID"
+        )
+    # plt
+    plt <- terra_plt_fn_temp(
+      rgb = rgb_temp 
+      , rgb_square = rgb_sq_temp 
+      , plot_poly = plot_temp 
+      , ref_pt = ref_pt_temp 
+      , ref_poly = ref_poly_temp 
+      , pred_poly = pred_poly_temp 
+      , plot_title = paste0("plot: ",plot_temp$plot)
+    )
+    return(plt)
+  }
+
+
+plts_temp <- 
+  validation_plots_polygons_th6 %>% 
+  dplyr::mutate(
+    rn = dplyr::row_number()
+    , xxx = abs(diff_trees_per_ha/ref_trees_per_ha)
+  ) %>% 
+  # dplyr::pull(xxx) %>% summary()
+  dplyr::filter(
+    xxx > 0.7
+  ) %>% 
+  dplyr::slice_sample(n = 12) %>% 
+  dplyr::pull(rn) %>% 
+  purrr::map(plt_validation_plots_polygons_temp)
+print(combine_plts_temp(plts_temp))
+```
+
+get the plots
+
+```{r,eval=F,purl=FALSE, results=F, fig.show='hide'}
 set.seed(44)
 plts_temp <- 
   1:nrow(validation_plots_polygons) %>% 

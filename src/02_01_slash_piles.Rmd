@@ -214,7 +214,7 @@ remove(list = ls()[grep("_temp",ls())])
 gc()
 ```
 
-## Candidate Pile Review
+## Candidate Pile Review{#pile_review}
 
 we should have gotten a list of candidate slash pile locations which we'll spectrally filter after we look at a few examples
 
