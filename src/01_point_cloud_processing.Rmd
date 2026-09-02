@@ -968,7 +968,7 @@ Let's look at the distribution of CBH in our study area
 ```{r}
 trees_cbh_ans %>%
   ggplot2::ggplot(mapping = ggplot2::aes(x = tree_cbh_m)) +
-  ggplot2::geom_density(fill = "maroon4", color = "maroon4", alpha = 0.2) +
+  ggplot2::geom_density(fill = "brown", color = "brown", alpha = 0.2) +
   ggplot2::scale_x_continuous(breaks = scales::breaks_extended(11)) +
   ggplot2::labs(x = "tree CBH (m)", y = "") +
   ggplot2::theme_light() +

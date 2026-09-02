@@ -68,7 +68,11 @@ what proportion of "trees" were removed?
 scales::percent((nrow_temp-nrow(treetops_sf))/nrow_temp, accuracy = 0.1)
 ```
 
-nice. now we'll keep only trees that are at least 2 m in height since we included trees as small as 1.37 m in our [tree detection](#trees)
+## Additional UAS-tree Filters
+
+nice. now we'll keep only trees that are at least 2 m in height since we included trees as small as 1.37 m in our [tree detection](#trees). This 2 m height sets the lower limit of what is considered a "tree" and if there are field-measured trees that are below this height in the validation data, we'll apply the same threshold limit. Setting a minimum height threshold will help us remove predictions that are actually shrubs which we know are present with a retention proportion prescribed:
+
+>e. Remove 70% of all woody shrubs (i.e. gambel oak and serviceberry); retain all gambel oak stems greater than 3 inches in basal diameter.
 
 ```{r}
 min_tree_ht_m <- 2
@@ -78,6 +82,10 @@ treetops_sf <- treetops_sf %>% dplyr::filter(tree_height_m>=min_tree_ht_m)
 now, we'll read in the UAS-delineated tree crown polygons as well so we have them for visualization and get the crown diameter for each tree as the greatest distance across the UAS-delineated crown polygon
 
 we'll also add a flag for a prediction of if the tree is dead or not based on the [RGB spectral classification workflow](#pile_review) we described for slash pile identification
+
+dead-tree classification is important for our UAS tree detection validation because these dead trees were not measured during field data collection. Thus, if we did not remove them from our UAS predictions, they would be incorrectly counted as false positive predictions and artificially reduce the UAS tree detection accuracy metrics. Classifying dead trees is also important for quantifying the spatial tree arrangement treatment outcomes since the prescription specifically excludes dead trees from spacing guideline implementation:
+
+>d. Cut all dead pinyon trees <8 inches in basal diameter. Leave all other standing dead trees for wildlife snags. Dead trees are not considered when applying the spacing guides above.
 
 ```{r, include=F, eval = F}
   crowns_sf_temp <- sf::st_read(
@@ -208,7 +216,6 @@ cowplot::save_plot(
 )
 print(plt_temp)
 ```
-
 
 ```{r do-the-crown-stuff}
 # ```{r,eval=F,purl=FALSE}
@@ -383,6 +390,118 @@ treetops_sf <-
   )
 ```
 
+```{r, warning=FALSE, message=FALSE, echo=FALSE, include=FALSE}
+remove(list = ls()[grep("_temp",ls())])
+gc()
+```
+
+based on the spectral information within the crown footprint, let's determine a criteria to flag a tree as "dead" based on the `inrange_th_votes` variable which tells us how many of the 6 spectral index thresholds were met to distinguish a dead wood from living biomass. Where, a value of 5-6 represents high likelihood that the object is *not* living vegetation (e.g. piled slash) and 1-2 indicates a high likelihood that the object is living vegetation (e.g. small tree/shrub)
+
+what is the distribution of this multi-index spectral threshold voting system?
+
+```{r}
+treetops_sf %>% 
+  sf::st_drop_geometry() %>% 
+  dplyr::count(inrange_th_votes) %>% 
+  dplyr::mutate(
+    pct=n/sum(n)
+    , lab = paste0(
+      scales::percent(pct,accuracy=0.1)
+      # , "\n("
+      # , scales::comma(n,accuracy=1)
+      # , ")"
+    )
+  ) %>% 
+  ggplot2::ggplot(
+    mapping = ggplot2::aes(y = pct, x = ordered(inrange_th_votes))
+  ) +
+  ggplot2::geom_col(
+    fill = "brown"
+    , width = 0.6
+    , color = NA, alpha = 0.8
+  ) +
+  ggplot2::geom_text(
+    mapping = ggplot2::aes(label = lab)
+    , color = "black", size = 3, vjust = -0.2
+  ) +
+  ggplot2::scale_y_continuous(
+    # breaks = seq(0,1,by=0.2)
+    labels = scales::percent
+    , expand = ggplot2::expansion(mult = c(0,0.1))
+  ) +
+  ggplot2::labs(
+    x = "`inrange_th_votes`", y = "UAS trees (%)"
+  ) +
+  ggplot2::theme_light() +
+  ggplot2::theme(
+    legend.position = "none"
+    , axis.text.x = ggplot2::element_text(size = 9)
+  )
+```
+
+here is that same plot by treatment type
+
+```{r}
+treetops_sf %>% 
+  sf::st_drop_geometry() %>% 
+  recode_treatment_type_fn(ordered = T) %>%
+  dplyr::count(trtmnt_type, inrange_th_votes) %>% 
+  dplyr::group_by(trtmnt_type) %>% 
+  dplyr::mutate(
+    pct=n/sum(n)
+    , lab = paste0(
+      scales::percent(pct,accuracy=0.1)
+      # , "\n("
+      # , scales::comma(n,accuracy=1)
+      # , ")"
+    )
+  ) %>% 
+  ggplot2::ggplot(
+    mapping = ggplot2::aes(y = pct, x = ordered(inrange_th_votes))
+  ) +
+  ggplot2::geom_col(
+    mapping = ggplot2::aes(fill = trtmnt_type)
+    , width = 0.6
+    , color = NA, alpha = 0.8
+  ) +
+  ggplot2::geom_text(
+    mapping = ggplot2::aes(label = lab)
+    , color = "black", size = 2.5, vjust = -0.2
+  ) +
+  ggplot2::scale_fill_brewer(palette = "Dark2") +
+  # ggplot2::scale_x_discrete(drop = F) + 
+  ggplot2::scale_y_continuous(
+    # breaks = seq(0,1,by=0.2)
+    labels = scales::percent
+    , expand = ggplot2::expansion(mult = c(0,0.1))
+  ) +
+  ggplot2::facet_grid(
+    cols = dplyr::vars(trtmnt_type)
+    # , rows = dplyr::vars(trtmnt_block)
+    # , ncol = 2
+    , axes = "all"
+    # , switch = "y"
+  ) +
+  ggplot2::labs(
+    x = "`inrange_th_votes`", y = "UAS trees (%)", fill = ""
+  ) +
+  ggplot2::theme_light() +
+  ggplot2::theme(
+    legend.position = "none"
+    , strip.text = ggplot2::element_text(size = 11, color = "black", face = "bold")
+    , axis.text.x = ggplot2::element_text(size = 9)
+    # , axis.text.y = ggplot2::element_blank()
+    # , axis.ticks.y = ggplot2::element_blank()
+  )
+```
+
+to be conservative with what we classify as a dead tree, we'll use the highest level of the `inrange_th_votes` of "6" which means that all 6 spectral indices agree that the object detected is not living vegetation.
+
+```{r}
+max_inrange_th_votes <- 5
+treetops_sf <- treetops_sf %>% dplyr::filter(dplyr::coalesce(inrange_th_votes,0)<=max_inrange_th_votes)
+crowns_sf <- crowns_sf %>% dplyr::filter(dplyr::coalesce(inrange_th_votes,0)<=max_inrange_th_votes)
+```
 
 ```{r, warning=FALSE, message=FALSE, echo=FALSE, include=FALSE}
 remove(list = ls()[grep("_temp",ls())])
@@ -491,6 +610,7 @@ let's check out the horizontal crown length and width dimensions measured in the
 
 ```{r}
 validation_trees %>% 
+  sf::st_drop_geometry() %>% 
   dplyr::select(crown_length_m, crown_width_m) %>% 
   summary() %>% 
   knitr::kable(format = "markdown")
@@ -526,6 +646,8 @@ validation_trees %>%
 we'll exclude these as well and implement the exclusions using a spatial join with the treatment unit boundaries. we'll also set a minimum tree height threshold of `r min_tree_ht_m` m to define what is considered a "tree". a minimum tree height of `r min_tree_ht_m` m will be used to filter the reference field trees which we also applied to our UAS-detected trees.
 
 ```{r}
+# sort(validation_trees$crown_length_m, decreasing = T) %>% head()
+# sort(validation_trees$crown_width_m, decreasing = T) %>% head()
 # drop missings and spatial it
 validation_trees <- 
   validation_trees %>% 
@@ -542,7 +664,12 @@ validation_trees <-
   dplyr::mutate(
     dplyr::across(
       c(crown_length_m, crown_width_m)
-      , ~ifelse(.x>100,.x/100,.x)
+      , ~ ifelse(.x>100,.x/100,.x)
+    )
+    # do it again for really bad ones
+    , dplyr::across(
+      c(crown_length_m, crown_width_m)
+      , ~ ifelse(.x>10,.x/10,.x)
     )
     , crown_diam_m = dplyr::case_when(
       !is.na(crown_length_m) & !is.na(crown_width_m) ~ (crown_length_m+crown_width_m)/2
@@ -828,7 +955,7 @@ validation_trees %>%
   dplyr::filter(plot==plt_temp) %>% 
   sf::st_transform(terra::crs(rgb_rast)) %>% 
   terra::vect() %>% 
-  terra::plot(add = T, col = "cyan", cex = 1.5)
+  terra::plot(add = T, col = harrypotter::hp(n=2, option="hermionegranger")[1], cex = 1.5)
 ```
 
 interesting. do you have any thoughts?
@@ -867,7 +994,7 @@ validation_trees %>%
   dplyr::filter(plot==plt_temp) %>% 
   sf::st_transform(terra::crs(rgb_rast)) %>% 
   terra::vect() %>% 
-  terra::plot(add = T, col = "cyan", cex = 1.5)
+  terra::plot(add = T, col = harrypotter::hp(n=2, option="hermionegranger")[1], cex = 1.5)
 # add trees
 validation_trees %>% 
   dplyr::filter(plot==plt_temp) %>% 
@@ -875,7 +1002,7 @@ validation_trees %>%
   sf::st_buffer(.$crown_radius_m) %>% 
   sf::st_transform(terra::crs(rgb_rast)) %>% 
   terra::vect() %>% 
-  terra::plot(add = T, col = NA, border = "cyan")
+  terra::plot(add = T, col = NA, border = harrypotter::hp(n=2, option="hermionegranger")[1])
 
 ```
 
@@ -1680,7 +1807,10 @@ treetops_sf %>%
 reference_prediction_match_ans_temp <- reference_prediction_match(
   pred_data = 
     treetops_sf %>% 
-      dplyr::filter(tree_height_m>=min_tree_ht_m) %>% 
+      dplyr::filter(
+        tree_height_m>=min_tree_ht_m
+        , dplyr::coalesce(inrange_th_votes,0)<=max_inrange_th_votes
+      ) %>% 
       sf::st_intersection(
         validation_plots %>% 
           dplyr::slice(33) %>% 
@@ -2462,9 +2592,19 @@ gc()
 
 because we have plot-level reference field data but a complete census of predictions, we need to perform accuracy evaluation for each plot and then aggregate to the entire study site. 
 
-let's perform instance matching over each plot and then bring those results together after
+let's perform instance matching for each plot and then bring those results together after
 
 ```{r}
+my_max_dist_m <- 
+  validation_trees %>% 
+  dplyr::ungroup() %>% 
+  dplyr::mutate(
+    crown_radius_m = pmax(crown_length_m,crown_width_m, na.rm=T)/2
+  ) %>% 
+  dplyr::pull(crown_radius_m) %>% 
+  quantile(probs=0.80,na.rm = T) %>% 
+  round(1)
+my_max_height_error_m <- round(sd(validation_trees$height_m)*1.15,1)
 # treetops_sf %>% sf::st_drop_geometry() %>% dplyr::count(inrange_th_votes)
 # make a temp function to map over each plot
 inst_match_fn_temp <- function(plt_id) {
@@ -2473,12 +2613,12 @@ inst_match_fn_temp <- function(plt_id) {
     treetops_sf %>% 
     dplyr::filter(
       tree_height_m>=min_tree_ht_m
-      # , dplyr::coalesce(inrange_th_votes,0)<6
+      , dplyr::coalesce(inrange_th_votes,0)<=max_inrange_th_votes
     ) %>% 
     sf::st_intersection(
       validation_plots %>% 
         dplyr::filter(plot==plt_id) %>%  
-        dplyr::mutate(plot_radius_m = plot_radius_m+1) %>% # 1 = 0.5*max_dist_m where max_dist_m=allowable search distance for TP match
+        dplyr::mutate(plot_radius_m = plot_radius_m+(my_max_dist_m/2)) %>% # = 0.5*max_dist_m where max_dist_m=allowable search distance for TP match
         sf::st_transform(sf::st_crs(treetops_sf)) %>% 
         sf::st_buffer(.$plot_radius_m) %>% 
         dplyr::select(plot_area_m2)
@@ -2553,8 +2693,8 @@ inst_match_fn_temp <- function(plt_id) {
         ) %>% 
         dplyr::rename(tree_height_m=height_m, dbh_cm=dbh_cm, tree_cbh_m=cbh_m) %>% 
         sf::st_transform(sf::st_crs(treetops_sf))
-    , max_dist_m = 2 # round(median(validation_trees$crown_width_m)/2)
-    , max_height_error_m = 1.5 # round(sd(validation_trees$height_m)*1.1,1)
+    , max_dist_m = my_max_dist_m
+    , max_height_error_m = my_max_height_error_m
   )
   # # wha?
   # rp_match_ans_temp$ref_data %>% dplyr::glimpse()
@@ -2581,7 +2721,6 @@ inst_match_fn_temp <- function(plt_id) {
   # gt_temp %>% agg_ground_truth_match() %>% dplyr::glimpse()
   return(gt_temp)
 }
-
 
 ################### map it
 ################### map it
@@ -2618,6 +2757,9 @@ ground_truth_prediction_match_ans <-
   purrr::compact() %>% 
   purrr::list_rbind(names_to = "plot")
 ```
+
+note that we set the `max_dist_m` to a `r my_max_dist_m` m radius based on the crown radius of the 80th percentile field-measured tree crown to represent a "mature" tree while also accounting for tree lean and slight horizontal misalignment in GPS data collection. we set the `max_height_error_m` to `r my_max_height_error_m` m which represents 1.15 times one standard deviation in tree height based on the field-measured tree heights 
+
 
 ```{r, warning=FALSE, message=FALSE, echo=FALSE, include=FALSE}
 remove(list = ls()[grep("_temp",ls())])
@@ -2678,7 +2820,7 @@ agg_ground_truth_match_ans %>%
   kableExtra::kable_styling()
 ```
 
-looks pretty good for a first check 
+looks pretty good for a first-time UAS implementation in a new forest type
 
 what if we look at the detection accuracy results by treatment type?
 
@@ -2740,9 +2882,9 @@ agg_ground_truth_match_by_type_ans %>%
   kableExtra::kable_styling()
 ```
 
-interesting to see the variation in detection accuracy across the different treatment types. the more aggressive treatments (i.e. treatments that removed more trees and left fewer residual trees) have a smaller margin for error with respect to tree detection accuracy since each tree carries more weight. however, the more open stand conditions created by the more aggressive treatments should make it easier to detect each individual if they are spaced with openings between individuals. at the same time the units with a high proportion of slash piles might result in increased commission rate (i.e. higher number of false positive tree predictions) even though we applied a slash pile mask. an additional data check may be needed for the remaining trees to check whether or not they are "green" while it is not clear if only live or both dead and live trees were sampled during the field inventory. and many, many more questions...
+interesting to see the variation in detection accuracy across the different treatment types. the more aggressive treatments (i.e. treatments that removed more trees and left fewer residual trees) have a smaller margin for error with respect to tree detection accuracy since each tree carries more weight. however, the more open stand conditions created by the more aggressive treatments should make it easier to detect each individual if they are spaced with openings between individuals. at the same time the units with a high proportion of slash piles might result in increased commission rate (i.e. higher number of false positive tree predictions) even though we applied a slash pile mask. an additional data check may be needed for the remaining trees to check whether or not they are "green" and perhaps we should increase our strictness for what we spectrally include as a non-dead tree to match the field data collection method of only measuring live trees
 
-let's see the relationship between tree detection (recall rate) and tree height within each flight. we'll look at true positive and omissions (FN) and use the field-measured tree height to quantify the proportion of trees within a height bin that were detected by the UAS method
+let's see the relationship between tree detection (recall rate) and tree height. we'll look at true positive and omissions (FN) and use the field-measured tree height to quantify the proportion of trees within a height bin that were detected by the UAS method
 
 ```{r}
 # make ggplot2::cut_* bins pretty
@@ -3080,9 +3222,9 @@ agg_ground_truth_match_ans %>%
 # UAS-measured heights are highly accurate but those DBH measurements do not align very well. perhaps this is due to the fact that DBH wasn't actually measured in the field. instead, DRC (diameter at root crown) was measured and then we converted DRC to DBH using the Chojnacky & Rogers ([1999](https://doi.org/10.1093/wjaf/14.1.14)) model...therefore, it's probably best not to view these DBH metrics as measurements of "error" but as measurements of "comparison"
 ```
 
-UAS-measured heights are highly accurate but those crown diameter measurements do not align very well. perhaps this is due to challenges measuring horizontal crown dimensions in the field...therefore, it's probably best to view these crown diameter metrics not as measurements of "error" but as measurements of "comparison"
+UAS-measured heights are highly accurate but those crown diameter measurements do not align very well. perhaps this is due to challenges measuring horizontal crown dimensions in the field? it may be best to view these crown diameter metrics not as measurements of "error" but as measurements of "comparison". we'll evaluate measures of plot-level canopy cover next, but these individual tree crown measurements are direct inputs to the plot-level canopy cover
 
-and plot predicted versus reference values for correct predictions (TP)
+and check predicted versus reference values for correct predictions (TP)
 
 ```{r}
 ####################################
@@ -3253,7 +3395,7 @@ ht_plt_temp <-
 crwn_dia_plt_temp
 ```
 
-yikes. see comments on DBH above
+yikes. we'll see how this disagreement in horizontal crown measurement impacts canopy cover at the plot-level which is likely more important for management of these systems. modern management evaluations in these pinyon-juniper systems prioritize tree density measurements and canopy clump configurations to analyze structural and spatial patterns. This focus on horizontal canopy architecture, tracking trees per hectare and interspace connectivity, provides a much more direct and ecologically meaningful way to evaluate ecosystem health and fire risk across these arid landscapes. than optimizing individaul tree growth as in traditional timber management where accurate DBH and tree volume measurements are much more operationally important.
 
 **height: predicted vs reference**
 
@@ -3398,7 +3540,7 @@ ground_truth_prediction_match_ans %>%
   ggplot2::theme_light()
 ```
 
-that's neat
+that doesn't look great (but it's a neat visualization)
 
 do it for height too
 
@@ -3473,7 +3615,7 @@ gc()
 
 ## Plot-Level Accuracy Results{#stand_acc}
 
-In this section, we'll shift our focus from individual trees to plot-level predictions by aggregating tree-level UAS predictions and field-reference values irrespective of individual instance matches. Because individual tree prediction errors can cancel out at the plot scale with omission errors balancing commission errors, for example, evaluating these aggregate forest inventory metrics helps us understand how accurately the UAS data captures broader forest structural metrics like tree density (TPH) and canopy cover.
+In this section, we'll shift our focus from individual trees to plot-level predictions by aggregating tree-level UAS predictions and field-reference values irrespective of individual instance matches. Because individual tree prediction errors can cancel out at the plot scale with omission errors balancing commission errors, for example, evaluating these aggregate forest inventory metrics helps us understand how accurately the UAS data captures broader forest structural metrics like tree spacing (mean nearest neighbor distance) and canopy cover.
 
 We'll utilize the plot-level field reference data to evaluate the performance of the UAS method across the entire study area and to determine how different treatments influenced prediction accuracy. Specifically, we assess UAS prediction accuracy at two spatial scales:
 
@@ -3645,13 +3787,12 @@ We'll start by evaluating UAS-predicted canopy cover compared to field-measured 
 # validation_plots_polygons %>% nrow()
 # validation_plots_polygons$plot %>% unique() %>% length()
 
-# uas trees in plots
+# uas trees in plots...allows for one tree to go to multiple plots if the plots overlap
 pred_trees_temp <-
   treetops_sf %>% 
   dplyr::filter(
     tree_height_m>=min_tree_ht_m
-    # , dplyr::coalesce(inrange_th_votes,0)<6
-    # , dplyr::coalesce(inrange_th_votes,0)<5
+    , dplyr::coalesce(inrange_th_votes,0)<=max_inrange_th_votes
   ) %>% 
   sf::st_intersection(
     validation_plots_polygons %>% 
@@ -3666,6 +3807,79 @@ pred_trees_temp <-
   # dplyr::slice(1) %>% 
   # dplyr::ungroup()
 
+# pred_trees_temp %>% dplyr::glimpse()
+
+############################################################################
+# function to get nearest neighbor distance given a set of points
+############################################################################
+get_nn_point_dist <- function(df_w_xy){
+  if(nrow(df_w_xy) < 2){
+    return(
+      df_w_xy %>% 
+        dplyr::select(-c(X,Y)) %>% 
+        dplyr::mutate(nn_dist_m=as.numeric(NA))
+    )
+  }
+  # perform a fixed-radius search using RANN::nn2
+  # ?RANN::nn2
+  nn_ans_temp <- RANN::nn2(
+    # the point cloud xy data (builds the kd-tree on this)
+    data = df_w_xy %>% sf::st_drop_geometry() %>% dplyr::select(X,Y)
+    # maximum number of neighbors to find per query
+    , k = nrow(df_w_xy)
+    , searchtype = "standard"
+  )
+  # nn_ans_temp
+  # nn_ans_temp$nn.dists[,1] # first col is self-dist which should be 0
+  # nn_ans_temp$nn.dists[,2] # second col is nearest non-self dist
+  
+  ret_df <- df_w_xy %>% 
+    dplyr::select(-c(X,Y)) %>% 
+    dplyr::mutate(
+      nn_dist_m = nn_ans_temp$nn.dists[,2]
+    )
+    # # dplyr::glimpse(ret_df)
+    # ggplot2::ggplot(data=ret_df) + 
+    #   ggplot2::geom_sf(mapping=ggplot2::aes(color = factor(round(nn_dist_m,3)))) +
+    #   ggplot2::scale_color_viridis_d(option="cividis")
+  return(ret_df)
+}
+
+# add nn dist one plot at a time...pred
+# add nn dist one plot at a time...pred
+# add nn dist one plot at a time...pred
+pred_trees_temp <- 
+  unique(pred_trees_temp$plot) %>% 
+  purrr::map(function(plt){
+    pred_trees_temp %>% 
+      dplyr::filter(plot == plt) %>% 
+      dplyr::mutate(
+        X = tree_x
+        , Y = tree_y
+      ) %>% 
+      get_nn_point_dist()
+  }) %>% 
+  purrr::list_rbind()
+# pred_trees_temp %>% dplyr::glimpse()
+
+# add nn dist one plot at a time...ref
+# add nn dist one plot at a time...ref
+# add nn dist one plot at a time...ref
+# validation_trees <- 
+validation_trees %>% dplyr::glimpse()
+xxxxxx # transform tree_x and tree_y to UTM
+  unique(validation_trees$plot) 
+  %>% 
+  purrr::map(function(plt){
+    validation_trees %>% 
+      dplyr::filter(plot == plt) %>% 
+      dplyr::mutate(
+        X = tree_x
+        , Y = tree_y
+      ) %>% 
+      get_nn_point_dist()
+  }) %>% 
+  purrr::list_rbind()
 # pred_trees_temp %>% dplyr::glimpse()
 
 # huh_temp <- 
@@ -4108,8 +4322,7 @@ plt_validation_plots_polygons_temp <- function(x){
           treetops_sf %>% 
             dplyr::filter(
               tree_height_m>=min_tree_ht_m
-              # , dplyr::coalesce(inrange_th_votes,0)<6
-              # , dplyr::coalesce(inrange_th_votes,0)<5
+              , dplyr::coalesce(inrange_th_votes,0)<=max_inrange_th_votes
             ) %>% 
             sf::st_intersection(plot_temp %>% sf::st_transform(sf::st_crs(treetops_sf)) ) %>% 
             sf::st_drop_geometry() %>% 
@@ -4210,8 +4423,7 @@ plt_validation_plots_polygons_temp <- function(x){
           treetops_sf %>% 
             dplyr::filter(
               tree_height_m>=min_tree_ht_m
-              , dplyr::coalesce(inrange_th_votes,0)<6
-              # , dplyr::coalesce(inrange_th_votes,0)<5
+              , dplyr::coalesce(inrange_th_votes,0)<=max_inrange_th_votes
             ) %>% 
             sf::st_intersection(plot_temp %>% sf::st_transform(sf::st_crs(treetops_sf)) ) %>% 
             sf::st_drop_geometry() %>% 
