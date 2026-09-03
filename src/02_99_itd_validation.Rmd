@@ -3807,7 +3807,15 @@ pred_trees_temp <-
   # dplyr::slice(1) %>% 
   # dplyr::ungroup()
 
-# pred_trees_temp %>% dplyr::glimpse()
+# pred_trees_temp %>% dplyr::glimpse()# read crowns
+pred_crowns_temp <- 
+  crowns_sf %>% 
+  dplyr::filter(
+    treeID %in% unique(pred_trees_temp$treeID)
+  )
+# pred_crowns_temp %>% dplyr::glimpse()
+# pred_trees_temp %>% nrow()
+# pred_crowns_temp %>% nrow()
 
 ############################################################################
 # function to get nearest neighbor distance given a set of points
@@ -3845,6 +3853,9 @@ get_nn_point_dist <- function(df_w_xy){
   return(ret_df)
 }
 
+############################################################################
+# add nearest neighbor distance given a set of points
+############################################################################
 # add nn dist one plot at a time...pred
 # add nn dist one plot at a time...pred
 # add nn dist one plot at a time...pred
@@ -3861,26 +3872,37 @@ pred_trees_temp <-
   }) %>% 
   purrr::list_rbind()
 # pred_trees_temp %>% dplyr::glimpse()
+pred_trees_temp$nn_dist_m %>% summary()
 
 # add nn dist one plot at a time...ref
 # add nn dist one plot at a time...ref
 # add nn dist one plot at a time...ref
-# validation_trees <- 
-validation_trees %>% dplyr::glimpse()
-xxxxxx # transform tree_x and tree_y to UTM
-  unique(validation_trees$plot) 
-  %>% 
+# validation_trees %>% dplyr::glimpse()
+validation_trees <-
+  unique(validation_trees$plot) %>% 
   purrr::map(function(plt){
     validation_trees %>% 
       dplyr::filter(plot == plt) %>% 
+      # transform tree_x and tree_y to UTM
+      sf::st_transform(sf::st_crs(treetops_sf)) %>% 
       dplyr::mutate(
-        X = tree_x
-        , Y = tree_y
+        X = sf::st_coordinates(.)[,1] %>% as.numeric()
+        , Y = sf::st_coordinates(.)[,2] %>% as.numeric()
       ) %>% 
       get_nn_point_dist()
   }) %>% 
   purrr::list_rbind()
-# pred_trees_temp %>% dplyr::glimpse()
+# validation_trees %>% dplyr::glimpse()
+# validation_trees$nn_dist_m %>% summary()
+# 
+# validation_trees %>% 
+#   dplyr::filter(nn_dist_m==0) %>% 
+#   # dplyr::filter(is.na(nn_dist_m)) %>% 
+#   dplyr::select(plot,height_m,crown_width_m,crown_length_m) %>% 
+#   dplyr::arrange(plot) %>% 
+#   dplyr::group_by(plot) %>% 
+#   dplyr::mutate(n=dplyr::n()) %>% 
+#   print(n=22)
 
 # huh_temp <- 
 #   pred_trees_temp %>% 
@@ -3903,17 +3925,9 @@ xxxxxx # transform tree_x and tree_y to UTM
 #   ) +
 #   ggplot2::theme_void()
 
-# read crowns
-pred_crowns_temp <- 
-  crowns_sf %>% 
-  dplyr::filter(
-    treeID %in% unique(pred_trees_temp$treeID)
-  )
-# pred_crowns_temp %>% dplyr::glimpse()
-# pred_trees_temp %>% nrow()
-# pred_crowns_temp %>% nrow()
-# attach predicted cc to plot data
-
+############################################################################
+# attach predicted cc to plot data and nn dists
+############################################################################
 # validation_plots_polygons %>% dplyr::glimpse()
 validation_plots_polygons <-
   plot_crowns_cc_fn(
@@ -3929,18 +3943,50 @@ validation_plots_polygons <-
     .cols = c("n_trees","trees_per_ha")
     , ~ paste0("ref_",.x,recycle0 = T)
   ) %>% 
+  # add pred tree count and nn dist
   dplyr::left_join(
     pred_trees_temp %>% 
-      sf::st_drop_geometry() %>% 
-      dplyr::count(plot) %>% 
-      dplyr::rename(pred_n_trees=n)
+      sf::st_drop_geometry() %>%
+      dplyr::group_by(plot) %>% 
+      dplyr::summarize(
+        n_trees = dplyr::n()
+        , median_nn_dist_m = median(nn_dist_m,na.rm=T)
+        , mean_nn_dist_m = mean(nn_dist_m,na.rm=T)
+      ) %>% 
+      dplyr::ungroup() %>% 
+      dplyr::rename_with(
+        .cols = -c(plot)
+        , ~ paste0("pred_",.x,recycle0 = T)
+      )
+    , by = "plot"
+  ) %>% 
+  # add ref nn dist
+  dplyr::left_join(
+    validation_trees %>% 
+      sf::st_drop_geometry() %>%
+      dplyr::group_by(plot) %>% 
+      dplyr::summarize(
+        median_nn_dist_m = median(nn_dist_m,na.rm=T)
+        , mean_nn_dist_m = mean(nn_dist_m,na.rm=T)
+      ) %>% 
+      dplyr::ungroup() %>% 
+      dplyr::rename_with(
+        .cols = -c(plot)
+        , ~ paste0("ref_",.x,recycle0 = T)
+      )
     , by = "plot"
   ) %>% 
   dplyr::mutate(
-    pred_trees_per_ha = pred_n_trees/(plot_area_m2/10000)
+    pred_n_trees = dplyr::coalesce(pred_n_trees,0)
+    , pred_canopy_cov_pct = dplyr::coalesce(pred_canopy_cov_pct,0)
+    , pred_canopy_cov_area_m2 = dplyr::coalesce(pred_canopy_cov_area_m2,0)
+    , pred_trees_per_ha = pred_n_trees/(plot_area_m2/10000)
     , diff_canopy_cov_pct = pred_canopy_cov_pct-ref_canopy_cov_pct
     , diff_trees_per_ha = pred_trees_per_ha-ref_trees_per_ha
+    , diff_median_nn_dist_m = pred_median_nn_dist_m-ref_median_nn_dist_m
+    , diff_mean_nn_dist_m = pred_mean_nn_dist_m-ref_mean_nn_dist_m
   )
+
 # validation_plots_polygons %>% dplyr::glimpse()
 # validation_plots_polygons %>% 
 #   ggplot2::ggplot(mapping = ggplot2::aes(x=ref_trees_per_ha,y=pred_trees_per_ha)) +
@@ -4087,10 +4133,10 @@ get_me_rmse_fn <- function(df_w_diffs) {
   return(return_df %>% dplyr::bind_cols(rmse_df))
 }
 
-# validation_plots_polygons_ %>%
-#   # dplyr::group_by(trtmnt_type) %>%
-#   get_me_rmse_fn() %>%
-#   dplyr::glimpse()
+validation_plots_polygons %>%
+  # dplyr::group_by(trtmnt_type) %>%
+  get_me_rmse_fn() %>%
+  dplyr::glimpse()
 # validation_plots_polygons %>%
 #   dplyr::group_by(trtmnt_type) %>%
 #   get_me_rmse_fn() %>%
@@ -4098,27 +4144,42 @@ get_me_rmse_fn <- function(df_w_diffs) {
 #   kableExtra::kable_styling()
 
 
+cc_agg_temp <- validation_plots_polygons %>%
+  # dplyr::group_by(trtmnt_type) %>%
+  get_me_rmse_fn()
 
-# cc_agg_temp <- validation_plots_polygons %>%
-#   # dplyr::group_by(trtmnt_type) %>%
-#   get_me_rmse_fn()
-# 
-# # get the plottttttttttttttttttt
-# validation_plots_polygons %>% 
-#   sf::st_drop_geometry() %>% 
-#   dplyr::bind_cols(
-#     cc_agg_temp    
-#   ) %>% 
-#   plt_scatter_fn(which_col = "canopy_cov_pct", title_lab = "Canopy Cover", x_lab = "reference Canopy Cover (%)", y_lab = "predicted Canopy Cover (%)")
-# # get the plottttttttttttttttttt
-# validation_plots_polygons %>% 
-#   sf::st_drop_geometry() %>% 
-#   dplyr::bind_cols(
-#     cc_agg_temp    
-#   ) %>% 
-#   plt_scatter_fn(which_col = "trees_per_ha", title_lab = "TPH", x_lab = "reference TPH", y_lab = "predicted TPH")
-# ggsave(filename = "../data/wtf_tph_plotrmse.jpg",height = 8, width = 8)
+# get the plottttttttttttttttttt
+validation_plots_polygons %>%
+  sf::st_drop_geometry() %>%
+  dplyr::bind_cols(
+    cc_agg_temp
+  ) %>%
+  plt_scatter_fn(which_col = "canopy_cov_pct", title_lab = "Canopy Cover", x_lab = "reference Canopy Cover (%)", y_lab = "predicted Canopy Cover (%)")
+```
 
+```{r, include=F, eval = F}
+# get the plottttttttttttttttttt
+validation_plots_polygons %>%
+  sf::st_drop_geometry() %>%
+  dplyr::bind_cols(
+    cc_agg_temp
+  ) %>%
+  plt_scatter_fn(which_col = "trees_per_ha", title_lab = "TPH", x_lab = "reference TPH", y_lab = "predicted TPH")
+# get the plottttttttttttttttttt
+validation_plots_polygons %>%
+  sf::st_drop_geometry() %>%
+  dplyr::bind_cols(
+    cc_agg_temp
+  ) %>%
+  plt_scatter_fn(which_col = "n_trees", title_lab = "trees", x_lab = "reference trees", y_lab = "predicted trees")
+
+# get the plottttttttttttttttttt
+validation_plots_polygons %>%
+  sf::st_drop_geometry() %>%
+  dplyr::bind_cols(
+    cc_agg_temp
+  ) %>%
+  plt_scatter_fn(which_col = "mean_nn_dist_m", title_lab = "nearest neighbor dist. (m)", x_lab = "reference nearest neighbor dist. (m)", y_lab = "predicted nearest neighbor dist. (m)")
 ```
 
 The plot-level aggregation comparing the canopy cover of the field method to the UAS method yielded an RMSE of `r scales::percent(cc_agg_temp$diff_canopy_cov_pct_rmse,accuracy=0.1)` and a mean error (ME) of `r scales::percent(cc_agg_temp$diff_canopy_cov_pct_mean,accuracy=0.1)`. These values mean that the average UAS prediction of plot-level canopy cover is off by about ±`r scales::number(cc_agg_temp$diff_canopy_cov_pct_rmse*100,accuracy=0.1)` percentage points from the field-measured value which is generally considered highly accurate and operationally acceptable. The `r ifelse(cc_agg_temp$diff_canopy_cov_pct_mean>=0,"positive","negative")` ME of `r scales::percent(cc_agg_temp$diff_canopy_cov_pct_mean,accuracy=0.1)` means that, on average across all plots, the UAS method is systematically `r ifelse(cc_agg_temp$diff_canopy_cov_pct_mean>=0,"overpredicting","underpredicting")` canopy cover by `r scales::number(cc_agg_temp$diff_canopy_cov_pct_mean*100,accuracy=0.1)` percentage points compared to the field data.
@@ -4126,7 +4187,6 @@ The plot-level aggregation comparing the canopy cover of the field method to the
 we can table the canopy cover measurements aggregated over all field plots
 
 ```{r}
-# comps not done in agg_ground_truth_match()
 validation_plots_polygons %>% 
   sf::st_drop_geometry() %>% 
   dplyr::ungroup() %>% 
@@ -4134,13 +4194,21 @@ validation_plots_polygons %>%
     n_plots = sum(!is.na(diff_canopy_cov_pct))
     , plot_area_ha = sum(plot_area_m2)/10000
     , dplyr::across(
-      .cols = c(ref_canopy_cov_pct,pred_canopy_cov_pct,diff_canopy_cov_pct)
+      .cols = c(ref_n_trees,pred_n_trees,ref_canopy_cov_pct,pred_canopy_cov_pct,diff_canopy_cov_pct)
       , mean
     )
   ) %>% 
+  dplyr::ungroup() %>% 
+  dplyr::bind_cols(
+    validation_plots_polygons %>% 
+      dplyr::ungroup() %>% 
+      dplyr::select(tidyselect::ends_with("_canopy_cov_pct")) %>% 
+      get_me_rmse_fn() %>% 
+      dplyr::select(diff_canopy_cov_pct_rmse)
+  ) %>% 
   dplyr::mutate(
     # pct_diff_canopy_cov_pct = (pred_canopy_cov_pct-ref_canopy_cov_pct)/ref_canopy_cov_pct
-    dplyr::across(c(tidyselect::ends_with("_pct")),~scales::percent(.x,accuracy=0.1))
+    dplyr::across(c(tidyselect::ends_with("_pct_rmse"),tidyselect::ends_with("_pct")),~scales::percent(.x,accuracy=0.1))
     , dplyr::across(c(plot_area_ha),~scales::number(.x,accuracy=0.1))
     , dplyr::across(dplyr::where(is.numeric),~scales::number(.x,accuracy=1))
   ) %>% 
@@ -4148,7 +4216,8 @@ validation_plots_polygons %>%
     caption = "Canopy Cover Across all Measured Plots"
     , col.names = c(
       "# plots", "field-measured area (ha)"
-      , rep(c("reference","predicted","difference"), times = 1)
+      , "reference", "predicted"
+      , rep(c("mean<br>reference","mean<br>predicted","mean error<br>(ME)","RMSE"), times = 1)
     )
     , escape = F
     # , digits = 2
@@ -4157,11 +4226,12 @@ validation_plots_polygons %>%
   kableExtra::add_header_above(
     c(
       " "=2
-      , "Canopy Cover (%)" = 3
+      , "mean<br /># trees" = 2
+      , "Canopy Cover (%)" = 4
     )
     , escape = F
   ) %>% 
-  kableExtra::column_spec( c(2,seq(2,5,by=3) ), border_right = TRUE, include_thead = TRUE) %>% 
+  kableExtra::column_spec( c(2,4,8), border_right = TRUE, include_thead = TRUE) %>% 
   kableExtra::collapse_rows(columns = c(1), valign = "top")
 ```
 
@@ -4175,24 +4245,33 @@ validation_plots_polygons %>%
     n_plots = sum(!is.na(diff_canopy_cov_pct))
     , plot_area_ha = sum(plot_area_m2)/10000
     , dplyr::across(
-      .cols = c(ref_n_trees,ref_canopy_cov_pct,pred_canopy_cov_pct,diff_canopy_cov_pct)
+      .cols = c(ref_n_trees,pred_n_trees,ref_canopy_cov_pct,pred_canopy_cov_pct,diff_canopy_cov_pct)
       , mean
     )
   ) %>% 
   dplyr::ungroup() %>% 
+  dplyr::left_join(
+    validation_plots_polygons %>% 
+      dplyr::select(trtmnt_type,tidyselect::ends_with("_canopy_cov_pct")) %>% 
+      dplyr::group_by(trtmnt_type) %>% 
+      get_me_rmse_fn() %>% 
+      dplyr::select(diff_canopy_cov_pct_rmse)
+    , by = "trtmnt_type"
+  ) %>% 
   dplyr::mutate(
     # pct_diff_canopy_cov_pct = (pred_canopy_cov_pct-ref_canopy_cov_pct)/ref_canopy_cov_pct
-    dplyr::across(c(tidyselect::ends_with("_pct")),~scales::percent(.x,accuracy=0.1))
+    dplyr::across(c(tidyselect::ends_with("_pct_rmse"),tidyselect::ends_with("_pct")),~scales::percent(.x,accuracy=0.1))
     , dplyr::across(c(plot_area_ha),~scales::number(.x,accuracy=0.1))
     , dplyr::across(dplyr::where(is.numeric),~scales::number(.x,accuracy=1))
   ) %>% 
   recode_treatment_type_fn(ordered = T) %>% 
+  dplyr::arrange(trtmnt_type) %>% 
   kableExtra::kbl(
-    caption = "Canopy Cover Across all Measured Plots"
+    caption = "Canopy Cover Across all Measured Plots<br />by treatment type"
     , col.names = c(
       "treatment","# plots", "field-measured area (ha)"
-      , "mean<br /># trees"
-      , rep(c("reference","predicted","difference"), times = 1)
+      , "reference", "predicted"
+      , rep(c("mean<br>reference","mean<br>predicted","mean error<br>(ME)","RMSE"), times = 1)
     )
     , escape = F
     # , digits = 2
@@ -4200,12 +4279,13 @@ validation_plots_polygons %>%
   kableExtra::kable_styling(font_size = 11.5) %>% 
   kableExtra::add_header_above(
     c(
-      " "=4
-      , "Canopy Cover (%)" = 3
+      " "=3
+      , "mean<br /># trees" = 2
+      , "Canopy Cover (%)" = 4
     )
     , escape = F
   ) %>% 
-  kableExtra::column_spec( c(3,4,7), border_right = TRUE, include_thead = TRUE) %>% 
+  kableExtra::column_spec( c(3,5,9), border_right = TRUE, include_thead = TRUE) %>% 
   kableExtra::collapse_rows(columns = c(1), valign = "top")
 ```
 
