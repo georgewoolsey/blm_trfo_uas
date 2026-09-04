@@ -184,7 +184,7 @@ plts_temp <-
     purrr::map(plt_spectral_crown_polygons_temp)
 # unique(crowns_sf_spectral_temp$inrange_th_votes)[1]
 
-combine_plts_temp <- function(plot_list) {
+combine_validation_plots_polygons_fn <- function(plot_list) {
   n_plots <- length(plot_list)
   n_cols <- min(n_plots, 4)
   n_rows <- ceiling(n_plots / n_cols)
@@ -203,7 +203,7 @@ combine_plts_temp <- function(plot_list) {
   # }
 }
 
-plt_temp <- combine_plts_temp(plts_temp)
+plt_temp <- combine_validation_plots_polygons_fn(plts_temp)
 cowplot::save_plot(
   filename = "../data/crowns_spectral_inrange3.png"
   , plot = plt_temp 
@@ -4262,14 +4262,36 @@ The higher canopy cover predictions by the UAS method compared to the field meth
 
 let's check out a visual representation of that phenomenon by looking as some example plots after we define a plotting function
 
-```{r,eval=F,purl=FALSE, results=F, fig.show='hide'}
+```{r}
+
 # harrypotter::hp(n=2, option="hermionegranger") %>% scales::show_col()
-terra_plt_fn <- function(rgb, rgb_square, plot_poly, ref_pt, ref_poly, pred_poly, plot_title="") {
-  grDevices::dev.new()
+terra_plt_fn <- function(rgb, rgb_square, plot_poly, ref_pt, ref_poly, pred_poly, plot_title="", chm=NA) {
+  grDevices::dev.new(canvas = "white")
   grDevices::dev.control("enable")
   
-  terra::plotRGB(rgb)
+  if(inherits(chm,"SpatRaster")){
+    terra::plotRGB(rgb, mar = c(0.2,0.2,1.2,3.2), bg = "white")
+    # add chm
+    terra::plot(
+        chm
+        , col = grDevices::hcl.colors(n = 100, palette = "YlGnBu") # viridis::plasma(n=100) # not good with the hermione orange
+        # , col = grDevices::hcl.colors(n = 100, palette = "Purples")
+        # , mar = c(b,l,t,r)
+        , mar = c(0.2,0.2,1.2,3.2) 
+        , bg = "white"
+        , plg = list(
+          title = "CHM (m)"
+          , cex = 0.7, title.cex = 0.5, shrink = 0.7
+        )
+        , alpha = 0.4
+        , add = T
+      )
+  }else{
+    terra::plotRGB(rgb)
+  }
+  
   terra::plot(rgb_square, add = T, border = "white", col = NA, lwd = 2)
+  
   terra::plot(terra::vect(plot_poly %>% sf::st_transform(terra::crs(rgb)) ), add = T, border = "white", col = NA, lwd = 0.8)
   terra::plot(terra::vect(ref_pt %>% sf::st_transform(terra::crs(rgb)) ), add = T, col = harrypotter::hp(n=2, option="hermionegranger")[1])
   terra::plot(terra::vect(ref_poly %>% sf::st_transform(terra::crs(rgb)) ), add = T, border = harrypotter::hp(n=2, option="hermionegranger")[1], col = NA, lwd = 1.4)
@@ -4282,7 +4304,7 @@ terra_plt_fn <- function(rgb, rgb_square, plot_poly, ref_pt, ref_poly, pred_poly
 }
 
 # for a single record in the validation plot data
-plt_validation_plots_polygons_fn <- function(x){
+plt_validation_plots_polygons_fn <- function(x, addchm=F){
     # plot
     plot_temp <- validation_plots_polygons %>% dplyr::slice(x)
     # sq
@@ -4320,17 +4342,56 @@ plt_validation_plots_polygons_fn <- function(x){
           , by = "treeID"
         )
     # plt
-    plt <- terra_plt_fn(
-      rgb = rgb_temp 
-      , rgb_square = rgb_sq_temp 
-      , plot_poly = plot_temp 
-      , ref_pt = ref_pt_temp 
-      , ref_poly = ref_poly_temp 
-      , pred_poly = pred_poly_temp 
-      , plot_title = paste0("plot: ",plot_temp$plot)
-    )
+    if(addchm){
+      # rgb
+      hey_chm <- chm_rast %>% 
+         terra::crop(
+            rgb_sq_temp
+          , mask=T
+        )
+      plt <- terra_plt_fn(
+        rgb = rgb_temp 
+        , rgb_square = rgb_sq_temp 
+        , plot_poly = plot_temp 
+        , ref_pt = ref_pt_temp 
+        , ref_poly = ref_poly_temp 
+        , pred_poly = pred_poly_temp 
+        , plot_title = paste0("plot: ",plot_temp$plot)
+        , chm = hey_chm
+      )
+    }else{
+      plt <- terra_plt_fn(
+        rgb = rgb_temp 
+        , rgb_square = rgb_sq_temp 
+        , plot_poly = plot_temp 
+        , ref_pt = ref_pt_temp 
+        , ref_poly = ref_poly_temp 
+        , pred_poly = pred_poly_temp 
+        , plot_title = paste0("plot: ",plot_temp$plot)
+      )
+    }
     return(plt)
-  }
+}
+
+combine_validation_plots_polygons_fn <- function(plot_list,my_ncol=3) {
+  n_plots <- length(plot_list)
+  n_cols <- min(n_plots, my_ncol)
+  n_rows <- ceiling(n_plots / n_cols)
+  
+  grob_list <- purrr::map(plot_list, cowplot::as_grob)
+  
+  # grDevices::dev.new()
+  cowplot::plot_grid(
+    plotlist = grob_list
+    , ncol = n_cols
+    , nrow = n_rows
+  )  
+  # graphics::par(mfrow = c(n_rows, n_cols), mar = c(1, 1, 2, 1))
+  #   for (i in seq_len(n_plots)) {
+  #   grDevices::replayPlot(plot_list[[i]])
+  # }
+}
+
 
 # # get individual plots
 # validation_plots_polygons %>% dplyr::glimpse()
@@ -4447,7 +4508,7 @@ plts_temp <-
   dplyr::slice_sample(n = 12) %>% 
   dplyr::pull(rn) %>% 
   purrr::map(plt_validation_plots_polygons_fn)
-print(combine_plts_temp(plts_temp))
+print(combine_validation_plots_polygons_fn(plts_temp))
 ```
 
 get the plots
@@ -4464,26 +4525,8 @@ plts_temp <-
 # plts_temp[[3]]
 # patchwork::wrap_plots(plts_temp, ncol = 3) doesn't work :\
 
-combine_plts_temp <- function(plot_list) {
-  n_plots <- length(plot_list)
-  n_cols <- min(n_plots, 3)
-  n_rows <- ceiling(n_plots / n_cols)
-  
-  grob_list <- purrr::map(plot_list, cowplot::as_grob)
-  
-  # grDevices::dev.new()
-  cowplot::plot_grid(
-    plotlist = grob_list
-    , ncol = n_cols
-    , nrow = n_rows
-  )  
-  # graphics::par(mfrow = c(n_rows, n_cols), mar = c(1, 1, 2, 1))
-  #   for (i in seq_len(n_plots)) {
-  #   grDevices::replayPlot(plot_list[[i]])
-  # }
-}
 
-plt_temp <- combine_plts_temp(plts_temp)
+plt_temp <- combine_validation_plots_polygons_fn(plts_temp)
 cowplot::save_plot(
   filename = "../data/field_uas_crown_comp.png"
   , plot = plt_temp 
@@ -4998,11 +5041,11 @@ validation_plots_polygons %>%
 
 at the upper-limit of plot tree height, the UAS method tends to underpredict height more than in any other portion of the range. however, this is heavily influenced by a few end points and may not represent anything other than a spurrious trend. let's check out those 
 
-```{r}
+```{r, fig.height = 9.5, fig.width = 9}
 so_bad_plot_ht_temp <- 
   validation_plots_polygons %>%
   sf::st_drop_geometry() %>% 
-  dplyr::slice_min(diff_mean_tree_height_m, n = 10, with_ties = F) %>% 
+  dplyr::slice_min(diff_mean_tree_height_m, n = 12, with_ties = F) %>% 
   dplyr::select(trtmnt_type, plot,diff_mean_tree_height_m)  
 ht_huh_temp <- 
   dplyr::bind_rows(
@@ -5025,10 +5068,7 @@ ht_huh_temp <-
       )
   ) %>% 
   recode_treatment_type_fn(ordered = T)
-```
 
-
-```{r}
 # ht_huh_temp %>% dplyr::glimpse()
 ht_huh_temp %>% 
   dplyr::group_by(plot,diff_mean_tree_height_m,which_dta) %>% 
@@ -5087,18 +5127,45 @@ ht_huh_temp %>%
     )
   )
 # ggplot2::ggsave("../data/explt.jpg", height = 9.5, width = 9, dpi = "print")  
-ht_huh_temp %>% dplyr::filter(which_dta=="field") %>% dplyr::count(plot) %>% dplyr::summarise(n=mean(n)) %>% dplyr::pull(n) %>% scales::comma(accuracy=0.1)
-ht_huh_temp %>% dplyr::filter(which_dta=="UAS") %>% dplyr::count(plot) %>% dplyr::summarise(n=mean(n)) %>% dplyr::pull(n) %>% scales::comma(accuracy=0.1)
+# ht_huh_temp %>% dplyr::filter(which_dta=="field") %>% dplyr::count(plot) %>% dplyr::summarise(n=mean(n)) %>% dplyr::pull(n) %>% scales::comma(accuracy=0.1)
+# ht_huh_temp %>% dplyr::filter(which_dta=="UAS") %>% dplyr::count(plot) %>% dplyr::summarise(n=mean(n)) %>% dplyr::pull(n) %>% scales::comma(accuracy=0.1)
 ```
 
 it appears that one of the primary problems with the UAS plot tree height measurements in these plots with the largest disagreement between the field and UAS plot tree height measurements is due to the UAS method segmenting more, smaller trees than were measured in the field. The average number of trees counted by the UAS method in these example plots is `r ht_huh_temp %>% dplyr::filter(which_dta=="UAS") %>% dplyr::count(plot) %>% dplyr::summarise(n=mean(n)) %>% dplyr::pull(n) %>% scales::comma(accuracy=0.1)` compared to an average of `r ht_huh_temp %>% dplyr::filter(which_dta=="field") %>% dplyr::count(plot) %>% dplyr::summarise(n=mean(n)) %>% dplyr::pull(n) %>% scales::comma(accuracy=0.1)` trees counted in the field.
 
 the UAS is oversegmenting trees in these plots, possibly splitting a single, actual tree into multiple segments due to the common growth form in pinyon-juniper systems where trees may have weak apical dominance and lack a single, strict leader. let's see if we can visualize this using the CHM data
 
-```{r}
-
+```{r,eval=F,purl=FALSE}
+# # good example of multiple potential leaders visible in the shadow 
+# # that the UAS splits into 4 trees but the field measured 1 tree
+# plt_validation_plots_polygons_fn(1,addchm = T)
+plts_temp <- 
+  validation_plots_polygons %>% 
+  dplyr::mutate(rn = dplyr::row_number()) %>% 
+  dplyr::filter(plot %in% unique(ht_huh_temp$plot)) %>% 
+  dplyr::pull(rn) %>% 
+  purrr::map(
+    \(x)
+    plt_validation_plots_polygons_fn(x,addchm = T)    
+  )
+plt_temp <- combine_validation_plots_polygons_fn(plts_temp,my_ncol = 4)
+cowplot::save_plot(
+  filename = "../data/field_uas_crown_treeht_comp.png"
+  , plot = plt_temp 
+  , base_width = 10.5
+  , base_height = 7
+  , ncol = 1
+  , nrow = 1
+  , dpi = 300
+  , bg = "white"
+)
 ```
 
+```{r,eval=F,purl=FALSE, fig.width=10.5, fig.height=7, fig.show='asis'}
+print(plt_temp)
+```
+
+there are a lot of things going on in those example plots and it does not appear that the primary issue is the UAS oversegmenting larger trees with mulitple possible leaders, though that is the case in a few of the examples. Other discrepancies include plot edge effects influencing which trees were determined to be "in" the plot, a few cases of undersegmentation by the UAS, standing dead trees not removed by the RGB spectral filter applied at the very beginning of this section, potential "missed" trees in the field plot data (or these trees were not included in the validation data due to not meeting the `r min_tree_ht_m` m minimum tree height threshold or were removed due to other missing data like missing coordinates). Either way, the tendency of the UAS method to underpredict height at the upper-limit of plot tree height does not appear to be systematically due to a single factor.
 
 ```{r, warning=FALSE, message=FALSE, echo=FALSE, include=FALSE}
 remove(list = ls()[grep("_temp",ls())])
