@@ -1,4 +1,4 @@
-# Individual Tree Accuracy Evaluation
+# UAS Measurement Accuracy Evaluation
 
 In this section, we'll mask the point cloud detected trees using the slash pile detections to get our final UAS point cloud-derived forest inventory tree list. Then we'll bring in field-measured data to evaluate our tree detection accuracy. This accuracy evaluation will yield detection accuracy metric including precision, recall (i.e. detection rate), and F-score (overall accuracy or balanced accuracy). Precision is a measure of the proportion of trees that estimated by the UAS method that were actually trees. Recall is a measure of the proportion of field-measured trees that the UAS method correctly identified. The F-score balances precision and recall to create an overall accuracy measure. All of these metrics range between 0 and 1 with values close to one indicating higher tree detection accuracies. In open canopy ponderosa pine forests, tree detection rates generally range from 65-85% (Creasey et al. 2021; Swayze and Tinkham 2023; Tinkham and Woolsey 2024) with higher proportions of larger trees (e.g. 75-95%) being detected compared to smaller tree detection rates (55-75%). As far as I know there has not been a detailed accuracy evaluation of tree detection methods from aerial point cloud data in Pinyon-Juniper forests.
 
@@ -902,6 +902,7 @@ validation_plots %>%
   ) %>% 
   dplyr::select(-plot_area_m2) %>% 
   recode_treatment_type_fn(ordered=T) %>%
+  dplyr::arrange(trtmnt_type) %>% 
   kableExtra::kbl(
     caption = "Field-Measured tree density by treatment type"
     , col.names = c(
@@ -1193,7 +1194,7 @@ remove(list = ls()[grep("_temp",ls())])
 gc()
 ```
 
-## Detection Accuracy Overview {#detect_metrics_form}
+## Tree Detection Accuracy Overview {#detect_metrics_form}
 
 we'll make a function that uses the following input data parameters to match predicted trees with validation/reference trees:
 
@@ -1852,7 +1853,7 @@ reference_prediction_match_ans_temp <- reference_prediction_match(
 # reference_prediction_match_ans_temp$pred_data %>% dplyr::glimpse()
 ```
 
-the `ground_truth_prediction_match()` uses the output from `reference_prediction_match()` and creates a nice, clean data frame with the instances classified as TP, FP, or FN for use in aggregating to calculate detection accuracy metrics. Optionally, users can set the foundation for physical measurement accuracy assessment via the `comp_cols` argument (see the `diff_*` and `pct_diff_*` columns in the output)
+the `ground_truth_prediction_match()` uses the output from `reference_prediction_match()` and creates a nice, clean data frame with the instances classified as TP, FP, or FN for use in aggregating to calculate detection accuracy metrics. Optionally, users can set the foundation for individual tree physical measurement accuracy assessment via the `comp_cols` argument (see the `diff_*` and `pct_diff_*` columns in the output)
 
 ```{r}
 gt_temp <- ground_truth_prediction_match(
@@ -2124,7 +2125,7 @@ gggttt_temp %>% agg_ground_truth_match()
 
 test it out on the example data (but without the `diff_*` and `pct_diff_*` columns which we'll review next)
 
-**Single-Plot Detection Accuracy Example**
+**Single-Plot individual tree Detection Accuracy Example**
 
 ```{r}
 gt_temp %>% 
@@ -2150,13 +2151,13 @@ gt_temp %>%
 
 this result if for just a single plot as an example...below we'll use the data from all field plots
 
-## Physical Measurement Accuracy Overview {#quant_metrics_form}
+## Tree-level Physical Measurement Accuracy Overview {#quant_metrics_form}
 
-Physical measurement accuracy metrics such as RMSE, MAPE, and Mean Error of tree form measurements (e.g. height, diameter) are calculated by aggregating the differences between the estimated tree attributes and the field reference values for instances classified as True Positives. These metrics tell us about the method's ability to accurately quantify the form of the trees it successfully identified.
+Physical measurement accuracy metrics such as RMSE, MAPE, and Mean Error of individual tree form measurements (e.g. height, diameter) are calculated by aggregating the differences between the estimated tree attributes and the field reference values for instances classified as True Positives. These metrics tell us about the method's ability to accurately quantify the form of the trees it successfully identified.
 
-to prepare our results for analysis, we will develop a function that aggregates the tree-level data into a single record for each metric-error measurement combination. this function will calculate detection performance metrics such as F-score, precision, and recall (using the `confusion_matrix_scores_fn()` we defined above), as well as physical measurement accuracy metrics including Root Mean Squared Error (RMSE), Mean Error (ME), and Mean Absolute Percentage Error (MAPE) to assess the accuracy of our tree form measurements. this could be a valuable function for any future analysis comparing predictions to reference data.
+to prepare our results for analysis, we will develop a function that aggregates the tree-level data into a single record for each metric-error measurement combination. this function will calculate detection performance metrics such as F-score, precision, and recall (using the `confusion_matrix_scores_fn()` we defined above), as well as individual tree physical measurement accuracy metrics including Root Mean Squared Error (RMSE), Mean Error (ME), and Mean Absolute Percentage Error (MAPE) to assess the accuracy of our tree form measurements. this could be a valuable function for any future analysis comparing predictions to reference data.
 
-here are the physical measurement accuracy metric formulas:
+here are the individual tree physical measurement accuracy metric formulas:
 
 $$
 \textrm{RMSE} = \sqrt{ \frac{  \sum_{i=1}^{N} (y_{i} - \hat{y_{i}})^{2}}{N}}
@@ -2182,15 +2183,15 @@ There is a lot going on in our `agg_ground_truth_match()` function but it's appl
 * Optionally, if the data contain columns with the prefix "pct_diff_" the mean absolute percent error (MAPE) is calculated for those columns with the return having the suffix "_mape"
   - these "pct_diff_" columns are calculated as the actual value minus the predicted value divided by the actual value (e.g. `(gt_diameter_m - pred_diameter_m)/gt_diameter_m`) 
 
-For plot-level accuracy evaluations of tree density (TPH) and canopy cover (%), we will also calculate Relative Root Mean Square Error (RRMSE) which relativizes the RMSE to the average of the reference values, making it a dimensionless percentage that allows for accuracy comparisons across different units.
-
-$$
-\textrm{RRMSE} = \frac{\sqrt{ \frac{  \sum_{i=1}^{N} (y_{i} - \hat{y_{i}})^{2}}{N}}}{\bar{y}}
-$$
-
-where $\bar{y}$ is the mean (average) of all reference values ($y_{i}$)
-
 ```{r, include=F,eval=F}
+# For plot-level accuracy evaluations of tree density (TPH) and canopy cover (%), we will also calculate Relative Root Mean Square Error (RRMSE) which relativizes the RMSE to the average of the reference values, making it a dimensionless percentage that allows for accuracy comparisons across different units.
+# 
+# $$
+# \textrm{RRMSE} = \frac{\sqrt{ \frac{  \sum_{i=1}^{N} (y_{i} - \hat{y_{i}})^{2}}{N}}}{\bar{y}}
+# $$
+# 
+# where $\bar{y}$ is the mean (average) of all reference values ($y_{i}$)
+
 # When your data is already measured in percentages, interpreting these metrics requires a bit of extra care to avoid confusing percentage points with relative percentages.
 # Here is how the interpretation changes between a physical unit like meters and an abstract unit like percentages:
 # ------------------------------
@@ -2231,7 +2232,7 @@ where $\bar{y}$ is the mean (average) of all reference values ($y_{i}$)
 
 ### Example: Physical measurement Accuracy
 
-we already demonstrated minimum use of the `agg_ground_truth_match()` function to get detection accuracy metrics, now we'll demonstrate the physical measurement accuracy metrics by keeping the `diff_*` and `pct_diff_*` columns calculated with the `ground_truth_prediction_match()` function
+we already demonstrated minimum use of the `agg_ground_truth_match()` function to get detection accuracy metrics, now we'll demonstrate the individual tree physical measurement accuracy metrics by keeping the `diff_*` and `pct_diff_*` columns calculated with the `ground_truth_prediction_match()` function
 
 ```{r, purl=F,include=F,eval=F}
 gt_temp %>% 
@@ -2254,7 +2255,7 @@ gt_temp %>%
   ) %>% View()
 ```
 
-**Single-Plot Physical Measurement Accuracy Example**
+**Single-Plot Tree-level Physical Measurement Accuracy Example**
 
 ```{r}
 gt_temp %>% 
@@ -2760,7 +2761,6 @@ ground_truth_prediction_match_ans <-
 
 note that we set the `max_dist_m` to a `r my_max_dist_m` m radius based on the crown radius of the 80th percentile field-measured tree crown to represent a "mature" tree while also accounting for tree lean and slight horizontal misalignment in GPS data collection. we set the `max_height_error_m` to `r my_max_height_error_m` m which represents 1.15 times one standard deviation in tree height based on the field-measured tree heights 
 
-
 ```{r, warning=FALSE, message=FALSE, echo=FALSE, include=FALSE}
 remove(list = ls()[grep("_temp",ls())])
 gc()
@@ -2772,9 +2772,9 @@ now we have a single data set with all predicted trees and all reference trees w
 ground_truth_prediction_match_ans %>% dplyr::glimpse()
 ```
 
-we can use this data to get study-wide detection and physical measurement accuracy metrics
+we can use this data to get study-wide detection and individual tree physical measurement accuracy metrics
 
-## Detection Accuracy Results{#detect_acc_res}
+## Tree Detection Accuracy Results{#detect_acc_res}
 
 Here we'll perform individual tree detection (ITD) performance evaluation of the UAS method to verify the it's ability to segment individual trees. Our instance matching method pairs field-mapped trees to UAS-detected trees to calculate:
 
@@ -2782,9 +2782,9 @@ Here we'll perform individual tree detection (ITD) performance evaluation of the
 * Precision - the proportion of UAS-detected trees that correspond to real trees (or the inverse of commission errors)
 * F-score - the harmonic mean between recall and precsion representing balanced detection accuracy
 
-Combining individual-level tree detection metrics with [plot-level canopy and height aggregates](#stand_acc) will establish the statistical confidence we need to scale the UAS spatial tree list data across the entire study area to evaluate treatment effects on residual spatial structure. This focus aligns with contemporary management paradigms in pinyon-juniper systems, which prioritize horizontal canopy architecture, clump configuration, and interspace connectivity as ecologically meaningful indicators of ecosystem health and fuel-hazard risk across arid landscapes.
+Combining individual-level tree detection metrics with [plot-level canopy and height aggregates](#stand_acc) will establish the statistical confidence we need to scale the UAS spatial tree list data across the entire study area to evaluate treatment effects on residual spatial structure. This focus aligns with contemporary management in pinyon-juniper systems, which prioritizes horizontal canopy architecture, clump configuration, and treeless open gaps as ecologically meaningful indicators of ecosystem health and fuel-hazard risk across these arid landscapes.
 
-first, we'll check out the overall, site-wide detection accuracy results
+first, we'll check out the overall, site-wide tree detection accuracy results
 
 ```{r}
 agg_ground_truth_match_ans <-
@@ -2816,7 +2816,7 @@ agg_ground_truth_match_ans %>%
   dplyr::mutate(data = "site-wide") %>% 
   dplyr::relocate(data) %>% 
   kableExtra::kbl(
-    caption = "Site-Wide Detection Accuracy"
+    caption = "site-wide individual tree detection accuracy"
     , col.names = c(
       "data", "# plots"
       , "TP predictions", "FP predictions", "FN predictions"
@@ -2878,7 +2878,7 @@ agg_ground_truth_match_by_type_ans %>%
   recode_treatment_type_fn(ordered = T) %>% 
   dplyr::arrange(trtmnt_type) %>% 
   kableExtra::kbl(
-    caption = "Detection Accuracy by Treatment Type"
+    caption = "individual tree detection accuracy by treatment type"
     , col.names = c(
       "treatment", "# plots"
       , "TP predictions", "FP predictions", "FN predictions"
@@ -3136,7 +3136,7 @@ ground_truth_prediction_match_ans %>%
 
 the commission error (percentage shown in the gray bar) is highest for the small trees which suggests we could potentially improve our ITD window function to decrease the number of trees detected in this height range. However, going back to the detection rate above, this same height range also had the lowest detection rate which would suggest we increase the number of trees identified in this height range. This conflict suggests that the trees in this height range are likely difficult to detect for the study area using the data and ITD methods used in this study. For example, they may be subordinate to directly adjacent taller trees with the crowns interlocking, so they are often grouped with the taller tree during the CHM-based ITD.
 
-## Physical measurement Accuracy Results{#quant_acc}
+## Tree-level Physical measurement Accuracy Results{#quant_acc}
 
 let's table the tree-level aggregated measurement error
 
@@ -3206,7 +3206,7 @@ agg_ground_truth_match_ans %>%
   # ncol()
   # dplyr::glimpse()
   kableExtra::kbl(
-    caption = "Physical measurement Accuracy"
+    caption = "individual tree physical measurement accuracy"
     , col.names = c(
       "data"
       , "TP predictions"
@@ -3655,7 +3655,7 @@ We'll start by evaluating UAS-predicted canopy cover compared to field-measured 
 # validation_plots_polygons$plot %>% unique() %>% length()
 
 # uas trees in plots...allows for one tree to go to multiple plots if the plots overlap
-pred_trees_temp <-
+pred_trees_in_validation_plots_w_dups <-
   treetops_sf %>% 
   dplyr::filter(
     tree_height_m>=min_tree_ht_m
@@ -3674,14 +3674,14 @@ pred_trees_temp <-
   # dplyr::slice(1) %>% 
   # dplyr::ungroup()
 
-# pred_trees_temp %>% dplyr::glimpse()# read crowns
+# pred_trees_in_validation_plots_w_dups %>% dplyr::glimpse()# read crowns
 pred_crowns_temp <- 
   crowns_sf %>% 
   dplyr::filter(
-    treeID %in% unique(pred_trees_temp$treeID)
+    treeID %in% unique(pred_trees_in_validation_plots_w_dups$treeID)
   )
 # pred_crowns_temp %>% dplyr::glimpse()
-# pred_trees_temp %>% nrow()
+# pred_trees_in_validation_plots_w_dups %>% nrow()
 # pred_crowns_temp %>% nrow()
 
 ############################################################################
@@ -3726,10 +3726,10 @@ get_nn_point_dist <- function(df_w_xy){
 # add nn dist one plot at a time...pred
 # add nn dist one plot at a time...pred
 # add nn dist one plot at a time...pred
-pred_trees_temp <- 
-  unique(pred_trees_temp$plot) %>% 
+pred_trees_in_validation_plots_w_dups <- 
+  unique(pred_trees_in_validation_plots_w_dups$plot) %>% 
   purrr::map(function(plt){
-    pred_trees_temp %>% 
+    pred_trees_in_validation_plots_w_dups %>% 
       dplyr::filter(plot == plt) %>% 
       dplyr::mutate(
         X = tree_x
@@ -3738,8 +3738,8 @@ pred_trees_temp <-
       get_nn_point_dist()
   }) %>% 
   purrr::list_rbind()
-# pred_trees_temp %>% dplyr::glimpse()
-# pred_trees_temp$nn_dist_m %>% summary()
+# pred_trees_in_validation_plots_w_dups %>% dplyr::glimpse()
+# pred_trees_in_validation_plots_w_dups$nn_dist_m %>% summary()
 
 # add nn dist one plot at a time...ref
 # add nn dist one plot at a time...ref
@@ -3772,7 +3772,7 @@ validation_trees <-
 #   print(n=22)
 
 # huh_temp <- 
-#   pred_trees_temp %>% 
+#   pred_trees_in_validation_plots_w_dups %>% 
 #   dplyr::group_by(treeID) %>% 
 #   dplyr::filter(dplyr::n()>1)
 # ggplot2::ggplot() +
@@ -3813,7 +3813,7 @@ validation_plots_polygons <-
   ) %>% 
   # add pred tree count and nn dist and mean stand height
   dplyr::left_join(
-    pred_trees_temp %>% 
+    pred_trees_in_validation_plots_w_dups %>% 
       sf::st_drop_geometry() %>%
       dplyr::group_by(plot) %>% 
       dplyr::summarize(
@@ -4092,7 +4092,7 @@ validation_plots_polygons %>%
   plt_scatter_fn(which_col = "mean_nn_dist_m", title_lab = "nearest neighbor dist. (m)", x_lab = "reference nearest neighbor dist. (m)", y_lab = "predicted nearest neighbor dist. (m)")
 ```
 
-The plot-level aggregation comparing the canopy cover of the field method to the UAS method yielded an RMSE of `r scales::percent(cc_agg_temp$diff_canopy_cov_pct_rmse,accuracy=0.1)` and a mean error (ME) of `r scales::percent(cc_agg_temp$diff_canopy_cov_pct_mean,accuracy=0.1)`. These values mean that the average UAS prediction of plot-level canopy cover is off by about ±`r scales::number(cc_agg_temp$diff_canopy_cov_pct_rmse*100,accuracy=0.1)` percentage points from the field-measured value which is generally considered highly accurate and operationally acceptable. The `r ifelse(cc_agg_temp$diff_canopy_cov_pct_mean>=0,"positive","negative")` ME of `r scales::percent(cc_agg_temp$diff_canopy_cov_pct_mean,accuracy=0.1)` means that, on average across all plots, the UAS method is systematically `r ifelse(cc_agg_temp$diff_canopy_cov_pct_mean>=0,"overpredicting","underpredicting")` canopy cover by `r scales::number(cc_agg_temp$diff_canopy_cov_pct_mean*100,accuracy=0.1)` percentage points compared to the field data.
+The plot-level aggregation comparing the canopy cover of the field method to the UAS method yielded an RMSE of `r scales::percent(cc_agg_temp$diff_canopy_cov_pct_rmse,accuracy=0.1)` and a mean error (ME) of `r scales::percent(cc_agg_temp$diff_canopy_cov_pct_mean,accuracy=0.1)`. These values mean that the average UAS prediction of plot-level canopy cover is off by about ±`r scales::number(cc_agg_temp$diff_canopy_cov_pct_rmse*100,accuracy=0.1)` percentage points from the field-measured value which is generally considered highly accurate and operationally acceptable. The `r ifelse(cc_agg_temp$diff_canopy_cov_pct_mean>=0,"positive","negative")` ME of `r scales::percent(cc_agg_temp$diff_canopy_cov_pct_mean,accuracy=0.1)` means that, on average across all plots, the UAS method is systematically `r ifelse(cc_agg_temp$diff_canopy_cov_pct_mean>=0,"overpredicting","underpredicting")` canopy cover by `r scales::number(abs(cc_agg_temp$diff_canopy_cov_pct_mean*100),accuracy=0.1)` percentage points compared to the field data.
 
 we can table the canopy cover measurements aggregated over all field plots
 
@@ -4777,9 +4777,327 @@ validation_plots_polygons %>%
 
 treatment intensity seems to have minimal impact on the spatial agreement between the UAS crown polygons and circular field crowns
 
-### Tree Density Evaluation{#plt_ht_eval}
+```{r, warning=FALSE, message=FALSE, echo=FALSE, include=FALSE}
+remove(list = ls()[grep("_temp",ls())])
+gc()
+```
+
+### Plot Height Evaluation{#plt_ht_eval}
 
 In addition to canopy cover and as part of our plot-level evaluation of the UAS tree detection methodology, we'll also evaluate mean tree height at the plot level to validate the vertical profile representation of the UAS data. We'll calculate these plot-level metrics by aggregating tree-level UAS predictions and field-reference values irrespective of individual instance matching. Following the terminology established by Li ([2009](https://research.fs.usda.gov/treesearch/33385)), plot tree height is defined as the average height of individual trees within a plot boundary. While Li ([2009](https://research.fs.usda.gov/treesearch/33385)) used a diameter threshold of at least 5 inches DBH to calcuate plot tree height, we used a tree height threshold of `r min_tree_ht_m` m applied to both the UAS and field trees. 
+
+```{r}
+cc_agg_temp <- validation_plots_polygons %>%
+  # dplyr::group_by(trtmnt_type) %>%
+  get_me_rmse_fn()
+
+# get the plottttttttttttttttttt
+validation_plots_polygons %>%
+  sf::st_drop_geometry() %>%
+  dplyr::bind_cols(
+    cc_agg_temp
+  ) %>%
+  plt_scatter_fn(which_col = "mean_tree_height_m", title_lab = "plot tree height", x_lab = "reference plot tree height (m)", y_lab = "predicted plot tree height (m)")
+```
+
+```{r, include=F, eval = F}
+# | Scale / Element | Avoid This | Use This Instead |
+# | :--- | :--- | :--- |
+# | Individual Tree Level | Tree Height | Individual Tree Height |
+# | Plot Level | Mean Stand Height / Mean of Tree Heights | Plot Tree Height or Average Plot Height |
+# | Treatment / Table Level | Mean of Mean Tree Height | Treatment-Level Plot Tree Height |
+# | The Error Metric | ME of Mean Tree Height | Mean Error in Plot Tree Height |
+# | Figure / Axis Labels | UAS Mean Tree Height (m) | UAS Plot Tree Height (m) or Predicted Plot Tree Height (m) |
+
+# get the plottttttttttttttttttt
+validation_plots_polygons %>%
+  sf::st_drop_geometry() %>%
+  dplyr::bind_cols(
+    cc_agg_temp
+  ) %>%
+  plt_scatter_fn(which_col = "trees_per_ha", title_lab = "TPH", x_lab = "reference TPH", y_lab = "predicted TPH")
+
+
+# get the plottttttttttttttttttt
+validation_plots_polygons %>%
+  sf::st_drop_geometry() %>%
+  dplyr::bind_cols(
+    cc_agg_temp
+  ) %>%
+  plt_scatter_fn(which_col = "mean_nn_dist_m", title_lab = "nearest neighbor dist. (m)", x_lab = "reference nearest neighbor dist. (m)", y_lab = "predicted nearest neighbor dist. (m)")
+```
+
+The aggregation comparing the plot tree height of the field method to the UAS method yielded an RMSE of `r scales::comma(cc_agg_temp$diff_mean_tree_height_m_rmse,accuracy=0.01)` and a mean error (ME) of `r scales::comma(cc_agg_temp$diff_mean_tree_height_m_mean,accuracy=0.01)`. These values mean that the average UAS prediction of plot tree height is off by about ±`r scales::comma(cc_agg_temp$diff_mean_tree_height_m_rmse,accuracy=0.01)` meters from the field-measured value which is generally considered highly accurate and operationally acceptable. The `r ifelse(cc_agg_temp$diff_mean_tree_height_m_mean>=0,"positive","negative")` ME of `r scales::comma(cc_agg_temp$diff_mean_tree_height_m_mean,accuracy=0.01)` means that, on average across all plots, the UAS method is systematically `r ifelse(cc_agg_temp$diff_mean_tree_height_m_mean>=0,"overpredicting","underpredicting")` plot tree height by `r scales::comma(abs(cc_agg_temp$diff_mean_tree_height_m_mean),accuracy=0.01)` meters compared to the field data.
+
+we can table the plot tree height measurement aggregated over all field plots
+
+```{r}
+cc_agg_temp %>% 
+  dplyr::mutate(
+    total_area_ha = (n_obs_for_error_metrics * validation_plots$plot_area_m2[1])/10000
+  ) %>% 
+  dplyr::select(
+    n_obs_for_error_metrics
+    , total_area_ha
+    , tidyselect::contains("mean_tree_height_m")
+  ) %>% 
+  dplyr::select(!c(
+    tidyselect::ends_with("rrmse")
+    , tidyselect::ends_with("mape")
+  )) %>% 
+  dplyr::relocate(
+    n_obs_for_error_metrics
+    , total_area_ha
+    , tidyselect::starts_with("mean")
+    , tidyselect::ends_with("mean")
+    , tidyselect::ends_with("rmse")
+  ) %>% 
+  dplyr::mutate(
+    dplyr::across(c(tidyselect::starts_with("mean_")),~scales::comma(.x,accuracy=0.1))
+    , dplyr::across(c(tidyselect::starts_with("diff_")),~scales::comma(.x,accuracy=0.01))
+    , dplyr::across(c(total_area_ha),~scales::number(.x,accuracy=0.1))
+    , dplyr::across(dplyr::where(is.numeric),~scales::number(.x,accuracy=1))
+  ) %>% 
+  kableExtra::kbl(
+    caption = "Plot Tree Height Across all Measured Plots"
+    , col.names = c(
+      "# plots", "field-measured area (ha)"
+      , rep(c("mean<br>reference","mean<br>predicted","mean error<br>(ME)","RMSE"), times = 1)
+    )
+    , escape = F
+    # , digits = 2
+  ) %>% 
+  kableExtra::kable_styling(font_size = 11.5) %>% 
+  kableExtra::add_header_above(
+    c(
+      " "=2
+      , "Plot Tree Height (m)" = 4
+    )
+    , escape = F
+  ) %>% 
+  kableExtra::column_spec( c(2,6), border_right = TRUE, include_thead = TRUE) %>% 
+  kableExtra::collapse_rows(columns = c(1), valign = "top")
+```
+
+let's check that out by treatment type
+
+```{r}
+validation_plots_polygons %>% 
+  dplyr::select(trtmnt_type,tidyselect::ends_with("mean_tree_height_m")) %>% 
+  dplyr::group_by(trtmnt_type) %>% 
+  get_me_rmse_fn() %>% 
+  dplyr::mutate(
+    total_area_ha = (n_obs_for_error_metrics * validation_plots$plot_area_m2[1])/10000
+  ) %>% 
+  dplyr::select(
+    trtmnt_type,n_obs_for_error_metrics
+    , total_area_ha
+    , tidyselect::contains("mean_tree_height_m")
+  ) %>% 
+  dplyr::select(!c(
+    tidyselect::ends_with("rrmse")
+    , tidyselect::ends_with("mape")
+  )) %>% 
+  dplyr::relocate(
+    trtmnt_type,n_obs_for_error_metrics
+    , total_area_ha
+    , tidyselect::starts_with("mean")
+    , tidyselect::ends_with("mean")
+    , tidyselect::ends_with("rmse")
+  ) %>% 
+  dplyr::mutate(
+    dplyr::across(c(tidyselect::starts_with("mean_")),~scales::comma(.x,accuracy=0.1))
+    , dplyr::across(c(tidyselect::starts_with("diff_")),~scales::comma(.x,accuracy=0.01))
+    , dplyr::across(c(total_area_ha),~scales::number(.x,accuracy=0.1))
+    , dplyr::across(dplyr::where(is.numeric),~scales::number(.x,accuracy=1))
+  ) %>% 
+  recode_treatment_type_fn() %>% 
+  dplyr::arrange(trtmnt_type) %>% 
+  kableExtra::kbl(
+    caption = "Plot Tree Height Across all Measured Plots"
+    , col.names = c(
+      "treatment", "# plots", "field-measured area (ha)"
+      , rep(c("mean<br>reference","mean<br>predicted","mean error<br>(ME)","RMSE"), times = 1)
+    )
+    , escape = F
+    # , digits = 2
+  ) %>% 
+  kableExtra::kable_styling(font_size = 11.5) %>% 
+  kableExtra::add_header_above(
+    c(
+      " "=3
+      , "Plot Tree Height (m)" = 4
+    )
+    , escape = F
+  ) %>% 
+  kableExtra::column_spec( c(3,7), border_right = TRUE, include_thead = TRUE) %>% 
+  kableExtra::collapse_rows(columns = c(1), valign = "top")
+```
+
+let's look for any trends in the overprediction or underprediction of plot tree height by the UAS method compared to the field measurement as the plot-level tree height increases
+
+```{r}
+# Data trends (dashed) are visualized using a LOESS (locally weighted scatterplot smoothing) regression. 
+# A span of 1.0 was utilized to include 100% of the observations in each local neighborhood, 
+# and the local polynomial degree was restricted to 1 (local linear regression) to prevent overfitting and boundary inflation at the data extremes.
+
+# The dashed line represents a locally estimated scatterplot smoothing (LOESS) trend line
+# , calculated with a smoothing parameter (span) of 1.0 and a local linear polynomial fit (degree = 1).
+validation_plots_polygons %>%
+  sf::st_drop_geometry() %>% 
+  # dplyr::glimpse()
+  ggplot2::ggplot(
+    mapping = ggplot2::aes(y = diff_mean_tree_height_m, x = ref_mean_tree_height_m)
+  ) + 
+  ggplot2::geom_hline(yintercept = 0, color = "gray33", lwd = 1) +
+  ggplot2::geom_point(color = "brown", alpha = 0.7, size = 0.7) +
+  ggplot2::geom_smooth(
+    method = "loess", se=F
+    , span = 1 # 0.75 = default
+    , method.args = list(degree = 1)
+    , lwd = 1, color = "gray", linetype = "dashed"
+  ) +
+  ggplot2::annotate(
+    "text"
+    , x = Inf
+    # , y = 0.045
+    , y = Inf
+    , label = "prediction > reference"
+    , hjust = 1.1
+    , vjust = 1.2
+    , parse = F
+    , size = 2.5
+  ) +
+  ggplot2::annotate(
+    "text"
+    , x = Inf
+    # , y = -0.04
+    , y = -Inf
+    , label = "prediction < reference"
+    , hjust = 1.1
+    , vjust = -0.4
+    , parse = F
+    , size = 2.5
+  ) +
+  ggplot2::scale_x_continuous(breaks = scales::breaks_extended(n=8)) +
+  ggplot2::scale_y_continuous(
+    limits = c(
+      -max(abs(validation_plots_polygons$diff_mean_tree_height_m),na.rm=T)
+      ,max(abs(validation_plots_polygons$diff_mean_tree_height_m),na.rm=T)
+    )
+    # breaks = seq(-1,1,by=0.2)
+    , breaks = scales::breaks_extended(n = 8)
+    , labels = scales::comma
+  ) +
+  ggplot2::labs(
+    x = "field reference Plot tree height (m)", y = "Plot tree height difference (m)"
+    , subtitle = "Plot tree height difference by reference TPH"
+  ) +
+  ggplot2::theme_light()
+```
+
+at the upper-limit of plot tree height, the UAS method tends to underpredict height more than in any other portion of the range. however, this is heavily influenced by a few end points and may not represent anything other than a spurrious trend. let's check out those 
+
+```{r}
+so_bad_plot_ht_temp <- 
+  validation_plots_polygons %>%
+  sf::st_drop_geometry() %>% 
+  dplyr::slice_min(diff_mean_tree_height_m, n = 10, with_ties = F) %>% 
+  dplyr::select(trtmnt_type, plot,diff_mean_tree_height_m)  
+ht_huh_temp <- 
+  dplyr::bind_rows(
+    pred_trees_in_validation_plots_w_dups %>% 
+      sf::st_drop_geometry() %>% 
+      dplyr::select(plot,tree_height_m) %>%
+      dplyr::mutate(which_dta = "UAS") %>% 
+      dplyr::inner_join(
+        so_bad_plot_ht_temp
+        , by = "plot"
+      )
+    , validation_trees %>% 
+      sf::st_drop_geometry() %>% 
+      dplyr::rename(tree_height_m=height_m) %>% 
+      dplyr::select(plot,tree_height_m) %>%
+      dplyr::mutate(which_dta = "field") %>% 
+      dplyr::inner_join(
+        so_bad_plot_ht_temp
+        , by = "plot"
+      )
+  ) %>% 
+  recode_treatment_type_fn(ordered = T)
+```
+
+
+```{r}
+# ht_huh_temp %>% dplyr::glimpse()
+ht_huh_temp %>% 
+  dplyr::group_by(plot,diff_mean_tree_height_m,which_dta) %>% 
+  dplyr::summarize(tree_height_m=mean(tree_height_m,na.rm=T)) %>% 
+  dplyr::ungroup() %>% 
+  dplyr::mutate(lab = scales::comma(tree_height_m,accuracy = 0.1,suffix=" m")) %>% 
+  dplyr::arrange(desc(diff_mean_tree_height_m)) %>% 
+  ggplot2::ggplot(
+    mapping = ggplot2::aes(y = plot, x = tree_height_m, color = which_dta)
+  ) + 
+  ggplot2::geom_point(
+    # data = ~ .x %>% dplyr::filter(which_dta=="field")
+    # color = "black"
+    shape = "|"
+    , size = 7
+    , show.legend = F
+  ) +
+  ggplot2::geom_text(
+    mapping = ggplot2::aes(label = lab ) #, fontface = "bold")
+    , hjust = 0.5
+    , vjust = 3.3
+    , size = 2.8
+    , color = "gray11"
+  ) +
+  ggplot2::geom_point(
+    data = ht_huh_temp %>% dplyr::filter(which_dta=="field")
+    #, color = "gray"
+    , alpha = 0.8
+    , size = 6
+  ) +
+  ggplot2::geom_point(
+    data = ht_huh_temp %>% dplyr::filter(which_dta=="UAS")
+    #, color = "blue"
+    , alpha = 0.8
+    , size = 3
+  ) +
+  harrypotter::scale_color_hp_d( option="hermionegranger") +
+  ggplot2::scale_x_continuous(breaks = scales::breaks_extended(n=8)) +
+  ggplot2::labs(
+    x = "individual tree height (m)", y = "plot"
+    , title = "individual tree height values for a sample of plots with the largest disagreement in plot tree height"
+    , subtitle = "'|' symbol indicates plot tree height for each data set"
+    , color = ""
+  ) +
+  ggplot2::theme_light() +
+  ggplot2::theme(
+    legend.position = "top"
+    , plot.title = ggplot2::element_text(size = 8.5)
+    , plot.subtitle = ggplot2::element_text(size = 8.5)
+  ) +
+  ggplot2::guides(
+    color = ggplot2::guide_legend(
+      override.aes = list(
+        fill = NA, shape = 15, size = 6, alpha = 1, linetype = 0
+      )
+    )
+  )
+# ggplot2::ggsave("../data/explt.jpg", height = 9.5, width = 9, dpi = "print")  
+ht_huh_temp %>% dplyr::filter(which_dta=="field") %>% dplyr::count(plot) %>% dplyr::summarise(n=mean(n)) %>% dplyr::pull(n) %>% scales::comma(accuracy=0.1)
+ht_huh_temp %>% dplyr::filter(which_dta=="UAS") %>% dplyr::count(plot) %>% dplyr::summarise(n=mean(n)) %>% dplyr::pull(n) %>% scales::comma(accuracy=0.1)
+```
+
+it appears that one of the primary problems with the UAS plot tree height measurements in these plots with the largest disagreement between the field and UAS plot tree height measurements is due to the UAS method segmenting more, smaller trees than were measured in the field. The average number of trees counted by the UAS method in these example plots is `r ht_huh_temp %>% dplyr::filter(which_dta=="UAS") %>% dplyr::count(plot) %>% dplyr::summarise(n=mean(n)) %>% dplyr::pull(n) %>% scales::comma(accuracy=0.1)` compared to an average of `r ht_huh_temp %>% dplyr::filter(which_dta=="field") %>% dplyr::count(plot) %>% dplyr::summarise(n=mean(n)) %>% dplyr::pull(n) %>% scales::comma(accuracy=0.1)` trees counted in the field.
+
+the UAS is oversegmenting trees in these plots, possibly splitting a single, actual tree into multiple segments due to the common growth form in pinyon-juniper systems where trees may have weak apical dominance and lack a single, strict leader. let's see if we can visualize this using the CHM data
+
+```{r}
+
+```
 
 
 ```{r, warning=FALSE, message=FALSE, echo=FALSE, include=FALSE}
