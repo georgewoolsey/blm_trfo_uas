@@ -397,7 +397,7 @@ gc()
 
 based on the spectral information within the crown footprint, let's determine a criteria to flag a tree as "dead" based on the `inrange_th_votes` variable which tells us how many of the 6 spectral index thresholds were met to distinguish a dead wood from living biomass. Where, a value of 5-6 represents high likelihood that the object is *not* living vegetation (e.g. piled slash) and 1-2 indicates a high likelihood that the object is living vegetation (e.g. small tree/shrub)
 
-what is the distribution of this multi-index spectral threshold voting system?
+what is the distribution of this multi-index spectral threshold ensemble system?
 
 ```{r}
 treetops_sf %>% 
