@@ -182,6 +182,8 @@ if(
 ```
 
 ```{r, warning=FALSE, message=FALSE, echo=FALSE, include=FALSE}
+ctg_temp <- sf::st_read("../data/point_cloud_processing_delivery/raw_las_ctg_info.gpkg")
+ctg_temp %>% sf::st_union() %>% sf::st_area() %>% as.numeric() %>% `/`(10000) %>% scales::comma(accuracy = 0.01, suffix = " ha")
 remove(list = ls()[grep("_temp",ls())])
 remove(f)
 gc()

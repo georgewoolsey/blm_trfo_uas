@@ -45,6 +45,17 @@ treetops_sf <- treetops_sf %>%
 # treetops_sf %>% dplyr::glimpse()
 ```
 
+
+```{r, include=F, eval=F}
+treetops_sf %>% sf::st_drop_geometry() %>% dplyr::count(trtmnt_type)
+treetops_sf %>% dplyr::filter(!is.na(trtmnt_type), tree_height_m>=2) %>% nrow() %>% scales::comma(accuracy = 1)
+stand_boundary %>% nrow()
+stand_boundary %>% sf::st_drop_geometry() %>% dplyr::count(tretmnt)
+stand_boundary %>% sf::st_transform(terra::crs(chm_rast)) %>% sf::st_union() %>% sf::st_area() %>% as.numeric() %>% `/`(10000) %>% scales::comma(accuracy = 0.1, suffix = " ha")
+stand_boundary %>% sf::st_transform(terra::crs(chm_rast)) %>% sf::st_area() %>% as.numeric() %>% sum() %>% `/`(10000) %>% scales::comma(accuracy = 0.1, suffix = " ha")
+
+```
+
 use our slash pile mask to remove detected "trees" that are likely not trees. if a tree top point falls within the boundary of a detected pile footprint, it will be removed
 
 ```{r}
@@ -438,6 +449,29 @@ treetops_sf %>%
     , axis.text.x = ggplot2::element_text(size = 9)
   )
 ```
+
+```{r, include=F, eval=F}
+treetops_sf %>% 
+  dplyr::filter(
+    !is.na(trtmnt_type)
+    , tree_height_m>=2
+  ) %>% 
+  nrow() %>% 
+  scales::comma(accuracy = 1)
+treetops_sf %>% 
+  dplyr::filter(
+    !is.na(trtmnt_type)
+    , tree_height_m>=2
+    , dplyr::coalesce(inrange_th_votes,0)<=5
+  ) %>% 
+  nrow() %>% 
+  scales::comma(accuracy = 1)
+
+98135-78760
+(98135-78760)/98135
+
+```
+
 
 here is that same plot by treatment type
 
@@ -3254,6 +3288,7 @@ plt_scatter_fn <- function(
     , title_lab = "Crown Diameter"
     , x_lab = "reference crown diam. (m)" # latex2exp::TeX("reference area ($m^2$)")
     , y_lab = "predicted crown diam. (m)" # latex2exp::TeX("predicted area ($m^2$)")
+    , remove_r_sq = F
 ){
     d <- dta
     # construct the formula: "y_var ~ x_var"
@@ -3323,6 +3358,29 @@ plt_scatter_fn <- function(
         )
     }else{me_val <- NA}
     
+    if(remove_r_sq){
+      hey_my_annote <- 
+      paste0(
+        "RMSE = ", rmse_val
+        , ifelse(!is.na(mape_val), paste0("\nMAPE = ", mape_val),"")
+        , ifelse(!is.na(me_val), paste0("\nME = ", me_val),"")
+        , "\n"
+        , lmf_temp
+      )
+    }else{
+      hey_my_annote <- 
+      paste0(
+        "RMSE = ", rmse_val
+        , ifelse(!is.na(mape_val), paste0("\nMAPE = ", mape_val),"")
+        , ifelse(!is.na(me_val), paste0("\nME = ", me_val),"")
+        , "\n"
+        , lmf_temp
+        , "\n R² = "
+        # , scales::number((summary(lm_temp)$r.squared)*100, accuracy = 0.1, suffix = "%")
+        , scales::number((summary(lm_temp)$r.squared), accuracy = 0.01)
+      )
+    }
+    
     # plot
     p <- d %>% 
       ggplot2::ggplot(mapping = ggplot2::aes(y = .data[[y_var]], x = .data[[x_var]])) +
@@ -3332,22 +3390,13 @@ plt_scatter_fn <- function(
       ggplot2::annotate(
         "text", 
         x = -Inf, y = Inf # Top Left
-        , label = 
+        , label = hey_my_annote
           # paste0(
           #   "R^2 == "
           #   , scales::number((summary(lm_temp)$r.squared)*100, accuracy = 0.1)
           #   , "*'%'"
           # )
-          paste0(
-            "RMSE = ", rmse_val
-            , ifelse(!is.na(mape_val), paste0("\nMAPE = ", mape_val),"")
-            , ifelse(!is.na(me_val), paste0("\nME = ", me_val),"")
-            , "\n"
-            , lmf_temp
-            , "\n R² = "
-            # , scales::number((summary(lm_temp)$r.squared)*100, accuracy = 0.1, suffix = "%")
-            , scales::number((summary(lm_temp)$r.squared), accuracy = 0.01)
-          )
+          
         , hjust = -0.1, vjust = 1.1
         , parse = F
         , size = 3
@@ -4051,12 +4100,14 @@ cc_agg_temp <- validation_plots_polygons %>%
   get_me_rmse_fn()
 
 # get the plottttttttttttttttttt
-validation_plots_polygons %>%
+plt_canopy_cov_pct <- 
+  validation_plots_polygons %>%
   sf::st_drop_geometry() %>%
   dplyr::bind_cols(
     cc_agg_temp
   ) %>%
-  plt_scatter_fn(which_col = "canopy_cov_pct", title_lab = "Canopy Cover", x_lab = "reference Canopy Cover (%)", y_lab = "predicted Canopy Cover (%)")
+  plt_scatter_fn(which_col = "canopy_cov_pct", title_lab = "Canopy Cover", x_lab = "reference Canopy Cover (%)", y_lab = "predicted Canopy Cover (%)", remove_r_sq = T)
+print(plt_canopy_cov_pct)
 ```
 
 ```{r, include=F, eval = F}
@@ -4835,12 +4886,14 @@ cc_agg_temp <- validation_plots_polygons %>%
   get_me_rmse_fn()
 
 # get the plottttttttttttttttttt
-validation_plots_polygons %>%
+plt_mean_tree_height_m <- 
+  validation_plots_polygons %>%
   sf::st_drop_geometry() %>%
   dplyr::bind_cols(
     cc_agg_temp
   ) %>%
-  plt_scatter_fn(which_col = "mean_tree_height_m", title_lab = "plot tree height", x_lab = "reference plot tree height (m)", y_lab = "predicted plot tree height (m)")
+  plt_scatter_fn(which_col = "mean_tree_height_m", title_lab = "plot tree height", x_lab = "reference plot tree height (m)", y_lab = "predicted plot tree height (m)", remove_r_sq = T)
+print(plt_mean_tree_height_m)
 ```
 
 ```{r, include=F, eval = F}
@@ -5167,6 +5220,39 @@ print(plt_temp)
 
 there are a lot of things going on in those example plots and it does not appear that the primary issue is the UAS oversegmenting larger trees with mulitple possible leaders, though that is the case in a few of the examples. Other discrepancies include plot edge effects influencing which trees were determined to be "in" the plot, a few cases of undersegmentation by the UAS, standing dead trees not removed by the RGB spectral filter applied at the very beginning of this section, potential "missed" trees in the field plot data (or these trees were not included in the validation data due to not meeting the `r min_tree_ht_m` m minimum tree height threshold or were removed due to other missing data like missing coordinates). Either way, the tendency of the UAS method to underpredict height at the upper-limit of plot tree height does not appear to be systematically due to a single factor.
 
+before we leave, let's combine the predicted versus reference plots for canopy cover and plot tree height for publication
+
+```{r}
+
+p_temp <-
+  patchwork::wrap_plots(
+    list(
+      plt_canopy_cov_pct + ggplot2::labs(title = NULL, subtitle = NULL)
+        # + ggplot2::labs(title = "(a) UAS Predicted versus Field Reference Canopy Cover")
+      , plt_mean_tree_height_m + ggplot2::labs(title = NULL, subtitle = NULL)
+        # + ggplot2::labs(title = "(b) UAS Predicted versus Field Reference Plot Tree Height")
+    )
+    , ncol = 1
+  ) +
+  patchwork::plot_annotation(
+    ### this is so horrible......why is patchwork::plot_annotation(tag_levels) like this????
+    tag_levels = list(c(
+      "(a) UAS Predicted versus Field Reference Canopy Cover"
+      , "    (b) UAS Predicted versus Field Reference Plot Tree Height"
+    ))
+  )  &
+  ggplot2::theme(
+    axis.title = ggplot2::element_text(size = 7.5)
+    , axis.text = ggplot2::element_text(size = 7.5)
+    , plot.tag.position = c(0.31,1.05)
+    , plot.tag = ggplot2::element_text(size = 11.5, face = "bold")
+    , plot.margin = ggplot2::margin(t = 0.29, r = 0.1, b = 0.1, l = 0.1, unit = "in")
+  )
+
+ggplot2::ggsave("../data/predicted_vs_ref_scatter.jpg", plot = p_temp, height = 10.5, width = 6.8, dpi = "print")  
+```
+
+
 ```{r, warning=FALSE, message=FALSE, echo=FALSE, include=FALSE}
 remove(list = ls()[grep("_temp",ls())])
 remove(
@@ -5176,6 +5262,7 @@ remove(
   , validation_plots, validation_plots_polygons, validation_trees
   , agg_ground_truth_match, confusion_matrix_scores_fn, ground_truth_prediction_match, reference_prediction_match
   , validate_df_fn
+  , plt_canopy_cov_pct, plt_mean_tree_height_m
 )
 gc()
 ```

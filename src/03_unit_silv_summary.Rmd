@@ -1448,8 +1448,12 @@ function to plot using `terra` which is fast
 unq_units_df <- treetops_sf %>% 
   sf::st_drop_geometry() %>% 
   dplyr::distinct(trtmnt_block,trtmnt_type,trtmnt_unit) %>% 
-  dplyr::arrange(trtmnt_block,trtmnt_type,trtmnt_unit)
-
+  dplyr::mutate(xxx=trtmnt_type) %>% 
+  recode_treatment_type_fn(ordered = T) %>% 
+  dplyr::arrange(trtmnt_block,trtmnt_type,trtmnt_unit) %>% 
+  dplyr::select(-trtmnt_type) %>% 
+  dplyr::rename(trtmnt_type=xxx)
+# unq_units_df
 # function to plot ortho
 terra_plt_ortho <- function(
   ortho

@@ -4,7 +4,7 @@ Evaluate the spatial configuration of the detected trees focusing on horizontal 
 
 some relevant work includes:
 
-* *Spatial Patterns of Pinyon–Juniper Woodland Expansion in Central Nevada* ([Weisberg et al. 2007](https://doi.org/10.2111/05-224R2.1))
+* *Spatial Patterns of Pinyon-Juniper Woodland Expansion in Central Nevada* ([Weisberg et al. 2007](https://doi.org/10.2111/05-224R2.1))
 * *Density-dependent tree mortality in pinyon-juniper woodlands* ([Greenwood and Weisberg 2008](https://doi.org/10.1016/j.foreco.2007.12.048))
 * *Long-Term Effectiveness of Tree Removal to Re-Establish Sagebrush Steppe Vegetation and Associated Spatial Patterns in Surface Conditions and Soil Hydrologic Properties* ([Williams et al. 2020](https://doi.org/10.3390/w12082213))
 
@@ -32,6 +32,8 @@ treetops_sf %>%
 Since a primary objective of this analysis is to evaluate how [different treatments](#silv_sum) influence forest structure, we'll treat each unit as a discrete area and exclude any trees located outside of the unit boundaries from the clump classification process. This approach assumes that trees within a unit do not form functional clusters with those in adjacent areas (even though some units share a common border and we have data extending beyond the unit boundaries). This assumption prevents data from untreated control areas or differently treated areas from influencing the results when summarized by treatment type. This intentional ignorance of edge effects means that the scale of focus of this analysis is strictly on the treatment unit.
 
 define a function to make the tree clump groupings by treatment unit
+
+Analysis of tree clump size distributions across the 48 units revealed distinct shifts in horizontal spatial aggregation driven by treatment type (Figure 2, Table 4). In untreated Control units, trees were predominantly aggregated within near-spatially continuous canopy groups, with clumps of >10 trees accounting for a mean proportion of 71.3% of trees per unit (Table 4). Individual trees and smaller clumps formed minor components of Control units, averaging 7.8% for individual trees, 11.2% for 2-4 tree clumps, and 9.8% for 5-10 tree clumps. Silvicultural treatments altered this spatial hierarchy by redistributing residual trees into smaller clump classes, breaking up continuous canopy groupings (Figure 2, Table 4). The Heterogeneous treatment produced a balanced distribution across all clump categories, led by small clumps of 2-4 trees (31.7%) and large clumps of >10 trees (25.7%), alongside individual trees (24.8%) and medium clumps of 5-10 trees (17.8%). Unit-level variability within the Heterogeneous treatment was narrowest in medium clumps (range: 13.5%-26.0%) and widest in large clumps (range: 16.8%-35.6%). Both uniform thinning treatments generated nearly identical structural shifts, concentrating residual trees into individual stems and small clumps while largely eliminating large tree aggregations (Figure 2, Table 4). Across Uniform-Low and Uniform-High units, individual trees (47.6% and 41.5%, respectively) and 2-4 tree clumps (34.0% and 37.4%, respectively) comprised over 78% of all trees per unit. Medium clumps of 5-10 trees accounted for 13.2% in Uniform-Low and 16.0% in Uniform-High units, whereas large clumps (>10 trees) were reduced to a mean of 5.2% in both treatments. Unit-level variability across the uniform treatments was highest in the individual tree category, where proportions spanned from 27.2% to 64.1% in Uniform-Low and 22.3% to 64.0% in Uniform-High units.
 
 ```{r, purl=F, eval = F, warning=FALSE, message=FALSE, echo=FALSE, include=FALSE}
 c2t_output_dir <- "../data"
@@ -648,13 +650,13 @@ here is the distance raster without the trees
 
 ```{r,eval=F,purl=FALSE, fig.height = 8, fig.width = 10.5}
 # one unit
-plt_dist_rast_fn(3, add_clumps = F)
+plt_dist_rast_fn(4, add_clumps = F)
 ```
 
 and here is the distance raster with the tree clump groups overlaid
 
 ```{r,eval=F,purl=FALSE, fig.height = 8, fig.width = 10.5}
-p_temp <- plt_dist_rast_fn(3, add_clumps = T)
+p_temp <- plt_dist_rast_fn(4, add_clumps = T)
 p_temp
 ```
 
@@ -1077,13 +1079,13 @@ plt_openings_vect_fn <-
 
 ```{r,eval=F,purl=FALSE, fig.height = 8, fig.width = 10.5}
 # one unit
-plt_openings_vect_fn(3, add_clumps = F)
+plt_openings_vect_fn(4, add_clumps = F)
 ```
 
 and here are the openings with the tree clump groups overlaid
 
 ```{r,eval=F,purl=FALSE, fig.height = 8, fig.width = 10.5}
-p_temp <- plt_openings_vect_fn(3, add_clumps = T)
+p_temp <- plt_openings_vect_fn(4, add_clumps = T)
 p_temp
 ```
 
@@ -1543,6 +1545,74 @@ ggplot2::ggsave(
 )
 ```
 
+let's table the summary statistics for that distribution
+
+```{r}
+clump_n_trees_grp_summary %>% 
+  dplyr::ungroup() %>% 
+  recode_treatment_type_fn(ordered = T) %>% 
+  dplyr::select(
+    trtmnt_type
+    , clump_n_trees_grp
+    , pct_stand_n_trees
+  ) %>% 
+  # dplyr::glimpse()
+  dplyr::group_by(trtmnt_type, clump_n_trees_grp) %>% 
+  dplyr::summarise(
+    dplyr::across(
+      c(pct_stand_n_trees)
+      , .fns = list(
+        q25 = ~quantile(.x,na.rm=T,probs=0.25)
+        , median = ~median(.x,na.rm=T)
+        , mean = ~mean(.x,na.rm=T)
+        , q75 = ~quantile(.x,na.rm=T,probs=0.75)
+        # , q10 = ~quantile(.x,na.rm=T,probs=0.1)
+        # , q50 = ~quantile(.x,na.rm=T,probs=0.5)
+        # , q90 = ~quantile(.x,na.rm=T,probs=0.9)
+        # , min = ~min(.x,na.rm=T)
+        # , max = ~max(.x,na.rm=T)
+        , range = ~paste0(
+          scales::percent(min(.x,na.rm=T), accuracy = 0.1)
+          ,"-"
+          , scales::percent(max(.x,na.rm=T), accuracy = 0.1)
+        )
+      )
+    )
+    , n = dplyr::n()
+  ) %>% 
+  dplyr::ungroup() %>% 
+  dplyr::select(trtmnt_type,clump_n_trees_grp,n,pct_stand_n_trees_mean,pct_stand_n_trees_range) %>% 
+  # dplyr::group_by(trtmnt_type) %>% dplyr::summarise(pct_stand_n_trees_median=sum(pct_stand_n_trees_mean))
+  dplyr::mutate(
+    n = scales::comma(n,accuracy=1)
+    , dplyr::across(.cols = dplyr::where(is.numeric), ~scales::percent(.x,accuracy=0.1) )
+    , lab = paste0(
+      pct_stand_n_trees_mean
+      , "<br/>("
+      , pct_stand_n_trees_range
+      , ")"
+    )
+  ) %>% 
+  dplyr::select(trtmnt_type,clump_n_trees_grp,n,lab) %>% 
+  tidyr::pivot_wider(
+    values_from = lab
+    , names_from = clump_n_trees_grp
+  ) %>% 
+  dplyr::arrange(trtmnt_type) %>% 
+  dplyr::rename(
+    `treatment` = trtmnt_type
+    , `number of units` = n
+  ) %>% 
+  # dplyr::glimpse()
+  kableExtra::kbl(
+    caption = "Distribution of unit-level tree proportions by tree clump size<br/>values represent mean unit (range)"
+    , escape = F
+    # , digits = 2
+  ) %>% 
+  kableExtra::kable_styling(font_size = 11)
+```
+
+
 we can aggregate those proportions over all units in a given treatment type to get the mean value
 
 ```{r}
@@ -1800,7 +1870,7 @@ crowns_sf %>%
 
 for the most part, those are very wide distributions but interesting to compare across treatment types
 
-## Openings Summary
+## Openings and Canopy Cover Summary
 
 lastly, we'll look at the openings information. 
 
@@ -2120,7 +2190,7 @@ open_temp %>%
   kableExtra::kbl(
     caption = "openings by treatment type"
     , col.names = c(
-      "type","# units","mean unit area (ha)"
+      "treatment","# units","mean unit area (ha)"
       , "1st Qu."
       , "median"
       , "mean"
@@ -2185,7 +2255,7 @@ open_temp %>%
   kableExtra::kbl(
     caption = "canopy cover by treatment type"
     , col.names = c(
-      "type","# units","mean unit area (ha)"
+      "treatment","# units","mean unit area (ha)"
       , "1st Qu."
       , "median"
       , "mean"
@@ -2315,7 +2385,7 @@ open_full_temp %>%
   kableExtra::kbl(
     caption = "treeless opening sizes by treatment type"
     , col.names = c(
-      "type","# openings"
+      "treatment","# openings"
       , "1st Qu."
       , "median"
       , "mean"
@@ -2590,10 +2660,12 @@ plt_fn_temp <- function(x) {
       ggplot2::geom_sf(
         data = 
           stand_boundary %>%
+            dplyr::rename(trtmnt_type=tretmnt) %>% 
+            recode_treatment_type_fn() %>% 
             dplyr::filter(
               unit==unit_temp$trtmnt_unit
               , block==unit_temp$trtmnt_block
-              , tolower(stringr::str_squish(tretmnt))==unit_temp$trtmnt_type
+              , tolower(trtmnt_type)==tolower(unit_temp$trtmnt_type)
             ) %>% 
             sf::st_transform(sf::st_crs(tree_obj_polys))
         , fill = NA
@@ -2645,6 +2717,15 @@ plt_fn_temp <- function(x) {
       )
   
 }
+# unq_units_df %>%
+#   dplyr::mutate(rn = dplyr::row_number()) %>%
+#   dplyr::filter(
+#     # stringr::str_starts(trtmnt_type, "uniform")
+#     tolower(trtmnt_type) == "uniform- low"
+#   ) %>%
+#   dplyr::pull(rn) %>%
+#   .[1] %>%
+#   purrr::map(plt_fn_temp)
 # map
 ```
 
@@ -2741,43 +2822,9 @@ plt_grid_fn_temp <- function(plot_list, ncol = 2, line_color = "lightgray", line
 
 ```
 
-#### Uniform - High
-
-let's plot the post-treatment uniform high group which had a target distance between the remaining trees of `r scales::comma(tree_obj_polys %>% dplyr::filter(trtmnt_type == "uniform- high") %>% dplyr::slice(1) %>% dplyr::pull(target_nearest_dist_m), accuracy = 0.1, suffix = " m")` (`r scales::comma(tree_obj_polys %>% dplyr::filter(trtmnt_type == "uniform- high") %>% dplyr::slice(1) %>% dplyr::mutate(target_nearest_dist_m=target_nearest_dist_m*3.281) %>% dplyr::pull(target_nearest_dist_m), accuracy = 0.1, suffix = " ft")`)
-
-```{r,eval=F,purl=FALSE, results=F, fig.show='asis', fig.height=7, fig.width=8}
-# get id's
-pl_temp <-
-  unq_units_df %>% 
-  dplyr::mutate(rn = dplyr::row_number()) %>% 
-  dplyr::filter(
-    # stringr::str_starts(trtmnt_type, "uniform")
-    tolower(trtmnt_type) == "uniform- high"
-  ) %>% 
-  dplyr::pull(rn) %>% 
-  # .[1] %>%
-  purrr::map(plt_fn_temp)
-print(pl_temp)
-```
-
-```{r,eval=F,purl=FALSE, warning=FALSE, message=FALSE, echo=FALSE, include=FALSE}
-ggplot2::ggsave(
-  "../data/plt_tree_dist_ex.jpg"
-  , plot = 
-    pl_temp[[1]]+
-    ggplot2::theme(
-      plot.subtitle = ggplot2::element_blank()
-      , plot.title = ggplot2::element_blank()
-      , axis.title.x =ggplot2::element_blank()
-      , legend.position = "top"
-    )
-  , height = 8, width = 10.5, dpi = "print"
-)
-```
-
 #### Uniform - Low
 
-let's plot the post-treatment uniform low group which had a target distance between the remaining trees of `r scales::comma(tree_obj_polys %>% dplyr::filter(trtmnt_type == "uniform- low") %>% dplyr::slice(1) %>% dplyr::pull(target_nearest_dist_m), accuracy = 0.1, suffix = " m")` (`r scales::comma(tree_obj_polys %>% dplyr::filter(trtmnt_type == "uniform- low") %>% dplyr::slice(1) %>% dplyr::mutate(target_nearest_dist_m=target_nearest_dist_m*3.281) %>% dplyr::pull(target_nearest_dist_m), accuracy = 0.1, suffix = " ft")`)
+let's plot the post-treatment uniform low group which had a target distance between the remaining trees of `r scales::comma(tree_obj_polys %>% dplyr::filter(trtmnt_type == "Uniform-Low") %>% dplyr::slice(1) %>% dplyr::pull(target_nearest_dist_m), accuracy = 0.1, suffix = " m")` (`r scales::comma(tree_obj_polys %>% dplyr::filter(trtmnt_type == "Uniform-Low") %>% dplyr::slice(1) %>% dplyr::mutate(target_nearest_dist_m=target_nearest_dist_m*3.281) %>% dplyr::pull(target_nearest_dist_m), accuracy = 0.1, suffix = " ft")`)
 
 ```{r,purl=FALSE, include = F, eval=FALSE}
 
@@ -2809,6 +2856,41 @@ pl_temp <-
   purrr::map(plt_fn_temp)
 print(pl_temp)
 ```
+
+#### Uniform - High
+
+let's plot the post-treatment uniform high group which had a target distance between the remaining trees of `r scales::comma(tree_obj_polys %>% dplyr::filter(trtmnt_type == "Uniform-High") %>% dplyr::slice(1) %>% dplyr::pull(target_nearest_dist_m), accuracy = 0.1, suffix = " m")` (`r scales::comma(tree_obj_polys %>% dplyr::filter(trtmnt_type == "Uniform-High") %>% dplyr::slice(1) %>% dplyr::mutate(target_nearest_dist_m=target_nearest_dist_m*3.281) %>% dplyr::pull(target_nearest_dist_m), accuracy = 0.1, suffix = " ft")`)
+
+```{r,eval=F,purl=FALSE, results=F, fig.show='asis', fig.height=7, fig.width=8}
+# get id's
+pl_temp <-
+  unq_units_df %>% 
+  dplyr::mutate(rn = dplyr::row_number()) %>% 
+  dplyr::filter(
+    # stringr::str_starts(trtmnt_type, "uniform")
+    tolower(trtmnt_type) == "uniform- high"
+  ) %>% 
+  dplyr::pull(rn) %>% 
+  # .[1] %>%
+  purrr::map(plt_fn_temp)
+print(pl_temp)
+```
+
+```{r,eval=F,purl=FALSE, warning=FALSE, message=FALSE, echo=FALSE, include=FALSE}
+ggplot2::ggsave(
+  "../data/plt_tree_dist_ex.jpg"
+  , plot = 
+    pl_temp[[1]]+
+    ggplot2::theme(
+      plot.subtitle = ggplot2::element_blank()
+      , plot.title = ggplot2::element_blank()
+      , axis.title.x =ggplot2::element_blank()
+      , legend.position = "top"
+    )
+  , height = 8, width = 10.5, dpi = "print"
+)
+```
+
 
 ```{r, warning=FALSE, message=FALSE, echo=FALSE, include=FALSE}
 remove(list = ls()[grep("_temp",ls())])
@@ -2992,7 +3074,7 @@ tree_obj_polys %>%
   kableExtra::kbl(
     caption = "post-treatment tree spacing of nearest-neighbor distances by treatment type"
     , col.names = c(
-      "type","target spacing<br/>distance (m)"
+      "treatment","target spacing<br/>distance (m)"
       , "# tree objects"
       , "1st Qu."
       , "median"
@@ -3469,7 +3551,7 @@ target_df_temp %>%
     caption = "hypothesis test: are block-adjusted tree spacings significantly greater than target spacing?"
     , digits = 3
     , col.names = c(
-      "type"
+      "treatment"
       , "marginal mean<br>nearest neighbor distance (m)"
       , "std. error"
       # , "df"
