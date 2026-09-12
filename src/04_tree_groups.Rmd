@@ -795,6 +795,7 @@ aoi_temp <-
   sf::st_as_sfc()
 # as.numeric(sf::st_area(aoi_temp))/10000
 d_temp <- get_clump_dist_rast_ans[[3]][["dist_rast"]]
+# terra::plot(d_temp)
 # dist rast
 d_temp %>% 
    terra::crop(
@@ -819,7 +820,7 @@ d_temp %>%
 clump_polys %>% 
   sf::st_intersection(aoi_temp) %>% 
   sf::st_transform(terra::crs(d_temp)) %>% 
-  terra::vect() %>% 
+  # terra::vect() %>% 
   terra::plot(add = T, col = NA, border = "gray33", lwd = 1.3)
 # add crowns
 cr_temp <- 
@@ -1076,7 +1077,6 @@ plt_openings_vect_fn <-
   }
 ```
 
-
 ```{r,eval=F,purl=FALSE, fig.height = 8, fig.width = 10.5}
 # one unit
 plt_openings_vect_fn(4, add_clumps = F)
@@ -1262,7 +1262,7 @@ get_clump_n_trees_grp_summary_temp = function(x){
 what does this do?
 
 ```{r}
-get_clump_n_trees_grp_summary_temp(3) %>% dplyr::glimpse()
+get_clump_n_trees_grp_summary_temp(4) %>% dplyr::glimpse()
 ```
 
 let's map over it for each treatment unit
@@ -1572,9 +1572,9 @@ clump_n_trees_grp_summary %>%
         # , min = ~min(.x,na.rm=T)
         # , max = ~max(.x,na.rm=T)
         , range = ~paste0(
-          scales::percent(min(.x,na.rm=T), accuracy = 0.1)
+          scales::percent(min(.x,na.rm=T), accuracy = 1)
           ,"-"
-          , scales::percent(max(.x,na.rm=T), accuracy = 0.1)
+          , scales::percent(max(.x,na.rm=T), accuracy = 1)
         )
       )
     )
@@ -1585,7 +1585,7 @@ clump_n_trees_grp_summary %>%
   # dplyr::group_by(trtmnt_type) %>% dplyr::summarise(pct_stand_n_trees_median=sum(pct_stand_n_trees_mean))
   dplyr::mutate(
     n = scales::comma(n,accuracy=1)
-    , dplyr::across(.cols = dplyr::where(is.numeric), ~scales::percent(.x,accuracy=0.1) )
+    , dplyr::across(.cols = dplyr::where(is.numeric), ~scales::percent(.x,accuracy=1) )
     , lab = paste0(
       pct_stand_n_trees_mean
       , "<br/>("
@@ -1612,23 +1612,22 @@ clump_n_trees_grp_summary %>%
   kableExtra::kable_styling(font_size = 11)
 ```
 
-
 we can aggregate those proportions over all units in a given treatment type to get the mean value
 
 ```{r}
-p_temp <- 
+p_temp <-
   clump_n_trees_grp_summary %>% 
   dplyr::group_by(trtmnt_type, clump_n_trees_grp) %>% 
-  dplyr::summarise(n = sum(n_trees)) %>% 
-  dplyr::group_by(trtmnt_type) %>% 
-  dplyr::mutate(
-    pct = n/sum(n)
+  dplyr::summarise(
+    n = sum(n_trees)
+    , pct_stand_n_trees = mean(pct_stand_n_trees,na.rm=T)
   ) %>% 
   dplyr::ungroup() %>% 
   recode_treatment_type_fn(ordered = T) %>% 
+  # dplyr::group_by(trtmnt_type) %>% dplyr::summarise(sum=sum(pct_stand_n_trees))
   # dplyr::glimpse()
   ggplot2::ggplot(
-    mapping = ggplot2::aes(y = pct, x = clump_n_trees_grp)
+    mapping = ggplot2::aes(y = pct_stand_n_trees, x = clump_n_trees_grp)
   ) +
   ggplot2::geom_col(
     mapping = ggplot2::aes(fill = trtmnt_type)
@@ -1636,7 +1635,7 @@ p_temp <-
     , color = NA, alpha = 0.8
   ) +
   ggplot2::geom_text(
-    mapping = ggplot2::aes(label = scales::percent(pct,accuracy = 0.1))
+    mapping = ggplot2::aes(label = scales::percent(pct_stand_n_trees,accuracy = 0.1))
     , color = "black", size = 2.2, vjust = -0.2
   ) +
   ggplot2::scale_fill_brewer(palette = "Dark2") +
@@ -1655,7 +1654,7 @@ p_temp <-
   ) +
   ggplot2::labs(
     x = "tree clump size", y = "proportion of trees", fill = ""
-    , subtitle = "Study-wide tree proportions by tree clump size"
+    , subtitle = "unit-level mean proportion of trees by tree clump size"
   ) +
   ggplot2::theme_light() +
   ggplot2::theme(
@@ -1689,15 +1688,14 @@ we can look at that same data in a slightly different way
 p_temp <- 
 clump_n_trees_grp_summary %>% 
   dplyr::group_by(trtmnt_type, clump_n_trees_grp) %>% 
-  dplyr::summarise(n = sum(n_trees)) %>% 
-  dplyr::group_by(trtmnt_type) %>% 
-  dplyr::mutate(
-    pct = n/sum(n)
+  dplyr::summarise(
+    n = sum(n_trees)
+    , pct_stand_n_trees = mean(pct_stand_n_trees,na.rm=T)
   ) %>% 
   dplyr::ungroup() %>% 
-  dplyr::select(trtmnt_type, clump_n_trees_grp, pct) %>% 
+  dplyr::select(trtmnt_type, clump_n_trees_grp, pct_stand_n_trees) %>% 
   dplyr::mutate(
-    pct_lab = scales::percent(ifelse(pct>=0.08,pct,NA), accuracy = 1)
+    pct_lab = scales::percent(ifelse(pct_stand_n_trees>=0.08,pct_stand_n_trees,NA), accuracy = 1)
     , trtmnt_type = forcats::fct_rev(trtmnt_type)
     , clump_n_trees_grp = forcats::fct_rev(clump_n_trees_grp)
     , huh = ifelse(
@@ -1709,7 +1707,7 @@ clump_n_trees_grp_summary %>%
   recode_treatment_type_fn(ordered = T) %>% 
   dplyr::mutate(trtmnt_type=forcats::fct_rev(trtmnt_type)) %>% 
 ggplot2::ggplot(
-  mapping = ggplot2::aes(x = pct, y = trtmnt_type, fill=clump_n_trees_grp, group=clump_n_trees_grp)
+  mapping = ggplot2::aes(x = pct_stand_n_trees, y = trtmnt_type, fill=clump_n_trees_grp, group=clump_n_trees_grp)
 ) +
   ggplot2::geom_col(
     width = 0.7, alpha=0.95
@@ -1730,8 +1728,8 @@ ggplot2::ggplot(
   ggplot2::labs(
     fill = "clump\nsize"
     , y = ""
-    , x = "proportion of trees in different sized clumps"
-    , subtitle = "Study-wide tree proportions by tree clump size"
+    , x = "mean proportion of trees in different sized clumps"
+    , subtitle = "unit-level mean proportion of trees by tree clump size"
   ) +
   ggplot2::theme_light() +
   ggplot2::theme(
@@ -1764,7 +1762,71 @@ ggplot2::ggsave(
     )
   , height = 9, width = 8.5, dpi = "print"
 )
+# levels(clump_n_trees_grp_summary$clump_n_trees_grp)
 ```
+
+what if we just use two clump size grouping classifications by combining the individual and 2-4 trees group into a "<= 4 trees" group and the 5-10 trees and >10 trees group into a ">= 5 trees" group?
+
+```{r}
+clump_n_trees_grp_summary %>% 
+  dplyr::ungroup() %>% 
+  dplyr::mutate(
+    clump_n_trees_grp2 = 
+      clump_n_trees_grp %>% 
+      forcats::fct_collapse(
+        "<= 4 trees" = c("Individual", "2-4 trees"),
+        ">= 5 trees" = c("5-10 trees", ">10 trees")
+      ) %>%
+      factor(ordered = TRUE)  
+  ) %>% 
+  recode_treatment_type_fn(ordered = T) %>% 
+  dplyr::group_by(trtmnt_type,trtmnt_block,trtmnt_unit,clump_n_trees_grp2) %>% 
+  dplyr::summarise(pct_stand_n_trees=sum(dplyr::coalesce(pct_stand_n_trees,0))) %>% 
+  # dplyr::ungroup() %>% dplyr::count(clump_n_trees_grp2)
+  # dplyr::glimpse()
+  ggplot2::ggplot(
+    mapping = ggplot2::aes(y = pct_stand_n_trees, x = clump_n_trees_grp2)
+  ) +
+  ggplot2::geom_boxplot(
+    mapping = ggplot2::aes(fill = trtmnt_type)
+    , width = 0.6
+    , alpha = 0.8
+    , outliers = F
+  ) +
+  # ggplot2::geom_text(
+  #   mapping = ggplot2::aes(label = lab)
+  #   , color = "black", size = 2.5, vjust = -0.2
+  # ) +
+  ggplot2::scale_fill_brewer(palette = "Dark2") +
+  ggplot2::scale_x_discrete(drop = F) + 
+  ggplot2::scale_y_continuous(
+    limits = c(0,0.9)
+    , breaks = seq(0,1,by=0.2)
+    , labels = scales::percent
+  ) +
+  ggplot2::facet_grid(
+    cols = dplyr::vars(trtmnt_type)
+    # , rows = dplyr::vars(trtmnt_block)
+    # , ncol = 2
+    , axes = "all"
+    # , switch = "y"
+  ) +
+  ggplot2::labs(
+    x = "tree clump size", y = "proportion of unit trees", fill = ""
+    , subtitle = "Distribution of unit-level tree proportions by tree clump size"
+  ) +
+  ggplot2::theme_light() +
+  ggplot2::theme(
+    legend.position = "none"
+    , strip.text = ggplot2::element_text(size = 11, color = "black", face = "bold")
+    , axis.text.x = ggplot2::element_text(size = 9, angle = 45, hjust = 1, vjust = 1)
+    # , axis.text.x = ggplot2::element_text(size = 12)
+    # , axis.text.y = ggplot2::element_blank()
+    # , axis.ticks.y = ggplot2::element_blank()
+  )
+```
+
+the shift in canopy clump groupings from the control units to the treated units is clear. while the distinction between the heterogenous and uniform treatments is also apparent and the uniform treatments are very similar.
 
 ```{r, purl=F, eval=F, include=F}
 # *DBH* 
@@ -1982,7 +2044,7 @@ open_temp %>%
   ggplot2::scale_fill_brewer(palette = "Dark2") +
   ggplot2::scale_x_continuous(labels = scales::percent) +
   ggplot2::theme_light() +
-  ggplot2::labs(x = "% unit open", y = "") +
+  ggplot2::labs(x = "treeless opening area (%)", y = "") +
   ggplot2::theme(
     legend.position = "none"
     , axis.text.y = ggplot2::element_text(size = 7)
@@ -1992,15 +2054,19 @@ open_temp %>%
 
 based on these unit-level data, we can look at the distribution of the proportion of the stand that is open
 
-```{r}
+```{r,include=FALSE,eval=FALSE}
 p_temp <- 
   open_temp %>% 
-  ggplot2::ggplot(mapping = ggplot2::aes(x=pct_open)) +
+  ggplot2::ggplot(mapping = ggplot2::aes(x=pct_open,fill=trtmnt_type)) +
   ggplot2::geom_violin(
     mapping = ggplot2::aes(y = 0, fill=trtmnt_type)
     , alpha = 0.8, color = NA
   ) +
-  ggplot2::geom_boxplot(width = 0.1, fill = NA, outliers = F) +
+  ggplot2::geom_boxplot(
+    width = 0.1
+    , fill = NA
+    , outliers = F
+  ) +
   ggplot2::facet_grid(
     rows = dplyr::vars(trtmnt_type)
     , axes = "all"
@@ -2010,7 +2076,7 @@ p_temp <-
   ggplot2::scale_x_continuous(limits=c(0,NA),labels = scales::percent, breaks = scales::breaks_extended(n=6)) +
   ggplot2::scale_y_continuous(NULL,breaks=NULL) +
   ggplot2::labs(
-    fill="",x="% unit open",y=""
+    fill="",x="treeless opening area (%)",y=""
     , title = "distribution of treatment unit open area"
     , subtitle = "\nby treatment type"
   ) +
@@ -2019,6 +2085,32 @@ p_temp <-
     legend.position = "none"
     , strip.text = ggplot2::element_text(size = 10, color = "black", face = "bold")
     , axis.text.x = ggplot2::element_text(size = 9)
+    , plot.subtitle = ggplot2::element_text(margin = ggplot2::margin(t = -20, unit = "pt"))
+  )
+p_temp
+```
+
+```{r}
+p_temp <-
+  open_temp %>% 
+  # dplyr::glimpse()
+  ggplot2::ggplot(mapping = ggplot2::aes(x = trtmnt_type, y=pct_open,fill=trtmnt_type)) +
+  ggplot2::geom_boxplot(
+    width = 0.6
+    , alpha = 0.8
+    , outliers = F
+  ) +
+  ggplot2::scale_fill_brewer(palette = "Dark2") +
+  ggplot2::scale_y_continuous(limits=c(0,NA),labels = scales::percent, breaks = scales::breaks_extended(n=6)) +
+  ggplot2::labs(
+    fill="",x="",y="treeless opening area (%)"
+    , title = "distribution of treatment unit open area"
+    , subtitle = "\nby treatment type"
+  ) +
+  ggplot2::theme_light() +
+  ggplot2::theme(
+    legend.position = "none"
+    , axis.text.x = ggplot2::element_text(size = 10, color = "black", face = "bold")
     , plot.subtitle = ggplot2::element_text(margin = ggplot2::margin(t = -20, unit = "pt"))
   )
 p_temp
@@ -2041,7 +2133,7 @@ this is what we expected based on the treatment type prescriptions.
 
 let's also look at the distribution of canopy cover based on that UAS-delineated tree crowns in these different treatments
 
-```{r}
+```{r, include= F, eval = F}
 p_temp <- 
   open_temp %>% 
   ggplot2::ggplot(mapping = ggplot2::aes(x=canopy_cov_pct)) +
@@ -2059,7 +2151,7 @@ p_temp <-
   ggplot2::scale_x_continuous(limits=c(0,NA),labels = scales::percent, breaks = scales::breaks_extended(n=6)) +
   ggplot2::scale_y_continuous(NULL,breaks=NULL) +
   ggplot2::labs(
-    fill="",x="% canopy cover",y=""
+    fill="",x="canopy cover (%)",y=""
     , title = "distribution of treatment canopy cover area"
     , subtitle = "\nby treatment type"
   ) +
@@ -2068,6 +2160,32 @@ p_temp <-
     legend.position = "none"
     , strip.text = ggplot2::element_text(size = 10, color = "black", face = "bold")
     , axis.text.x = ggplot2::element_text(size = 9)
+    , plot.subtitle = ggplot2::element_text(margin = ggplot2::margin(t = -20, unit = "pt"))
+  )
+p_temp
+```
+
+```{r}
+p_temp <-
+  open_temp %>% 
+  # dplyr::glimpse()
+  ggplot2::ggplot(mapping = ggplot2::aes(x = trtmnt_type, y=canopy_cov_pct,fill=trtmnt_type)) +
+  ggplot2::geom_boxplot(
+    width = 0.6
+    , alpha = 0.8
+    , outliers = F
+  ) +
+  ggplot2::scale_fill_brewer(palette = "Dark2") +
+  ggplot2::scale_y_continuous(limits=c(0,NA),labels = scales::percent, breaks = scales::breaks_extended(n=6)) +
+  ggplot2::labs(
+    fill="",x="",y="canopy cover (%)"
+    , title = "distribution of treatment unit canopy cover"
+    , subtitle = "\nby treatment type"
+  ) +
+  ggplot2::theme_light() +
+  ggplot2::theme(
+    legend.position = "none"
+    , axis.text.x = ggplot2::element_text(size = 10, color = "black", face = "bold")
     , plot.subtitle = ggplot2::element_text(margin = ggplot2::margin(t = -20, unit = "pt"))
   )
 p_temp
@@ -2088,8 +2206,10 @@ ggplot2::ggsave(
 
 let's look at the proportion of canopy cover and open area together for each treatment unit. note, that the total of canopy cover and opening area will not comprise the entire unit area with the remaining space accounted for in the form of intermediate required spacing of `r my_buffer` m between tree crowns and open space as well as very small enclosed, openings with an area less than 40.5 square meters (0.01 acres) which was required for classification as an actual treeless opening
 
-```{r, fig.height=8, fig.width=7.8}
+```{r, fig.height=8, fig.width=7.85}
+p_temp <- 
 open_temp %>% 
+  dplyr::arrange(trtmnt_type) %>% 
   ggplot2::ggplot(mapping = ggplot2::aes(x=pct_open,y=canopy_cov_pct,color=trtmnt_type)) +
   ggplot2::geom_function(
     fun = function(x) 1 - x
@@ -2102,18 +2222,94 @@ open_temp %>%
   ggplot2::scale_y_continuous(limits = c(0, 1), breaks = seq(0,1,by=0.2), labels = scales::percent) +
   ggplot2::theme_light() +
   ggplot2::labs(
-    x = "% unit open"
-    , y = "% canopy cover"
+    x = "treeless opening area (%)"
+    , y = "canopy cover (%)"
     , color = ""
   ) +
   ggplot2::theme(
     legend.position = "top"
     , axis.text.y = ggplot2::element_text(size = 8)
     , axis.text.x = ggplot2::element_text(size = 8)
+  ) +
+  ggplot2::guides(
+    color = ggplot2::guide_legend(
+      override.aes = list(
+        fill = NA, shape = 15, size = 6, alpha = 1, linetype = 0
+      )
+    )
   )
+p_temp
+```
+
+```{r, warning=FALSE, message=FALSE, echo=FALSE, include=FALSE, eval = T}
+ggplot2::ggsave(
+  "../data/plt_cancov_and_open_scatt_by_trtmnt_type.jpg"
+  , plot = 
+    p_temp+
+    ggplot2::theme(
+      plot.subtitle = ggplot2::element_blank()
+      , plot.title = ggplot2::element_blank()
+    )
+  , height = 8, width = 7.85, dpi = "print"
+)
 ```
 
 the variability within the different treatment types is interesting
+
+one more visualization together
+
+```{r, fig.height = 6.5, fig.width = 9.5}
+p_temp <- 
+  open_temp %>% 
+  # dplyr::glimpse()
+  dplyr::select(trtmnt_type, pct_open, canopy_cov_pct) %>% 
+  tidyr::pivot_longer(-trtmnt_type) %>% 
+  dplyr::mutate(
+    name = 
+      name %>% 
+      dplyr::recode_values(
+        "pct_open" ~ "treeless opening area (%)"
+        , "canopy_cov_pct" ~ "canopy cover (%)"
+      )
+  ) %>% 
+  ggplot2::ggplot(mapping = ggplot2::aes(x = trtmnt_type, y=value,fill=trtmnt_type)) +
+  ggplot2::geom_boxplot(
+    width = 0.6
+    , alpha = 0.8
+    , outliers = F
+  ) +
+  ggplot2::facet_grid(
+    cols = dplyr::vars(name)
+    , axes = "all"
+  ) +
+  ggplot2::scale_fill_brewer(palette = "Dark2") +
+  ggplot2::scale_y_continuous(limits=c(0,1),labels = scales::percent, breaks = scales::breaks_extended(n=6)) +
+  ggplot2::labs(
+    fill="",x="",y=""
+    # , title = "distribution of treatment unit open area"
+    # , subtitle = "\nby treatment type"
+  ) +
+  ggplot2::theme_light() +
+  ggplot2::theme(
+    legend.position = "none"
+    , strip.text = ggplot2::element_text(size = 10, color = "black", face = "bold")
+    , axis.text.x = ggplot2::element_text(size = 8.5, color = "black", face = "bold")
+  )
+p_temp
+```
+
+```{r, warning=FALSE, message=FALSE, echo=FALSE, include=FALSE, eval = T}
+ggplot2::ggsave(
+  "../data/plt_cancov_and_open_boxes_by_trtmnt_type.jpg"
+  , plot = 
+    p_temp+
+    ggplot2::theme(
+      plot.subtitle = ggplot2::element_blank()
+      , plot.title = ggplot2::element_blank()
+    )
+  , height = 6.5, width = 9.5, dpi = "print"
+)
+```
 
 let's table this by unit (which is the underlying data used to generate the distribution immediately above)
 
@@ -2134,8 +2330,8 @@ open_temp %>%
     caption = "openings by treatment unit"
     , col.names = c(
       "type","block","unit","ha"
-      , "open ha", "% open"
-      , "canopy cover ha", "% canopy cover"
+      , "open ha", "treeless opening area (%)"
+      , "canopy cover ha", "canopy cover (%)"
     )
     , escape = F
     # , digits = 2
@@ -2170,9 +2366,9 @@ open_temp %>%
         # , min = ~min(.x,na.rm=T)
         # , max = ~max(.x,na.rm=T)
         , range = ~paste0(
-          scales::percent(min(.x,na.rm=T), accuracy = 0.1)
+          scales::percent(min(.x,na.rm=T), accuracy = 1)
           ,"-"
-          , scales::percent(max(.x,na.rm=T), accuracy = 0.1)
+          , scales::percent(max(.x,na.rm=T), accuracy = 1)
         )
       )
     )
@@ -2183,7 +2379,7 @@ open_temp %>%
   dplyr::mutate(
     n = scales::comma(n,accuracy=1)
     , trtmnt_unit_area_ha = scales::comma(trtmnt_unit_area_ha,accuracy=.1)
-    , dplyr::across(.cols = dplyr::where(is.numeric), ~scales::percent(.x,accuracy=0.1) )
+    , dplyr::across(.cols = dplyr::where(is.numeric), ~scales::percent(.x,accuracy=1) )
   ) %>% 
   dplyr::arrange(trtmnt_type) %>% 
   dplyr::relocate(trtmnt_type,n,trtmnt_unit_area_ha) %>% 
@@ -2205,7 +2401,7 @@ open_temp %>%
     " "=3
     # , "Detection" = 3
     # , "Area" = 3
-    , "% unit open" = 5
+    , "treeless opening area (%)" = 5
   )) %>% 
   kableExtra::column_spec(c(3,8), border_right = TRUE, include_thead = TRUE) 
 ```
@@ -2235,9 +2431,9 @@ open_temp %>%
         # , min = ~min(.x,na.rm=T)
         # , max = ~max(.x,na.rm=T)
         , range = ~paste0(
-          scales::percent(min(.x,na.rm=T), accuracy = 0.1)
+          scales::percent(min(.x,na.rm=T), accuracy = 1)
           ,"-"
-          , scales::percent(max(.x,na.rm=T), accuracy = 0.1)
+          , scales::percent(max(.x,na.rm=T), accuracy = 1)
         )
       )
     )
@@ -2248,7 +2444,7 @@ open_temp %>%
   dplyr::mutate(
     n = scales::comma(n,accuracy=1)
     , trtmnt_unit_area_ha = scales::comma(trtmnt_unit_area_ha,accuracy=.1)
-    , dplyr::across(.cols = dplyr::where(is.numeric), ~scales::percent(.x,accuracy=0.1) )
+    , dplyr::across(.cols = dplyr::where(is.numeric), ~scales::percent(.x,accuracy=1) )
   ) %>% 
   dplyr::arrange(trtmnt_type) %>% 
   dplyr::relocate(trtmnt_type,n,trtmnt_unit_area_ha) %>% 
@@ -2270,9 +2466,71 @@ open_temp %>%
     " "=3
     # , "Detection" = 3
     # , "Area" = 3
-    , "% canopy cover" = 5
+    , "canopy cover (%)" = 5
   )) %>% 
   kableExtra::column_spec(c(3,8), border_right = TRUE, include_thead = TRUE) 
+```
+
+let's simplify the table to combine canopy cover and opening measures by keeping the mean value and the range
+
+```{r}
+# open_temp$canopy_cov_pct %>% summary()
+open_temp %>% 
+  dplyr::select(
+    trtmnt_type
+    , trtmnt_unit_area_ha
+    , canopy_cov_pct
+    , pct_open
+  ) %>% 
+  dplyr::group_by(trtmnt_type) %>% 
+  dplyr::summarise(
+    dplyr::across(
+      c(canopy_cov_pct,pct_open)
+      , .fns = list(
+        mean = ~mean(.x,na.rm=T)
+        , range = ~paste0(
+          scales::percent(min(.x,na.rm=T), accuracy = 1)
+          ,"-"
+          , scales::percent(max(.x,na.rm=T), accuracy = 1)
+        )
+      )
+    )
+    , n = dplyr::n()
+    , trtmnt_unit_area_ha = mean(trtmnt_unit_area_ha, na.rm=T)
+  ) %>% 
+  dplyr::ungroup() %>% 
+  dplyr::mutate(
+    n = scales::comma(n,accuracy=1)
+    , trtmnt_unit_area_ha = scales::comma(trtmnt_unit_area_ha,accuracy=.1)
+    , dplyr::across(.cols = dplyr::where(is.numeric), ~scales::percent(.x,accuracy=1) )
+    , pct_open = paste0(
+      pct_open_mean
+      , "<br/>("
+      , pct_open_range
+      , ")"
+    )
+    , canopy_cov_pct = paste0(
+      canopy_cov_pct_mean
+      , "<br/>("
+      , canopy_cov_pct_range
+      , ")"
+    )
+  ) %>% 
+  dplyr::select(trtmnt_type,n,trtmnt_unit_area_ha,pct_open,canopy_cov_pct) %>% 
+  dplyr::arrange(trtmnt_type) %>% 
+  # dplyr::glimpse()
+  kableExtra::kbl(
+    caption = "Distribution of treeless openings and canopy cover as a proportion of total unit area<br/>values represent mean unit (range)"
+    , col.names = c(
+      "treatment","# units","mean unit area (ha)"
+      , "treeless opening area (%)"
+      , "canopy cover (%)"
+    )
+    , escape = F
+    # , digits = 2
+  ) %>% 
+  kableExtra::kable_styling(font_size = 11) %>% 
+  kableExtra::column_spec(c(3,4,5), border_right = TRUE, include_thead = TRUE) 
 ```
 
 let's check out the raw size areas of the individual openings even though there is variation in the size of the treatment units which influences how large an opening can be
@@ -3408,6 +3666,42 @@ p_temp <-
 
 the p-value for treatment type of `r scales::comma(p_temp, accuracy=0.0001)` indicates that the nearest-neighbor spacing `r ifelse(p_temp<0.05,"differs", "does not differ")` significantly across the treatments after accounting for block variations and unit size
 
+let's get the estimated marginal mean nearest neighbor distance by treatment type
+
+```{r}
+# calculate estimated marginal means (emms) for each treatment
+# holds trtmnt_unit_area_ha constant at its mean value and averages over the trtmnt_block
+emm_nn_temp <- emmeans::emmeans(lm_nn_temp, ~ trtmnt_type) #, pbkrtest.limit = nrow(tree_obj_polys)) ## this makes it run forevvver
+# emm_nn_temp
+
+
+emm_nn_temp %>% 
+  dplyr::as_tibble() %>% 
+  names()
+  dplyr::mutate(
+    emm_se = sprintf("%.2f ± %.2f", emmean, SE)
+    CI = sprintf("[%.2f, %.2f]", lower.CL, upper.CL)
+  ) |>
+  dplyr::select(
+    `Treatment Type` = trtmnt_type,
+    `EMM (m) ± SE` = emm_se,
+    `95% CI (m)` = CI
+  )
+  kableExtra::kbl(
+    align = c("l", "c", "c"),
+    caption = "Table 6. Estimated marginal mean (EMM) nearest-neighbor distance (m) and pairwise comparisons among treatment types derived from the linear mixed-effects model."
+  ) |>
+  kableExtra::kable_styling(
+    bootstrap_options = c("striped", "hover", "condensed"),
+    full_width = FALSE,
+    position = "center"
+  ) |>
+  kableExtra::pack_rows("Estimated Marginal Means", 1, nrow(emm_df))
+
+```
+
+
+
 ### Pairwise Treatment Comparisons
 
 To identify which treatment(s) created unique tree spacing outcomes, we'll perform post-hoc pairwise contrasts among the different treatment groups. This comparison calculates the block-adjusted difference in average nearest-neighbor distances between every possible pair of treatments while keeping unit size constant at the mean.
@@ -3415,11 +3709,6 @@ To identify which treatment(s) created unique tree spacing outcomes, we'll perfo
 let's get a summary table of the pairwise differences in average nearest-neighbor distances across treatment type
 
 ```{r}
-# calculate estimated marginal means (emms) for each treatment
-# holds trtmnt_unit_area_ha constant at its mean value and averages over the trtmnt_block
-emm_nn_temp <- emmeans::emmeans(lm_nn_temp, ~ trtmnt_type)
-# emm_nn_temp
-
 # pairwise contrasts
 contrast_nn_temp <- emmeans::contrast(emm_nn_temp, method = "revpairwise", adjust = "tukey")
 # contrast_nn_temp
