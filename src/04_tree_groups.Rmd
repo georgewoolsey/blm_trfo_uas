@@ -67,8 +67,8 @@ treetops_sf <- treetops_sf %>%
       sf::st_transform(sf::st_crs(stand_boundary)) %>% 
       sf::st_intersection(
         stand_boundary %>%
-          dplyr::select(unit,block,tretmnt,unit_area_ha) %>% 
-          dplyr::rename(type = tretmnt) %>% 
+          dplyr::select(unit,block,type,unit_area_ha) %>% 
+          dplyr::rename(type = type) %>% 
           dplyr::mutate(
             type =
               tolower(type) %>% 
@@ -227,7 +227,8 @@ if(
     clump_polys %>% 
     # convert to factors
     dplyr::mutate(
-      dplyr::across(
+      trtmnt_type = trtmnt_type %>% tolower() %>% stringr::str_replace_all("heterogenous","heterogeneous")
+      , dplyr::across(
         dplyr::all_of(
           names(clump_polys)[names(clump_polys) %in% names(unq_units_df)]
         )
@@ -247,7 +248,8 @@ if(
       ) 
     )
 }
-
+# crowns_sf %>% sf::st_drop_geometry() %>% dplyr::count(trtmnt_type)
+# clump_polys %>% sf::st_drop_geometry() %>% dplyr::count(trtmnt_type)
 ```
 
 let's look at what this clump definition did
@@ -323,7 +325,7 @@ get_huge_palette <- function(n_colors) {
 ```{r}
 dta_temp <- crowns_sf %>% 
   dplyr::inner_join(
-    unq_units_df %>% dplyr::slice(3)
+    unq_units_df %>% dplyr::slice(4)
     , by = dplyr::join_by(trtmnt_type,trtmnt_block,trtmnt_unit)
   ) %>% 
   dplyr::mutate(clump_id = factor(clump_id))
@@ -447,7 +449,7 @@ get_clump_dist_rast_temp <- function(x, clump_dist_m = 3){
           dplyr::filter(
             unit == unq_units_df$trtmnt_unit[x]
             , block == unq_units_df$trtmnt_block[x]
-            , stringr::str_squish(tolower(tretmnt)) == unq_units_df$trtmnt_type[x]
+            , stringr::str_squish(tolower(type)) == unq_units_df$trtmnt_type[x]
           ) %>% 
           terra::vect() %>% 
           terra::rast(res = 0.2)
@@ -459,7 +461,7 @@ get_clump_dist_rast_temp <- function(x, clump_dist_m = 3){
           dplyr::filter(
             unit == unq_units_df$trtmnt_unit[x]
             , block == unq_units_df$trtmnt_block[x]
-            , stringr::str_squish(tolower(tretmnt)) == unq_units_df$trtmnt_type[x]
+            , stringr::str_squish(tolower(type)) == unq_units_df$trtmnt_type[x]
           ) %>% 
           terra::vect()
         , mask = T
@@ -528,7 +530,7 @@ plt_dist_rast_fn <-
       dplyr::filter(
         unit == unq_units_df$trtmnt_unit[x]
         , block == unq_units_df$trtmnt_block[x]
-        , stringr::str_squish(tolower(tretmnt)) == unq_units_df$trtmnt_type[x]
+        , stringr::str_squish(tolower(type)) == unq_units_df$trtmnt_type[x]
       ) %>% 
       sf::st_transform(terra::crs(chm_rast))
     
@@ -706,7 +708,7 @@ plt_dist_rast_fn <-
       dplyr::filter(
         unit == unq_units_df$trtmnt_unit[x]
         , block == unq_units_df$trtmnt_block[x]
-        , stringr::str_squish(tolower(tretmnt)) == unq_units_df$trtmnt_type[x]
+        , stringr::str_squish(tolower(type)) == unq_units_df$trtmnt_type[x]
       ) %>% 
       sf::st_transform(terra::crs(get_clump_dist_rast_ans[[x]][["dist_rast"]])) %>% 
       terra::vect()
@@ -773,7 +775,7 @@ plt_dist_rast_fn(4)
 
 let's zoom in on a single clump group and the surrounding area so we can see what is going on at the fine-scale level
 
-```{r}
+```{r,eval=F,purl=FALSE}
 aoi_temp <- 
   clump_polys %>% 
   sf::st_intersection(
@@ -958,7 +960,7 @@ plt_openings_vect_fn <-
       dplyr::filter(
         unit == unq_units_df$trtmnt_unit[x]
         , block == unq_units_df$trtmnt_block[x]
-        , stringr::str_squish(tolower(tretmnt)) == unq_units_df$trtmnt_type[x]
+        , stringr::str_squish(tolower(type)) == unq_units_df$trtmnt_type[x]
       ) %>% 
       sf::st_transform(terra::crs(chm_rast))
     
@@ -1174,7 +1176,7 @@ get_clump_n_trees_grp_summary_temp = function(x){
     dplyr::filter(
       unit == unq_units_df$trtmnt_unit[x]
       , block == unq_units_df$trtmnt_block[x]
-      , stringr::str_squish(tolower(tretmnt)) == unq_units_df$trtmnt_type[x]
+      , stringr::str_squish(tolower(type)) == unq_units_df$trtmnt_type[x]
     ) %>% 
     sf::st_transform(terra::crs(chm_rast)) %>% 
     sf::st_union() %>% 
@@ -1605,7 +1607,7 @@ clump_n_trees_grp_summary %>%
   ) %>% 
   # dplyr::glimpse()
   kableExtra::kbl(
-    caption = "Distribution of unit-level tree proportions by tree clump size<br/>values represent mean unit (range)"
+    caption = "Distribution of unit-level tree proportions by tree clump size<br/>values represent mean (range)"
     , escape = F
     # , digits = 2
   ) %>% 
@@ -1826,7 +1828,7 @@ clump_n_trees_grp_summary %>%
   )
 ```
 
-the shift in canopy clump groupings from the control units to the treated units is clear. while the distinction between the heterogenous and uniform treatments is also apparent and the uniform treatments are very similar.
+the shift in canopy clump groupings from the control units to the treated units is clear. while the distinction between the heterogeneous and uniform treatments is also apparent and the uniform treatments are very similar.
 
 ```{r, purl=F, eval=F, include=F}
 # *DBH* 
@@ -1966,8 +1968,8 @@ cc_df_temp <-
       # crop crowns to treatment units
       sf::st_intersection(
         stand_boundary %>%
-          dplyr::select(unit,block,tretmnt) %>% 
-          dplyr::rename(type = tretmnt) %>% 
+          dplyr::select(unit,block,type) %>% 
+          dplyr::rename(type = type) %>% 
           dplyr::mutate(
             type =
               tolower(type) %>% 
@@ -2054,7 +2056,7 @@ open_temp %>%
 
 based on these unit-level data, we can look at the distribution of the proportion of the stand that is open
 
-```{r,include=FALSE,eval=FALSE}
+```{r,include=FALSE,eval=FALSE,purl=F}
 p_temp <- 
   open_temp %>% 
   ggplot2::ggplot(mapping = ggplot2::aes(x=pct_open,fill=trtmnt_type)) +
@@ -2133,7 +2135,7 @@ this is what we expected based on the treatment type prescriptions.
 
 let's also look at the distribution of canopy cover based on that UAS-delineated tree crowns in these different treatments
 
-```{r, include= F, eval = F}
+```{r, include= F, eval = F, purl = F}
 p_temp <- 
   open_temp %>% 
   ggplot2::ggplot(mapping = ggplot2::aes(x=canopy_cov_pct)) +
@@ -2520,7 +2522,7 @@ open_temp %>%
   dplyr::arrange(trtmnt_type) %>% 
   # dplyr::glimpse()
   kableExtra::kbl(
-    caption = "Distribution of treeless openings and canopy cover as a proportion of total unit area<br/>values represent mean unit (range)"
+    caption = "Distribution of treeless openings and canopy cover as a proportion of total unit area<br/>values represent mean (range)"
     , col.names = c(
       "treatment","# units","mean unit area (ha)"
       , "treeless opening area (%)"
@@ -2708,7 +2710,7 @@ tree_obj_polys <-
     
     stand_temp <- 
       stand_boundary %>%
-      dplyr::rename(trtmnt_type=tretmnt) %>% 
+      dplyr::rename(trtmnt_type=type) %>% 
       recode_treatment_type_fn() %>% 
       dplyr::filter(
         unit==unt_temp$trtmnt_unit
@@ -2817,7 +2819,7 @@ tree_obj_polys <-
   )
   # sf::st_drop_geometry() %>% dplyr::count(trtmnt_type, target_nearest_dist_m,is_within_presc_dist)
 # huh?
-tree_obj_polys %>% dplyr::glimpse()
+# tree_obj_polys %>% dplyr::glimpse()
 
 ```
 
@@ -2844,7 +2846,7 @@ tree_obj_polys %>%
         dplyr::filter(
           unit==unit_temp$trtmnt_unit
           , block==unit_temp$trtmnt_block
-          , tolower(stringr::str_squish(tretmnt))==unit_temp$trtmnt_type
+          , tolower(stringr::str_squish(type))==unit_temp$trtmnt_type
         ) %>% 
         sf::st_transform(sf::st_crs(tree_obj_polys))
     , fill = NA
@@ -2918,7 +2920,7 @@ plt_fn_temp <- function(x) {
       ggplot2::geom_sf(
         data = 
           stand_boundary %>%
-            dplyr::rename(trtmnt_type=tretmnt) %>% 
+            dplyr::rename(trtmnt_type=type) %>% 
             recode_treatment_type_fn() %>% 
             dplyr::filter(
               unit==unit_temp$trtmnt_unit
@@ -3173,7 +3175,7 @@ p_temp <-
   
   ###### this makes sure the long tail isn't plotted :/
   dplyr::ungroup() %>%
-  dplyr::filter(nearest_dist_m< quantile(tree_obj_polys$nearest_dist_m, probs=0.9999, na.rm=T)) %>%
+  dplyr::filter(nearest_dist_m< quantile(tree_obj_polys$nearest_dist_m, probs=0.998, na.rm=T)) %>%
   ###### this makes sure the long tail isn't plotted :/
   
   # dplyr::filter(trtmnt_type!="control") %>% 
@@ -3205,7 +3207,7 @@ p_temp <-
   # ggplot2::scale_x_log10(labels = scales::comma) +
   ggplot2::scale_y_continuous(NULL,breaks=NULL) +
   ggplot2::labs(
-    fill="",x="distance to nearest tree (m)",y=""
+    fill="",x="nearest neighbor distance (m)",y=""
     , title = "distribution of post-treatment tree spacing distance to nearest neighbor"
     , subtitle = "\nby treatment type"
   ) +
@@ -3272,7 +3274,7 @@ tree_obj_polys %>%
   # ggplot2::scale_x_log10(labels = scales::comma) +
   ggplot2::scale_y_continuous(NULL,breaks=NULL) +
   ggplot2::labs(
-    fill="",x="distance to nearest tree (m)",y=""
+    fill="",x="nearest neighbor distance (m)",y=""
     , title = "distribution of post-treatment tree spacing distance to nearest neighbor"
     , subtitle = "\nby treatment type"
     , caption = "*note, independent x-axis range for each treatment type"
@@ -3674,33 +3676,40 @@ let's get the estimated marginal mean nearest neighbor distance by treatment typ
 emm_nn_temp <- emmeans::emmeans(lm_nn_temp, ~ trtmnt_type) #, pbkrtest.limit = nrow(tree_obj_polys)) ## this makes it run forevvver
 # emm_nn_temp
 
-
-emm_nn_temp %>% 
-  dplyr::as_tibble() %>% 
-  names()
+tree_obj_polys %>% 
+  sf::st_drop_geometry() %>% 
+  dplyr::count(trtmnt_type) %>% 
+  dplyr::left_join(
+    emm_nn_temp %>% 
+      dplyr::as_tibble() %>% 
+      dplyr::rename_with(tolower) %>% 
+      dplyr::select(-df) %>% 
+      dplyr::mutate(trtmnt_type=as.character(trtmnt_type))
+    , by = "trtmnt_type"
+  ) %>% 
   dplyr::mutate(
-    emm_se = sprintf("%.2f ± %.2f", emmean, SE)
-    CI = sprintf("[%.2f, %.2f]", lower.CL, upper.CL)
-  ) |>
-  dplyr::select(
-    `Treatment Type` = trtmnt_type,
-    `EMM (m) ± SE` = emm_se,
-    `95% CI (m)` = CI
-  )
+    trtmnt_type = ordered(trtmnt_type, levels = levels(tree_obj_polys$trtmnt_type))
+  ) %>% 
+  dplyr::arrange(trtmnt_type) %>% 
+  dplyr::mutate(
+    n = scales::comma(n,accuracy = 1)
+    , dplyr::across(.cols = dplyr::where(is.numeric), .fns = ~scales::comma(.x,accuracy = 0.01))
+    , ci = paste0("[",asymp.lcl,", ", asymp.ucl,"]")
+  ) %>% 
+  dplyr::select(-c(asymp.lcl, asymp.ucl)) %>% 
   kableExtra::kbl(
-    align = c("l", "c", "c"),
-    caption = "Table 6. Estimated marginal mean (EMM) nearest-neighbor distance (m) and pairwise comparisons among treatment types derived from the linear mixed-effects model."
-  ) |>
-  kableExtra::kable_styling(
-    bootstrap_options = c("striped", "hover", "condensed"),
-    full_width = FALSE,
-    position = "center"
-  ) |>
-  kableExtra::pack_rows("Estimated Marginal Means", 1, nrow(emm_df))
-
+    caption = "Estimated marginal mean nearest-neighbor distance (m) by treatment type"
+    , col.names = c(
+      "Treatment"
+      , "# Crown Features"
+      , "Estimated Marginal Mean<br/>Nearest-Neighbor Distance (m)"
+      , "Standard Error"
+      , "95% Confidence<br/>Interval (m)"
+    )
+    , escape = F
+  ) %>% 
+  kableExtra::kable_styling()
 ```
-
-
 
 ### Pairwise Treatment Comparisons
 
@@ -3747,7 +3756,7 @@ contrast_nn_df_temp <-
 
 a few interpretations: 
 
-* The *Heterogenous* treatment `r contrast_nn_df_temp %>% dplyr::filter(contrast=="Heterogenous - Control") %>% dplyr::pull(estimate) %>% {dplyr::case_when(.>=0 ~ "increased", T ~ "decreased")}` tree spacing by `r contrast_nn_df_temp %>% dplyr::filter(contrast=="Heterogenous - Control") %>% dplyr::pull(estimate) %>% scales::comma(accuracy=0.01, suffix = " m")` on average compared to the *Control*, which is a statistically `r contrast_nn_df_temp %>% dplyr::filter(contrast=="Heterogenous - Control") %>% dplyr::pull(p.value) %>% {dplyr::case_when(.<=0.05 ~ "significant", T ~ "insignificant")}` change (p-value of `r contrast_nn_df_temp %>% dplyr::filter(contrast=="Heterogenous - Control") %>% dplyr::pull(p.value) %>% scales::comma(accuracy=0.0001)`)
+* The *Heterogeneous* treatment `r contrast_nn_df_temp %>% dplyr::filter(contrast=="Heterogeneous - Control") %>% dplyr::pull(estimate) %>% {dplyr::case_when(.>=0 ~ "increased", T ~ "decreased")}` tree spacing by `r contrast_nn_df_temp %>% dplyr::filter(contrast=="Heterogeneous - Control") %>% dplyr::pull(estimate) %>% scales::comma(accuracy=0.01, suffix = " m")` on average compared to the *Control*, which is a statistically `r contrast_nn_df_temp %>% dplyr::filter(contrast=="Heterogeneous - Control") %>% dplyr::pull(p.value) %>% {dplyr::case_when(.<=0.05 ~ "significant", T ~ "insignificant")}` change (p-value of `r contrast_nn_df_temp %>% dplyr::filter(contrast=="Heterogeneous - Control") %>% dplyr::pull(p.value) %>% scales::comma(accuracy=0.0001)`)
 * The *Uniform-Low* treatment `r contrast_nn_df_temp %>% dplyr::filter(contrast=="(Uniform-Low) - Control") %>% dplyr::pull(estimate) %>% {dplyr::case_when(.>=0 ~ "increased", T ~ "decreased")}` tree spacing by `r contrast_nn_df_temp %>% dplyr::filter(contrast=="(Uniform-Low) - Control") %>% dplyr::pull(estimate) %>% scales::comma(accuracy=0.01, suffix = " m")` on average compared to the *Control*, which is a statistically `r contrast_nn_df_temp %>% dplyr::filter(contrast=="(Uniform-Low) - Control") %>% dplyr::pull(p.value) %>% {dplyr::case_when(.<=0.05 ~ "significant", T ~ "insignificant")}` change (p-value of `r contrast_nn_df_temp %>% dplyr::filter(contrast=="(Uniform-Low) - Control") %>% dplyr::pull(p.value) %>% scales::comma(accuracy=0.0001)`)
 * The *Uniform-High* treatment `r contrast_nn_df_temp %>% dplyr::filter(contrast=="(Uniform-High) - Control") %>% dplyr::pull(estimate) %>% {dplyr::case_when(.>=0 ~ "increased", T ~ "decreased")}` tree spacing by `r contrast_nn_df_temp %>% dplyr::filter(contrast=="(Uniform-High) - Control") %>% dplyr::pull(estimate) %>% scales::comma(accuracy=0.01, suffix = " m")` on average compared to the *Control*, which is a statistically `r contrast_nn_df_temp %>% dplyr::filter(contrast=="(Uniform-High) - Control") %>% dplyr::pull(p.value) %>% {dplyr::case_when(.<=0.05 ~ "significant", T ~ "insignificant")}` change (p-value of `r contrast_nn_df_temp %>% dplyr::filter(contrast=="(Uniform-High) - Control") %>% dplyr::pull(p.value) %>% scales::comma(accuracy=0.0001)`)
 

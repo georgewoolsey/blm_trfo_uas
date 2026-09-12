@@ -22,8 +22,8 @@ treetops_sf <- treetops_sf %>%
       sf::st_transform(sf::st_crs(stand_boundary)) %>% 
       sf::st_intersection(
         stand_boundary %>%
-          dplyr::select(unit,block,tretmnt,unit_area_ha) %>% 
-          dplyr::rename(type = tretmnt) %>% 
+          dplyr::select(unit,block,type,unit_area_ha) %>% 
+          
           dplyr::mutate(
             type =
               tolower(type) %>% 
@@ -50,7 +50,7 @@ treetops_sf <- treetops_sf %>%
 treetops_sf %>% sf::st_drop_geometry() %>% dplyr::count(trtmnt_type)
 treetops_sf %>% dplyr::filter(!is.na(trtmnt_type), tree_height_m>=2) %>% nrow() %>% scales::comma(accuracy = 1)
 stand_boundary %>% nrow()
-stand_boundary %>% sf::st_drop_geometry() %>% dplyr::count(tretmnt)
+stand_boundary %>% sf::st_drop_geometry() %>% dplyr::count(type)
 stand_boundary %>% sf::st_transform(terra::crs(chm_rast)) %>% sf::st_union() %>% sf::st_area() %>% as.numeric() %>% `/`(10000) %>% scales::comma(accuracy = 0.1, suffix = " ha")
 stand_boundary %>% sf::st_transform(terra::crs(chm_rast)) %>% sf::st_area() %>% as.numeric() %>% sum() %>% `/`(10000) %>% scales::comma(accuracy = 0.1, suffix = " ha")
 
@@ -472,7 +472,6 @@ treetops_sf %>%
 
 ```
 
-
 here is that same plot by treatment type
 
 ```{r}
@@ -722,8 +721,7 @@ validation_trees <-
      validation_trees %>% 
       sf::st_intersection(
         stand_boundary %>%
-          dplyr::select(unit,block,tretmnt,unit_area_ha) %>% 
-          dplyr::rename(type = tretmnt) %>% 
+          dplyr::select(unit,block,type,unit_area_ha) %>% 
           dplyr::mutate(
             type =
               tolower(type) %>% 
@@ -742,6 +740,7 @@ validation_trees <-
     is_in_trtmnt_unit = ifelse(is.na(trtmnt_type) | trtmnt_type=="control",F,T)
     # , dplyr::across(c(trtmnt_type,trtmnt_block,trtmnt_unit),ordered)
   )
+# validation_trees %>% sf::st_drop_geometry() %>% dplyr::count(trtmnt_type)
 ```
 
 what is the distribution of the field-measured tree size values

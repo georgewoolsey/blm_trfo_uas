@@ -48,14 +48,14 @@ stand_boundary <-
   sf::st_transform(terra::crs(chm_rast)) %>% 
   dplyr::mutate(
     unit_area_ha = as.numeric(sf::st_area(geometry))/10000
-    , type = tretmnt
+    , type = tretmnt %>% tolower() %>% stringr::str_replace_all("heterogenous","heterogeneous")
     , dplyr::across(c(unit,block,type), ~stringr::str_squish(.x))
     , type = tolower(type)
     , unit = toupper(unit)
     # , dplyr::across(c(type,block,unit),ordered)
   )
 # stand_boundary %>% dplyr::glimpse()
-stand_boundary$type %>% unique()
+# stand_boundary$type %>% unique()
 ```
 
 what treatments are there?
@@ -63,7 +63,7 @@ what treatments are there?
 ```{r}
 stand_boundary %>% 
   sf::st_drop_geometry() %>% 
-  dplyr::count(tretmnt)
+  dplyr::count(type)
 ```
 
 
@@ -228,7 +228,7 @@ lets zoom-in on a single stand to look at the candidate pile locations in blue w
 chm_rast %>% 
   terra::crop(
     stand_boundary %>%
-      dplyr::filter(tolower(tretmnt)!="control") %>% 
+      dplyr::filter(tolower(type)!="control") %>% 
       dplyr::slice(1) %>% 
       sf::st_transform(terra::crs(chm_rast)) %>% 
       sf::st_buffer(5) %>% 
@@ -237,7 +237,7 @@ chm_rast %>%
   terra::plot(col = viridis::plasma(n=100), main = "CHM (m)", axes = F)
 terra::plot(
     stand_boundary %>%
-      dplyr::filter(tolower(tretmnt)!="control") %>% dplyr::slice(1) %>% terra::vect()
+      dplyr::filter(tolower(type)!="control") %>% dplyr::slice(1) %>% terra::vect()
     , add = T, border = "black", col = NA, lwd = 1.5
   )
 piles_workflow_ans %>% 
@@ -248,7 +248,7 @@ piles_workflow_ans %>%
     sf::st_transform(sf::st_crs(stand_boundary)) %>% 
     sf::st_intersection(
       stand_boundary %>%
-        dplyr::filter(tolower(tretmnt)!="control") %>% 
+        dplyr::filter(tolower(type)!="control") %>% 
         dplyr::slice(1)
     ) %>% 
     sf::st_drop_geometry() %>% 
@@ -274,8 +274,8 @@ piles_workflow_ans <-
       sf::st_transform(sf::st_crs(stand_boundary)) %>% 
       sf::st_intersection(
         stand_boundary %>%
-          dplyr::select(unit,block,tretmnt,unit_area_ha) %>% 
-          dplyr::rename(type = tretmnt) %>% 
+          dplyr::select(unit,block,type,unit_area_ha) %>% 
+          dplyr::rename(type = type) %>% 
           dplyr::mutate(
             type =
               tolower(type) %>% 
@@ -292,8 +292,9 @@ piles_workflow_ans <-
   )
 ### make a function to get clean factor labels for the treatment type
 recode_treatment_type_fn <- function(df, short_labels = FALSE, ordered = FALSE) {
-  raw_levels <- c("control", "heterogenous", "uniform- low", "uniform- high")
-  labels_full <- c("Control", "Heterogenous", "Uniform-Low", "Uniform-High")
+  ###################### Heterogeneous
+  raw_levels <- c("control", "heterogeneous", "uniform- low", "uniform- high")
+  labels_full <- c("Control", "Heterogeneous", "Uniform-Low", "Uniform-High")
   labels_short <- c("C", "H", "UL", "UH")
   
   target_labels <- if (short_labels) labels_short else labels_full
@@ -426,6 +427,7 @@ unt_temp <- piles_workflow_ans %>%
   dplyr::filter(is_in_trtmnt_unit) %>% 
   dplyr::distinct(trtmnt_type,trtmnt_block,trtmnt_unit) %>% 
   dplyr::arrange(trtmnt_type,trtmnt_block,trtmnt_unit)
+
 plts_temp <- 
   1:nrow(unt_temp) %>% 
   purrr::map(function(x){
@@ -433,7 +435,7 @@ plts_temp <-
       dplyr::filter(
         unit == unt_temp$trtmnt_unit[x]
         , block == unt_temp$trtmnt_block[x]
-        , stringr::str_squish(tolower(tretmnt)) == unt_temp$trtmnt_type[x]
+        , stringr::str_squish(tolower(type)) == unt_temp$trtmnt_type[x]
       ) %>% 
       sf::st_transform(terra::crs(chm_rast))
     piles_temp <- piles_workflow_ans %>% 
@@ -505,9 +507,10 @@ plts_temp <-
 #   )
 ```
 
-**heterogenous** units 
+**heterogeneous** units 
 
 ```{r,eval=F,purl=FALSE, fig.height = 9.8}
+# plts_temp[1]
 wplts_temp <- patchwork::wrap_plots(
   plts_temp[1:12]
   , ncol = 4
