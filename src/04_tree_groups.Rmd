@@ -3725,33 +3725,72 @@ contrast_nn_temp <- emmeans::contrast(emm_nn_temp, method = "revpairwise", adjus
 contrast_nn_df_temp <- 
   summary(contrast_nn_temp, infer = TRUE) %>% 
   dplyr::as_tibble()
+# contrast_nn_df_temp
 
 # summary of pairwise differences
-# pairwise_table <- 
+contrast_nn_df_temp <-
   contrast_nn_df_temp %>%
   dplyr::select(contrast, estimate, SE, asymp.LCL, asymp.UCL, z.ratio, p.value) %>%
+  dplyr::rename_with(tolower) %>% 
+  tidyr::separate_wider_delim(
+    cols = contrast
+    , delim = " - "
+    , names = c("trtmnt_type1", "trtmnt_type2")
+    , cols_remove = F
+  ) %>%
+  mutate(
+    dplyr::across(
+      tidyselect::starts_with("trtmnt_type")
+      , ~ stringr::str_squish(.x) %>% stringr::str_remove_all("[()]")
+    )
+    , dplyr::across(
+      tidyselect::starts_with("trtmnt_type")
+      , ~ordered(.x, levels = levels(tree_obj_polys$trtmnt_type))
+    )
+  ) %>% 
+  dplyr::arrange(trtmnt_type2,trtmnt_type1) %>% 
+  dplyr::select(-c(trtmnt_type2,trtmnt_type1)) %>% 
+  dplyr::mutate(
+    contrast_cln = stringr::str_replace(contrast, " - ", " vs. ") %>% stringr::str_remove_all("[()]")
+  ) %>% 
+  dplyr::relocate(contrast_cln)
+
+# table
+contrast_nn_df_temp %>% 
+  dplyr::mutate(
+    dplyr::across(
+      .cols = p.value
+      , .fns = ~ dplyr::case_when(
+        .x < 0.001 ~ "< 0.001"
+        , T ~ scales::comma(.x,accuracy = 0.001) 
+      )
+    )
+    , dplyr::across(.cols = z.ratio, .fns = ~scales::comma(.x,accuracy = 0.1))
+    , dplyr::across(.cols = dplyr::where(is.numeric), .fns = ~scales::comma(.x,accuracy = 0.01))
+    , ci = paste0("[",asymp.lcl,", ", asymp.ucl,"]")
+  ) %>% 
+  dplyr::select(-c(contrast,asymp.lcl, asymp.ucl, z.ratio)) %>% 
+  dplyr::relocate(ci, .after = se) %>% 
   kableExtra::kbl(
-    caption = "pairwise mixed-model treatment comparisons for nearest neighbor tree distance (m)"
-    , digits = 3
+    caption = "pairwise contrasts of mean nearest-neighbor distance (m) between crowns across treatment types"
     , col.names = c(
-      "contrast"
-      , "nearest tree<br>difference estimate (m)"
-      , "std. error"
-      , "lower CL"
-      , "upper CL"
-      , "z-ratio"
+      "Treatment Contrast"
+      , "Difference in Mean<br/>Nearest-Neighbor Distance (m)"
+      , "Standard Error"
+      , "95% Confidence<br/>Interval (m)"
       , "p-value"
     )
-    , escape = F 
-  ) %>%
-  kableExtra::kable_styling() %>%
+    , escape = F
+  ) %>% 
+  kableExtra::kable_styling() %>% 
   kableExtra::footnote(
     general_title = "Interpretation:"
     , general = c(
       "difference estimate: positive values indicate the first treatment has wider tree spacing and vice-versa"
-      , "confidence intervals (CL): if the interval includes 0, the difference is not statistically significant"
+      , "confidence intervals: if the interval includes 0, the difference is not statistically significant"
     )
   )
+  
 ```
 
 a few interpretations: 
@@ -3766,10 +3805,11 @@ visualize that
 # plot pairwise contrasts
 p_temp <- 
   contrast_nn_df_temp %>% 
-  ggplot2::ggplot(mapping = ggplot2::aes(x = estimate, y = contrast)) +
+  dplyr::mutate(contrast_cln = forcats::fct_inorder(contrast_cln,ordered = T) %>% forcats::fct_rev()) %>% 
+  ggplot2::ggplot(mapping = ggplot2::aes(x = estimate, y = contrast_cln)) +
   ggplot2::geom_vline(xintercept = 0, linetype = "dashed", color = "black", lwd = 1.1) +
   ggplot2::geom_errorbar(
-    ggplot2::aes(xmin = asymp.LCL, xmax = asymp.UCL)
+    ggplot2::aes(xmin = asymp.lcl, xmax = asymp.ucl)
     , orientation = "y"
     , width = 0.2, color = "gray33", lwd=0.9
   ) +
@@ -3779,7 +3819,7 @@ p_temp <-
   ggplot2::labs(
     title = "pairwise treatment differences in nearest neighbor distance"
     # , subtitle = "mixed-model estimates with tukey adjusted 95% confidence intervals"
-    , x = "estimated difference in nearest neighbor distance (m)"
+    , x = "difference in mean nearest-neighbor distance (m)"
     , y = ""
     , caption = "*note: positive values indicate the first treatment has wider tree spacing and vice-versa"
   ) +
@@ -3845,16 +3885,29 @@ summary table of one-sided hypothesis test to determine if specific spacing targ
 target_df_temp %>% 
   dplyr::select(-c(target_nearest_dist_m,df)) %>% 
   dplyr::arrange(emmean) %>% 
+  dplyr::mutate(
+    dplyr::across(
+      .cols = p.value
+      , .fns = ~ dplyr::case_when(
+        .x < 0.001 ~ "< 0.001"
+        , T ~ scales::comma(.x,accuracy = 0.001) 
+      )
+    )
+    , dplyr::across(.cols = z.ratio, .fns = ~scales::comma(.x,accuracy = 0.1))
+    , dplyr::across(.cols = dplyr::where(is.numeric), .fns = ~scales::comma(.x,accuracy = 0.01))
+  ) %>% 
+  dplyr::select(-c(z.ratio)) %>% 
   kableExtra::kbl(
     caption = "hypothesis test: are block-adjusted tree spacings significantly greater than target spacing?"
     , digits = 3
     , col.names = c(
-      "treatment"
-      , "marginal mean<br>nearest neighbor distance (m)"
-      , "std. error"
+      "Treatment"
+      , "Estimated Marginal Mean<br/>Nearest-Neighbor Distance (m)"
+      , "Standard Error"
       # , "df"
-      , "NULL:<br/>target spacing<br/>distance (m)"
-      , "t-ratio"
+      # , "NULL:<br/>target spacing<br/>distance (m)"
+      , "Prescription Target<br/>Spacing Distance (m)"
+      # , "t-ratio"
       , "p-value"
     )
     , escape = F
@@ -3925,7 +3978,40 @@ summary(emm_nn_temp) %>%
   )
 ```
 
-interesting. 
+the target spacing prescriptions were not met for the majority of post-treatment crowns in the uniform treatments, which we could see from the violin plot and spatial crown plots above. as one last data point, let's check the proportion of crowns that met the prescription spacing target
+
+```{r}
+tree_obj_polys %>% 
+  sf::st_drop_geometry() %>% 
+  dplyr::filter(!is.infinite(target_nearest_dist_m)) %>% 
+  dplyr::count(trtmnt_type, is_within_presc_dist) %>%
+  dplyr::group_by(trtmnt_type) %>% 
+  dplyr::mutate(
+    tot_n = sum(n)
+    , pct = n/tot_n
+  ) %>% 
+  dplyr::ungroup() %>% 
+  dplyr::select(-n) %>% 
+  tidyr::pivot_wider(values_from = pct, names_from = is_within_presc_dist) %>% 
+  dplyr::mutate(
+    tot_n = scales::comma(tot_n,accuracy=1)
+    , dplyr::across(.cols = dplyr::where(is.numeric), .fns = ~scales::percent(.x,accuracy = 0.1))
+  ) %>% 
+  kableExtra::kbl(
+    caption = "proportion of post-treatment crowns greater than target spacing"
+    , digits = 3
+    , col.names = c(
+      "Treatment"
+      , "# Crown Features"
+      , "% fails<br/>prescription spacing"
+      , "% meets<br/>prescription spacing"
+    )
+    , escape = F
+  ) %>%
+  kableExtra::kable_styling()
+  
+```
+
 
 ```{r, warning=FALSE, message=FALSE, echo=FALSE, include=FALSE}
 remove(list = ls()[grep("_temp",ls())])
