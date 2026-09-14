@@ -3848,7 +3848,12 @@ ggplot2::ggsave(
 
 #### Prescription Target Threshold Testing
 
-Finally, let's perform a one-sided hypothesis test to determine if specific spacing targets were successfully met for the uniform treatments. Rather than comparing treatments to each other, this analysis evaluates each individual treatment's estimated marginal mean (accounting for both unit size and block variation) against the prescription tree spacing target. The null hypothesis is that the true average tree spacing is less than or equal to the target. A statistically significant upper-tail p-value (p < 0.05) provides evidence that a given treatment reliably met the prescription spacing target
+Finally, let's perform a one-sided hypothesis test to determine if specific spacing targets were successfully met for the uniform treatments. Rather than comparing treatments to each other, this analysis evaluates each individual treatment's estimated marginal mean (accounting for both unit size and block variation) against the prescription tree spacing target. let's perform a directional one-sided test to evaluate whether marginal mean spacing met or exceeded the spacing target:
+
+* The Alternative Hypothesis ($H_1$): mean spacing < target spacing: evaluates whether spacing is significantly below target
+* The Null Hypothesis ($H_0$): mean spacing $\ge$ target spacing: evaluates if the treatment met or exceeded the 4.6 m target
+
+A statistically significant upper-tail p-value (p < 0.05) provides evidence that a given treatment did not the prescription spacing target
 
 ```{r}
 # tree_obj_spacing_targets_df %>% dplyr::glimpse()
@@ -3856,14 +3861,14 @@ high_target_test_temp <-
  emmeans::test(
    emm_nn_temp
    , null = tree_obj_spacing_targets_df %>% dplyr::filter(trtmnt_type=="Uniform-High") %>% dplyr::pull(target_nearest_dist_m)
-   , side = ">"
+   , side = "<"
   )
 # high_target_test_temp
 low_target_test_temp <-
  emmeans::test(
    emm_nn_temp
    , null = tree_obj_spacing_targets_df %>% dplyr::filter(trtmnt_type=="Uniform-Low") %>% dplyr::pull(target_nearest_dist_m)
-   , side = ">"
+   , side = "<"
   )
 
 target_df_temp <-
@@ -3898,7 +3903,7 @@ target_df_temp %>%
   ) %>% 
   dplyr::select(-c(z.ratio)) %>% 
   kableExtra::kbl(
-    caption = "hypothesis test: are block-adjusted tree spacings significantly greater than target spacing?"
+    caption = "hypothesis test: are block-adjusted tree spacings significantly lower than target spacing?"
     , digits = 3
     , col.names = c(
       "Treatment"
@@ -3917,7 +3922,7 @@ target_df_temp %>%
     general_title = "Interpretation:"
     , general = c(
       "marginal mean: the model-estimated average spacing controlling for unit size and block clustering"
-      , "p-value: a small p-value (< 0.05) provides evidence the treatment met the spacing target"
+      , "p-value: a small p-value (< 0.05) provides evidence the treatment did not meet the spacing target"
     )
   )
 
@@ -3925,8 +3930,8 @@ target_df_temp %>%
 
 a few interpretations: 
 
-* The *Uniform-Low* treatment resulted in post-treatment tree objects spaced `r target_df_temp %>% dplyr::filter(trtmnt_type=="Uniform-Low") %>% dplyr::pull(emmean) %>% scales::comma(accuracy=0.01, suffix = " m")` apart on average (after accounting for both unit size and block variation) compared to the target prescription spacing of `r target_df_temp %>% dplyr::filter(trtmnt_type=="Uniform-Low") %>% dplyr::pull(null) %>% scales::comma(accuracy=0.01, suffix = " m")`. Based on this data, a one-sided hypothesis test indicates that we *`r target_df_temp %>% dplyr::filter(trtmnt_type=="Uniform-Low") %>% dplyr::pull(p.value) %>% {dplyr::case_when(.<=0.05 ~ "reject", T ~ "fail to reject")}`* the null hypothesis that the average tree spacing is less than or equal to the target (p-value of `r target_df_temp %>% dplyr::filter(trtmnt_type=="Uniform-Low") %>% dplyr::pull(p.value) %>% scales::comma(accuracy=0.0001)`)
-* The *Uniform-High* treatment resulted in post-treatment tree objects spaced `r target_df_temp %>% dplyr::filter(trtmnt_type=="Uniform-High") %>% dplyr::pull(emmean) %>% scales::comma(accuracy=0.01, suffix = " m")` apart on average (after accounting for both unit size and block variation) compared to the target prescription spacing of `r target_df_temp %>% dplyr::filter(trtmnt_type=="Uniform-High") %>% dplyr::pull(null) %>% scales::comma(accuracy=0.01, suffix = " m")`. Based on this data, a one-sided hypothesis test indicates that we *`r target_df_temp %>% dplyr::filter(trtmnt_type=="Uniform-High") %>% dplyr::pull(p.value) %>% {dplyr::case_when(.<=0.05 ~ "reject", T ~ "fail to reject")}`* the null hypothesis that the average tree spacing is less than or equal to the target (p-value of `r target_df_temp %>% dplyr::filter(trtmnt_type=="Uniform-High") %>% dplyr::pull(p.value) %>% scales::comma(accuracy=0.0001)`)
+* The *Uniform-Low* treatment resulted in post-treatment tree objects spaced `r target_df_temp %>% dplyr::filter(trtmnt_type=="Uniform-Low") %>% dplyr::pull(emmean) %>% scales::comma(accuracy=0.01, suffix = " m")` apart on average (after accounting for both unit size and block variation) compared to the target prescription spacing of `r target_df_temp %>% dplyr::filter(trtmnt_type=="Uniform-Low") %>% dplyr::pull(null) %>% scales::comma(accuracy=0.01, suffix = " m")`. Based on this data, a one-sided hypothesis test indicates that we *`r target_df_temp %>% dplyr::filter(trtmnt_type=="Uniform-Low") %>% dplyr::pull(p.value) %>% {dplyr::case_when(.<=0.05 ~ "reject", T ~ "fail to reject")}`* the null hypothesis that the average tree spacing is greater than or equal to the target (p-value of `r target_df_temp %>% dplyr::filter(trtmnt_type=="Uniform-Low") %>% dplyr::pull(p.value) %>% scales::comma(accuracy=0.0001)`)
+* The *Uniform-High* treatment resulted in post-treatment tree objects spaced `r target_df_temp %>% dplyr::filter(trtmnt_type=="Uniform-High") %>% dplyr::pull(emmean) %>% scales::comma(accuracy=0.01, suffix = " m")` apart on average (after accounting for both unit size and block variation) compared to the target prescription spacing of `r target_df_temp %>% dplyr::filter(trtmnt_type=="Uniform-High") %>% dplyr::pull(null) %>% scales::comma(accuracy=0.01, suffix = " m")`. Based on this data, a one-sided hypothesis test indicates that we *`r target_df_temp %>% dplyr::filter(trtmnt_type=="Uniform-High") %>% dplyr::pull(p.value) %>% {dplyr::case_when(.<=0.05 ~ "reject", T ~ "fail to reject")}`* the null hypothesis that the average tree spacing is greater than or equal to the target (p-value of `r target_df_temp %>% dplyr::filter(trtmnt_type=="Uniform-High") %>% dplyr::pull(p.value) %>% scales::comma(accuracy=0.0001)`)
 
 visualize that
 
