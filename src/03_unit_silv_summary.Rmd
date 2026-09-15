@@ -201,7 +201,7 @@ where are these units in space?
 
 ```{r}
 stand_boundary %>% 
-  dplyr::rename(trtmnt_type=tretmnt) %>% 
+  dplyr::rename(trtmnt_type=type) %>% 
   recode_treatment_type_fn(ordered = T) %>% 
 ggplot2::ggplot(
     ggplot2::aes(color = ordered(block), fill = trtmnt_type)
@@ -1461,11 +1461,13 @@ terra_plt_ortho <- function(
   , boundary
   , title
   , add_crowns = T
+  , col = harrypotter::hp(n=2, option="hermionegranger")[2]
+  , linewidth = 0.6
 ) {
   if(terra::nlyr(ortho)==3){
     terra::plotRGB(
       ortho
-      , stretch = "lin"
+      # , stretch = "lin"
       # , mar = c(b,l,t,r)
       , mar = c(0.2,0.2,2.2,0.2)
       , plg = list(
@@ -1499,8 +1501,9 @@ terra_plt_ortho <- function(
         sf::st_transform(terra::crs(ortho)) %>% 
         terra::vect()
       , add = T
-      , border = harrypotter::hp(n=2, option="hermionegranger")[2] # "cyan"
-      , col = NA, lwd = 0.6
+      , border = col # "cyan"
+      , col = NA
+      , lwd = linewidth
     )
   }
 }
@@ -1509,34 +1512,47 @@ terra_plt_ortho <- function(
 plot example unit
 
 ```{r,eval=F,purl=FALSE, results=F, fig.show='asis', fig.height = 8, fig.width = 10.5}
-plt_single_temp <- function(x, add = T){
+plt_single_temp <- function(x, rgb = T, add = T, add_tit = T, my_col = harrypotter::hp(n=2, option="hermionegranger")[2], my_lwd = 0.6){
     unit_temp <- stand_boundary %>% 
       dplyr::filter(
         unit == unq_units_df$trtmnt_unit[x]
         , block == unq_units_df$trtmnt_block[x]
-        , stringr::str_squish(tolower(tretmnt)) == unq_units_df$trtmnt_type[x]
+        , stringr::str_squish(tolower(type)) == unq_units_df$trtmnt_type[x]
       ) %>% 
       sf::st_transform(terra::crs(rgb_rast))
-    ortho_temp <- rgb_rast %>% 
-      terra::crop(unit_temp %>% sf::st_buffer(3) %>% terra::vect(), mask = T)
+    if(rgb){
+      ortho_temp <- rgb_rast %>% 
+        terra::crop(unit_temp %>% sf::st_buffer(3) %>% terra::vect(), mask = T)  
+    }else{
+      ortho_temp <- chm_rast %>% 
+        terra::crop(unit_temp %>% sf::st_buffer(3) %>% terra::vect(), mask = T)  
+    }
+    
     crowns_temp <- crowns_sf %>% 
       dplyr::inner_join(
         unq_units_df %>% dplyr::slice(x)
         , by = dplyr::join_by(trtmnt_type,trtmnt_block,trtmnt_unit)
       )
-    # plt
-    terra_plt_ortho(
-      ortho = ortho_temp
-      , crowns = crowns_temp
-      , boundary = unit_temp
-      , add_crowns = add
-      , title = paste0(
+    if(add_tit){
+      my_tit <- paste0(
         unq_units_df %>% dplyr::slice(x) %>% recode_treatment_type_fn() %>% dplyr::pull(trtmnt_type)
         , " | block "
         , unq_units_df %>% dplyr::slice(x) %>% dplyr::pull(trtmnt_block)
         , " | "
         , unq_units_df %>% dplyr::slice(x) %>% dplyr::pull(trtmnt_unit)
       )
+    }else{
+      my_tit <- ""
+    }
+    # plt
+    terra_plt_ortho(
+      ortho = ortho_temp
+      , crowns = crowns_temp
+      , boundary = unit_temp
+      , add_crowns = add
+      , title = my_tit
+      , col = my_col
+      , linewidth = my_lwd
     )
     
 }
@@ -1546,6 +1562,24 @@ unq_units_df %>%
   dplyr::filter(trtmnt_block==1,tolower(trtmnt_type)=="uniform- high",tolower(trtmnt_unit)=="u10") %>% 
   dplyr::pull(rn) %>% 
   plt_single_temp()
+```
+
+```{r,eval=F,purl=FALSE, results=F}
+grDevices::jpeg("../data/plt_rgb_ex.jpeg", width = 10.5, height = 7, units = "in", res = 300)
+unq_units_df %>% 
+  dplyr::mutate(rn=dplyr::row_number()) %>% 
+  dplyr::filter(trtmnt_block==1,tolower(trtmnt_type)=="uniform- high",tolower(trtmnt_unit)=="u10") %>% 
+  dplyr::pull(rn) %>% 
+  plt_single_temp(add = T, add_tit = F, my_col = "cyan", my_lwd = 0.7)
+grDevices::dev.off()
+
+grDevices::jpeg("../data/plt_chm_ex.jpeg", width = 10.5, height = 7, units = "in", res = 300)
+unq_units_df %>% 
+  dplyr::mutate(rn=dplyr::row_number()) %>% 
+  dplyr::filter(trtmnt_block==1,tolower(trtmnt_type)=="uniform- high",tolower(trtmnt_unit)=="u10") %>% 
+  dplyr::pull(rn) %>% 
+  plt_single_temp(add = T, rgb = F, add_tit = F, my_col = "cyan", my_lwd = 0.7)
+grDevices::dev.off()
 ```
 
 zoom in
@@ -1596,7 +1630,7 @@ terra_plt_ortho(
 )
 ```
 
-let's check out some examples of the RGB by treatment block
+let's check out some examples of the RGB by treatment block with the segmented crowns outlined in blue
 
 ```{r,eval=F,purl=FALSE, results=F, fig.show='asis', fig.height=8, fig.width=9.5}
 # mapping
@@ -1618,7 +1652,7 @@ plt_blk_temp <- function(blk, add = F, save = F) {
     dplyr::mutate(rownum = dplyr::row_number()) %>% 
     dplyr::filter(trtmnt_block==blk) %>% 
     dplyr::pull(rownum) %>% 
-    purrr::walk(\(x) plt_single_temp(x,add=add))
+    purrr::walk(\(x) plt_single_temp(x,add=add, my_col = "cyan"))
   
   # reset 
   if(save){grDevices::dev.off()}

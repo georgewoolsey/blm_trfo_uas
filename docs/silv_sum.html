@@ -245,7 +245,7 @@ code span.wa { color: #60a0b0; font-weight: bold; font-style: italic; } /* Warni
 <li class="chapter" data-level="6.2.2" data-path="tree-group-analysis.html"><a href="tree-group-analysis.html#visualize-openings"><i class="fa fa-check"></i><b>6.2.2</b> Visualize Openings</a></li>
 </ul></li>
 <li class="chapter" data-level="6.3" data-path="tree-group-analysis.html"><a href="tree-group-analysis.html#tree-clump-summary"><i class="fa fa-check"></i><b>6.3</b> Tree Clump Summary</a></li>
-<li class="chapter" data-level="6.4" data-path="tree-group-analysis.html"><a href="tree-group-analysis.html#openings-summary"><i class="fa fa-check"></i><b>6.4</b> Openings Summary</a></li>
+<li class="chapter" data-level="6.4" data-path="tree-group-analysis.html"><a href="tree-group-analysis.html#openings-and-canopy-cover-summary"><i class="fa fa-check"></i><b>6.4</b> Openings and Canopy Cover Summary</a></li>
 <li class="chapter" data-level="6.5" data-path="tree-group-analysis.html"><a href="tree-group-analysis.html#treatment-compliance-evaluation"><i class="fa fa-check"></i><b>6.5</b> Treatment Compliance Evaluation</a>
 <ul>
 <li class="chapter" data-level="6.5.1" data-path="tree-group-analysis.html"><a href="tree-group-analysis.html#tree-spacing-figures"><i class="fa fa-check"></i><b>6.5.1</b> Tree Spacing Figures</a></li>
@@ -301,7 +301,7 @@ code span.wa { color: #60a0b0; font-weight: bold; font-style: italic; } /* Warni
 <div style="border: 1px solid #ddd; padding: 0px; overflow-y: scroll; height:8.4in; ">
 <table class="table" style="font-size: 9.7px; margin-left: auto; margin-right: auto;">
 <caption style="font-size: initial !important;">
-<span id="tab:unnamed-chunk-213">Table 5.1: </span>count trees by treatment unit
+<span id="tab:unnamed-chunk-216">Table 5.1: </span>count trees by treatment unit
 </caption>
 <thead>
 <tr>
@@ -535,7 +535,7 @@ U54
 </tr>
 <tr>
 <td style="text-align:left;vertical-align: top !important;" rowspan="12">
-Heterogenous
+Heterogeneous
 </td>
 <td style="text-align:left;">
 1
@@ -1159,7 +1159,7 @@ U52
 </div>
 <p>where are these units in space?</p>
 <div class="sourceCode" id="cb227"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb227-1"><a href="silv_sum.html#cb227-1" tabindex="-1"></a>stand_boundary <span class="sc">%&gt;%</span> </span>
-<span id="cb227-2"><a href="silv_sum.html#cb227-2" tabindex="-1"></a>  dplyr<span class="sc">::</span><span class="fu">rename</span>(<span class="at">trtmnt_type=</span>tretmnt) <span class="sc">%&gt;%</span> </span>
+<span id="cb227-2"><a href="silv_sum.html#cb227-2" tabindex="-1"></a>  dplyr<span class="sc">::</span><span class="fu">rename</span>(<span class="at">trtmnt_type=</span>type) <span class="sc">%&gt;%</span> </span>
 <span id="cb227-3"><a href="silv_sum.html#cb227-3" tabindex="-1"></a>  <span class="fu">recode_treatment_type_fn</span>(<span class="at">ordered =</span> T) <span class="sc">%&gt;%</span> </span>
 <span id="cb227-4"><a href="silv_sum.html#cb227-4" tabindex="-1"></a>ggplot2<span class="sc">::</span><span class="fu">ggplot</span>(</span>
 <span id="cb227-5"><a href="silv_sum.html#cb227-5" tabindex="-1"></a>    ggplot2<span class="sc">::</span><span class="fu">aes</span>(<span class="at">color =</span> <span class="fu">ordered</span>(block), <span class="at">fill =</span> trtmnt_type)</span>
@@ -1184,7 +1184,7 @@ U52
 <span id="cb227-24"><a href="silv_sum.html#cb227-24" tabindex="-1"></a>      )</span>
 <span id="cb227-25"><a href="silv_sum.html#cb227-25" tabindex="-1"></a>    )</span>
 <span id="cb227-26"><a href="silv_sum.html#cb227-26" tabindex="-1"></a>  )</span></code></pre></div>
-<p><img src="blm_trfo_uas_files/figure-html/unnamed-chunk-214-1.png" alt="" width="1008" /></p>
+<p><img src="blm_trfo_uas_files/figure-html/unnamed-chunk-217-1.png" alt="" width="1008" /></p>
 <div id="function-to-calculate-silviclutural-metrics" class="section level2 hasAnchor" number="5.1">
 <h2><span class="header-section-number">5.1</span> Function to Calculate Silviclutural Metrics<a href="silv_sum.html#function-to-calculate-silviclutural-metrics" class="anchor-section" aria-label="Anchor link to header"></a></h2>
 <p>let’s make a function to summarize the data and create common silvicultural metrics within our stand boundary</p>
@@ -1483,7 +1483,7 @@ U52
 <div style="border: 1px solid #ddd; padding: 0px; overflow-y: scroll; height:8.4in; ">
 <table class="table" style="font-size: 9.7px; margin-left: auto; margin-right: auto;">
 <caption style="font-size: initial !important;">
-<span id="tab:unnamed-chunk-219">Table 5.2: </span>Stand summary metrics in metric units
+<span id="tab:unnamed-chunk-222">Table 5.2: </span>Stand summary metrics in metric units
 </caption>
 <thead>
 <tr>
@@ -1990,7 +1990,7 @@ NA
 </tr>
 <tr>
 <td style="text-align:left;vertical-align: top !important;" rowspan="12">
-Heterogenous
+Heterogeneous
 </td>
 <td style="text-align:left;">
 1
@@ -3421,7 +3421,7 @@ U52
 <div style="border: 1px solid #ddd; padding: 0px; overflow-y: scroll; height:8.4in; ">
 <table class="table" style="font-size: 9.7px; margin-left: auto; margin-right: auto;">
 <caption style="font-size: initial !important;">
-<span id="tab:unnamed-chunk-220">Table 5.3: </span>Stand summary metrics in imperial units
+<span id="tab:unnamed-chunk-223">Table 5.3: </span>Stand summary metrics in imperial units
 </caption>
 <thead>
 <tr>
@@ -3928,7 +3928,7 @@ NA
 </tr>
 <tr>
 <td style="text-align:left;vertical-align: top !important;" rowspan="12">
-Heterogenous
+Heterogeneous
 </td>
 <td style="text-align:left;">
 1
@@ -5323,7 +5323,7 @@ U52
 <span id="cb234-10"><a href="silv_sum.html#cb234-10" tabindex="-1"></a>    , <span class="at">axis.text.y =</span> ggplot2<span class="sc">::</span><span class="fu">element_text</span>(<span class="at">size =</span> <span class="dv">7</span>)</span>
 <span id="cb234-11"><a href="silv_sum.html#cb234-11" tabindex="-1"></a>    , <span class="at">axis.text.x =</span> ggplot2<span class="sc">::</span><span class="fu">element_text</span>(<span class="at">size =</span> <span class="dv">8</span>)</span>
 <span id="cb234-12"><a href="silv_sum.html#cb234-12" tabindex="-1"></a>  )</span></code></pre></div>
-<p><img src="blm_trfo_uas_files/figure-html/unnamed-chunk-221-1.png" alt="" width="1008" /></p>
+<p><img src="blm_trfo_uas_files/figure-html/unnamed-chunk-224-1.png" alt="" width="1008" /></p>
 <p>that’s looks about right, let’s check out a unit-level distribution of the TPH</p>
 <div class="sourceCode" id="cb235"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb235-1"><a href="silv_sum.html#cb235-1" tabindex="-1"></a><span class="co"># reusable function for plotting</span></span>
 <span id="cb235-2"><a href="silv_sum.html#cb235-2" tabindex="-1"></a>plt_metric_dist_fn <span class="ot">&lt;-</span> <span class="cf">function</span>(df, metric_name, <span class="at">metric_label =</span> <span class="cn">NA</span>) {</span>
@@ -5397,11 +5397,11 @@ U52
 <span id="cb235-70"><a href="silv_sum.html#cb235-70" tabindex="-1"></a>}</span>
 <span id="cb235-71"><a href="silv_sum.html#cb235-71" tabindex="-1"></a><span class="co"># plot it</span></span>
 <span id="cb235-72"><a href="silv_sum.html#cb235-72" tabindex="-1"></a><span class="fu">plt_metric_violin_fn</span>(unit_sum_df,<span class="st">&quot;trees_per_ha&quot;</span>,<span class="at">metric_label =</span> <span class="st">&quot;trees ha⁻¹&quot;</span>)</span></code></pre></div>
-<p><img src="blm_trfo_uas_files/figure-html/unnamed-chunk-222-1.png" alt="" width="1008" /></p>
+<p><img src="blm_trfo_uas_files/figure-html/unnamed-chunk-225-1.png" alt="" width="1008" /></p>
 <div class="sourceCode" id="cb236"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb236-1"><a href="silv_sum.html#cb236-1" tabindex="-1"></a><span class="co"># plt_metric_dist_fn(unit_sum_df,&quot;trees_per_ha&quot;,metric_label = &quot;trees $ha^{-1}$&quot;)</span></span></code></pre></div>
 <p>since we also have imperial units let’s see TPA</p>
 <div class="sourceCode" id="cb237"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb237-1"><a href="silv_sum.html#cb237-1" tabindex="-1"></a><span class="fu">plt_metric_violin_fn</span>(unit_sum_df,<span class="st">&quot;trees_per_ac&quot;</span>,<span class="at">metric_label =</span> <span class="st">&quot;trees ac⁻¹&quot;</span>)</span></code></pre></div>
-<p><img src="blm_trfo_uas_files/figure-html/unnamed-chunk-223-1.png" alt="" width="1008" /></p>
+<p><img src="blm_trfo_uas_files/figure-html/unnamed-chunk-226-1.png" alt="" width="1008" /></p>
 </div>
 </div>
 <div id="tree-size-distribution-by-treatment-type" class="section level2 hasAnchor" number="5.3">
@@ -5478,7 +5478,7 @@ U52
 <span id="cb238-69"><a href="silv_sum.html#cb238-69" tabindex="-1"></a>    , <span class="at">axis.text.x =</span> ggplot2<span class="sc">::</span><span class="fu">element_text</span>(<span class="at">size =</span> <span class="dv">9</span>)</span>
 <span id="cb238-70"><a href="silv_sum.html#cb238-70" tabindex="-1"></a>    , <span class="at">plot.subtitle =</span> ggplot2<span class="sc">::</span><span class="fu">element_text</span>(<span class="at">margin =</span> ggplot2<span class="sc">::</span><span class="fu">margin</span>(<span class="at">t =</span> <span class="sc">-</span><span class="dv">20</span>, <span class="at">unit =</span> <span class="st">&quot;pt&quot;</span>))</span>
 <span id="cb238-71"><a href="silv_sum.html#cb238-71" tabindex="-1"></a>  )</span></code></pre></div>
-<p><img src="blm_trfo_uas_files/figure-html/unnamed-chunk-226-1.png" alt="" width="1008" /></p>
+<p><img src="blm_trfo_uas_files/figure-html/unnamed-chunk-229-1.png" alt="" width="1008" /></p>
 <p>table it</p>
 <div class="sourceCode" id="cb239"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb239-1"><a href="silv_sum.html#cb239-1" tabindex="-1"></a>tbl_df_temp <span class="ot">&lt;-</span></span>
 <span id="cb239-2"><a href="silv_sum.html#cb239-2" tabindex="-1"></a>  treetops_sf <span class="sc">%&gt;%</span> </span>
@@ -5577,7 +5577,7 @@ U52
 <span id="cb240-55"><a href="silv_sum.html#cb240-55" tabindex="-1"></a>  )</span></code></pre></div>
 <table class="table" style="font-size: 11.5px; margin-left: auto; margin-right: auto;border-bottom: 0;">
 <caption style="font-size: initial !important;">
-<span id="tab:unnamed-chunk-230">Table 5.4: </span>Summary statistics of individual tree measurements<br>by treatment type
+<span id="tab:unnamed-chunk-233">Table 5.4: </span>Summary statistics of individual tree measurements<br>by treatment type
 </caption>
 <thead>
 <tr>
@@ -5655,7 +5655,7 @@ Control
 </tr>
 <tr>
 <td style="text-align:left;border-right:1px solid;font-size: 11px;">
-Heterogenous
+Heterogeneous
 </td>
 <td style="text-align:left;font-size: 11px;">
 4.9
@@ -5838,7 +5838,7 @@ Uniform-High
 <span id="cb241-80"><a href="silv_sum.html#cb241-80" tabindex="-1"></a>    <span class="co"># , axis.text.y = ggplot2::element_blank()</span></span>
 <span id="cb241-81"><a href="silv_sum.html#cb241-81" tabindex="-1"></a>    <span class="co"># , axis.ticks.y = ggplot2::element_blank()</span></span>
 <span id="cb241-82"><a href="silv_sum.html#cb241-82" tabindex="-1"></a>  )</span></code></pre></div>
-<p><img src="blm_trfo_uas_files/figure-html/unnamed-chunk-234-1.png" alt="" width="1008" /></p>
+<p><img src="blm_trfo_uas_files/figure-html/unnamed-chunk-237-1.png" alt="" width="1008" /></p>
 <p><em>imperial</em> units: TPA by height bins</p>
 <div class="sourceCode" id="cb242"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb242-1"><a href="silv_sum.html#cb242-1" tabindex="-1"></a><span class="co"># plot </span></span>
 <span id="cb242-2"><a href="silv_sum.html#cb242-2" tabindex="-1"></a>treetops_sf <span class="sc">%&gt;%</span> </span>
@@ -5924,7 +5924,7 @@ Uniform-High
 <span id="cb242-82"><a href="silv_sum.html#cb242-82" tabindex="-1"></a>    <span class="co"># , axis.text.y = ggplot2::element_blank()</span></span>
 <span id="cb242-83"><a href="silv_sum.html#cb242-83" tabindex="-1"></a>    <span class="co"># , axis.ticks.y = ggplot2::element_blank()</span></span>
 <span id="cb242-84"><a href="silv_sum.html#cb242-84" tabindex="-1"></a>  )</span></code></pre></div>
-<p><img src="blm_trfo_uas_files/figure-html/unnamed-chunk-235-1.png" alt="" width="1008" /></p>
+<p><img src="blm_trfo_uas_files/figure-html/unnamed-chunk-238-1.png" alt="" width="1008" /></p>
 </div>
 <div id="visual-crowns-by-unit" class="section level2 hasAnchor" number="5.4">
 <h2><span class="header-section-number">5.4</span> Visual Crowns by Unit<a href="silv_sum.html#visual-crowns-by-unit" class="anchor-section" aria-label="Anchor link to header"></a></h2>
@@ -5933,170 +5933,205 @@ Uniform-High
 <span id="cb243-2"><a href="silv_sum.html#cb243-2" tabindex="-1"></a>unq_units_df <span class="ot">&lt;-</span> treetops_sf <span class="sc">%&gt;%</span> </span>
 <span id="cb243-3"><a href="silv_sum.html#cb243-3" tabindex="-1"></a>  sf<span class="sc">::</span><span class="fu">st_drop_geometry</span>() <span class="sc">%&gt;%</span> </span>
 <span id="cb243-4"><a href="silv_sum.html#cb243-4" tabindex="-1"></a>  dplyr<span class="sc">::</span><span class="fu">distinct</span>(trtmnt_block,trtmnt_type,trtmnt_unit) <span class="sc">%&gt;%</span> </span>
-<span id="cb243-5"><a href="silv_sum.html#cb243-5" tabindex="-1"></a>  dplyr<span class="sc">::</span><span class="fu">arrange</span>(trtmnt_block,trtmnt_type,trtmnt_unit)</span>
-<span id="cb243-6"><a href="silv_sum.html#cb243-6" tabindex="-1"></a></span>
-<span id="cb243-7"><a href="silv_sum.html#cb243-7" tabindex="-1"></a><span class="co"># function to plot ortho</span></span>
-<span id="cb243-8"><a href="silv_sum.html#cb243-8" tabindex="-1"></a>terra_plt_ortho <span class="ot">&lt;-</span> <span class="cf">function</span>(</span>
-<span id="cb243-9"><a href="silv_sum.html#cb243-9" tabindex="-1"></a>  ortho</span>
-<span id="cb243-10"><a href="silv_sum.html#cb243-10" tabindex="-1"></a>  , crowns</span>
-<span id="cb243-11"><a href="silv_sum.html#cb243-11" tabindex="-1"></a>  , boundary</span>
-<span id="cb243-12"><a href="silv_sum.html#cb243-12" tabindex="-1"></a>  , title</span>
-<span id="cb243-13"><a href="silv_sum.html#cb243-13" tabindex="-1"></a>  , <span class="at">add_crowns =</span> T</span>
-<span id="cb243-14"><a href="silv_sum.html#cb243-14" tabindex="-1"></a>) {</span>
-<span id="cb243-15"><a href="silv_sum.html#cb243-15" tabindex="-1"></a>  <span class="cf">if</span>(terra<span class="sc">::</span><span class="fu">nlyr</span>(ortho)<span class="sc">==</span><span class="dv">3</span>){</span>
-<span id="cb243-16"><a href="silv_sum.html#cb243-16" tabindex="-1"></a>    terra<span class="sc">::</span><span class="fu">plotRGB</span>(</span>
-<span id="cb243-17"><a href="silv_sum.html#cb243-17" tabindex="-1"></a>      ortho</span>
-<span id="cb243-18"><a href="silv_sum.html#cb243-18" tabindex="-1"></a>      , <span class="at">stretch =</span> <span class="st">&quot;lin&quot;</span></span>
-<span id="cb243-19"><a href="silv_sum.html#cb243-19" tabindex="-1"></a>      <span class="co"># , mar = c(b,l,t,r)</span></span>
-<span id="cb243-20"><a href="silv_sum.html#cb243-20" tabindex="-1"></a>      , <span class="at">mar =</span> <span class="fu">c</span>(<span class="fl">0.2</span>,<span class="fl">0.2</span>,<span class="fl">2.2</span>,<span class="fl">0.2</span>)</span>
-<span id="cb243-21"><a href="silv_sum.html#cb243-21" tabindex="-1"></a>      , <span class="at">plg =</span> <span class="fu">list</span>(</span>
-<span id="cb243-22"><a href="silv_sum.html#cb243-22" tabindex="-1"></a>        <span class="at">title.cex =</span> <span class="fl">0.5</span></span>
-<span id="cb243-23"><a href="silv_sum.html#cb243-23" tabindex="-1"></a>      )</span>
-<span id="cb243-24"><a href="silv_sum.html#cb243-24" tabindex="-1"></a>      , <span class="at">main =</span> title, <span class="at">cex.main=</span><span class="fl">0.7</span></span>
-<span id="cb243-25"><a href="silv_sum.html#cb243-25" tabindex="-1"></a>    ) </span>
-<span id="cb243-26"><a href="silv_sum.html#cb243-26" tabindex="-1"></a>  }<span class="cf">else</span>{</span>
-<span id="cb243-27"><a href="silv_sum.html#cb243-27" tabindex="-1"></a>    terra<span class="sc">::</span><span class="fu">plot</span>(</span>
-<span id="cb243-28"><a href="silv_sum.html#cb243-28" tabindex="-1"></a>      ortho</span>
-<span id="cb243-29"><a href="silv_sum.html#cb243-29" tabindex="-1"></a>      , <span class="at">col =</span> viridis<span class="sc">::</span><span class="fu">plasma</span>(<span class="at">n=</span><span class="dv">100</span>)</span>
-<span id="cb243-30"><a href="silv_sum.html#cb243-30" tabindex="-1"></a>      <span class="co"># , mar = c(b,l,t,r)</span></span>
-<span id="cb243-31"><a href="silv_sum.html#cb243-31" tabindex="-1"></a>      , <span class="at">mar =</span> <span class="fu">c</span>(<span class="fl">0.2</span>,<span class="fl">0.2</span>,<span class="fl">2.2</span>,<span class="fl">3.5</span>)</span>
-<span id="cb243-32"><a href="silv_sum.html#cb243-32" tabindex="-1"></a>      , <span class="at">axes =</span> F</span>
-<span id="cb243-33"><a href="silv_sum.html#cb243-33" tabindex="-1"></a>      , <span class="at">plg =</span> <span class="fu">list</span>(</span>
-<span id="cb243-34"><a href="silv_sum.html#cb243-34" tabindex="-1"></a>        <span class="co"># title = &quot;CHM (m)&quot;</span></span>
-<span id="cb243-35"><a href="silv_sum.html#cb243-35" tabindex="-1"></a>        <span class="at">cex =</span> <span class="fl">0.8</span>, <span class="at">title.cex =</span> <span class="fl">0.5</span>, <span class="at">shrink =</span> <span class="fl">0.6</span></span>
-<span id="cb243-36"><a href="silv_sum.html#cb243-36" tabindex="-1"></a>      )</span>
-<span id="cb243-37"><a href="silv_sum.html#cb243-37" tabindex="-1"></a>      , <span class="at">main =</span> title, <span class="at">cex.main=</span><span class="fl">0.7</span></span>
-<span id="cb243-38"><a href="silv_sum.html#cb243-38" tabindex="-1"></a>    ) </span>
-<span id="cb243-39"><a href="silv_sum.html#cb243-39" tabindex="-1"></a>  }</span>
-<span id="cb243-40"><a href="silv_sum.html#cb243-40" tabindex="-1"></a>  terra<span class="sc">::</span><span class="fu">plot</span>(</span>
-<span id="cb243-41"><a href="silv_sum.html#cb243-41" tabindex="-1"></a>    boundary <span class="sc">%&gt;%</span> </span>
-<span id="cb243-42"><a href="silv_sum.html#cb243-42" tabindex="-1"></a>      sf<span class="sc">::</span><span class="fu">st_transform</span>(terra<span class="sc">::</span><span class="fu">crs</span>(ortho)) <span class="sc">%&gt;%</span> </span>
-<span id="cb243-43"><a href="silv_sum.html#cb243-43" tabindex="-1"></a>      terra<span class="sc">::</span><span class="fu">vect</span>()</span>
-<span id="cb243-44"><a href="silv_sum.html#cb243-44" tabindex="-1"></a>    , <span class="at">add =</span> T, <span class="at">border =</span> <span class="st">&quot;black&quot;</span>, <span class="at">col =</span> <span class="cn">NA</span></span>
-<span id="cb243-45"><a href="silv_sum.html#cb243-45" tabindex="-1"></a>  )</span>
-<span id="cb243-46"><a href="silv_sum.html#cb243-46" tabindex="-1"></a>  <span class="cf">if</span>(add_crowns){</span>
-<span id="cb243-47"><a href="silv_sum.html#cb243-47" tabindex="-1"></a>    terra<span class="sc">::</span><span class="fu">plot</span>(</span>
-<span id="cb243-48"><a href="silv_sum.html#cb243-48" tabindex="-1"></a>      crowns <span class="sc">%&gt;%</span> </span>
-<span id="cb243-49"><a href="silv_sum.html#cb243-49" tabindex="-1"></a>        sf<span class="sc">::</span><span class="fu">st_transform</span>(terra<span class="sc">::</span><span class="fu">crs</span>(ortho)) <span class="sc">%&gt;%</span> </span>
-<span id="cb243-50"><a href="silv_sum.html#cb243-50" tabindex="-1"></a>        terra<span class="sc">::</span><span class="fu">vect</span>()</span>
-<span id="cb243-51"><a href="silv_sum.html#cb243-51" tabindex="-1"></a>      , <span class="at">add =</span> T</span>
-<span id="cb243-52"><a href="silv_sum.html#cb243-52" tabindex="-1"></a>      , <span class="at">border =</span> harrypotter<span class="sc">::</span><span class="fu">hp</span>(<span class="at">n=</span><span class="dv">2</span>, <span class="at">option=</span><span class="st">&quot;hermionegranger&quot;</span>)[<span class="dv">2</span>] <span class="co"># &quot;cyan&quot;</span></span>
-<span id="cb243-53"><a href="silv_sum.html#cb243-53" tabindex="-1"></a>      , <span class="at">col =</span> <span class="cn">NA</span>, <span class="at">lwd =</span> <span class="fl">0.6</span></span>
-<span id="cb243-54"><a href="silv_sum.html#cb243-54" tabindex="-1"></a>    )</span>
-<span id="cb243-55"><a href="silv_sum.html#cb243-55" tabindex="-1"></a>  }</span>
-<span id="cb243-56"><a href="silv_sum.html#cb243-56" tabindex="-1"></a>}</span></code></pre></div>
+<span id="cb243-5"><a href="silv_sum.html#cb243-5" tabindex="-1"></a>  dplyr<span class="sc">::</span><span class="fu">mutate</span>(<span class="at">xxx=</span>trtmnt_type) <span class="sc">%&gt;%</span> </span>
+<span id="cb243-6"><a href="silv_sum.html#cb243-6" tabindex="-1"></a>  <span class="fu">recode_treatment_type_fn</span>(<span class="at">ordered =</span> T) <span class="sc">%&gt;%</span> </span>
+<span id="cb243-7"><a href="silv_sum.html#cb243-7" tabindex="-1"></a>  dplyr<span class="sc">::</span><span class="fu">arrange</span>(trtmnt_block,trtmnt_type,trtmnt_unit) <span class="sc">%&gt;%</span> </span>
+<span id="cb243-8"><a href="silv_sum.html#cb243-8" tabindex="-1"></a>  dplyr<span class="sc">::</span><span class="fu">select</span>(<span class="sc">-</span>trtmnt_type) <span class="sc">%&gt;%</span> </span>
+<span id="cb243-9"><a href="silv_sum.html#cb243-9" tabindex="-1"></a>  dplyr<span class="sc">::</span><span class="fu">rename</span>(<span class="at">trtmnt_type=</span>xxx)</span>
+<span id="cb243-10"><a href="silv_sum.html#cb243-10" tabindex="-1"></a><span class="co"># unq_units_df</span></span>
+<span id="cb243-11"><a href="silv_sum.html#cb243-11" tabindex="-1"></a><span class="co"># function to plot ortho</span></span>
+<span id="cb243-12"><a href="silv_sum.html#cb243-12" tabindex="-1"></a>terra_plt_ortho <span class="ot">&lt;-</span> <span class="cf">function</span>(</span>
+<span id="cb243-13"><a href="silv_sum.html#cb243-13" tabindex="-1"></a>  ortho</span>
+<span id="cb243-14"><a href="silv_sum.html#cb243-14" tabindex="-1"></a>  , crowns</span>
+<span id="cb243-15"><a href="silv_sum.html#cb243-15" tabindex="-1"></a>  , boundary</span>
+<span id="cb243-16"><a href="silv_sum.html#cb243-16" tabindex="-1"></a>  , title</span>
+<span id="cb243-17"><a href="silv_sum.html#cb243-17" tabindex="-1"></a>  , <span class="at">add_crowns =</span> T</span>
+<span id="cb243-18"><a href="silv_sum.html#cb243-18" tabindex="-1"></a>  , <span class="at">col =</span> harrypotter<span class="sc">::</span><span class="fu">hp</span>(<span class="at">n=</span><span class="dv">2</span>, <span class="at">option=</span><span class="st">&quot;hermionegranger&quot;</span>)[<span class="dv">2</span>]</span>
+<span id="cb243-19"><a href="silv_sum.html#cb243-19" tabindex="-1"></a>  , <span class="at">linewidth =</span> <span class="fl">0.6</span></span>
+<span id="cb243-20"><a href="silv_sum.html#cb243-20" tabindex="-1"></a>) {</span>
+<span id="cb243-21"><a href="silv_sum.html#cb243-21" tabindex="-1"></a>  <span class="cf">if</span>(terra<span class="sc">::</span><span class="fu">nlyr</span>(ortho)<span class="sc">==</span><span class="dv">3</span>){</span>
+<span id="cb243-22"><a href="silv_sum.html#cb243-22" tabindex="-1"></a>    terra<span class="sc">::</span><span class="fu">plotRGB</span>(</span>
+<span id="cb243-23"><a href="silv_sum.html#cb243-23" tabindex="-1"></a>      ortho</span>
+<span id="cb243-24"><a href="silv_sum.html#cb243-24" tabindex="-1"></a>      <span class="co"># , stretch = &quot;lin&quot;</span></span>
+<span id="cb243-25"><a href="silv_sum.html#cb243-25" tabindex="-1"></a>      <span class="co"># , mar = c(b,l,t,r)</span></span>
+<span id="cb243-26"><a href="silv_sum.html#cb243-26" tabindex="-1"></a>      , <span class="at">mar =</span> <span class="fu">c</span>(<span class="fl">0.2</span>,<span class="fl">0.2</span>,<span class="fl">2.2</span>,<span class="fl">0.2</span>)</span>
+<span id="cb243-27"><a href="silv_sum.html#cb243-27" tabindex="-1"></a>      , <span class="at">plg =</span> <span class="fu">list</span>(</span>
+<span id="cb243-28"><a href="silv_sum.html#cb243-28" tabindex="-1"></a>        <span class="at">title.cex =</span> <span class="fl">0.5</span></span>
+<span id="cb243-29"><a href="silv_sum.html#cb243-29" tabindex="-1"></a>      )</span>
+<span id="cb243-30"><a href="silv_sum.html#cb243-30" tabindex="-1"></a>      , <span class="at">main =</span> title, <span class="at">cex.main=</span><span class="fl">0.7</span></span>
+<span id="cb243-31"><a href="silv_sum.html#cb243-31" tabindex="-1"></a>    ) </span>
+<span id="cb243-32"><a href="silv_sum.html#cb243-32" tabindex="-1"></a>  }<span class="cf">else</span>{</span>
+<span id="cb243-33"><a href="silv_sum.html#cb243-33" tabindex="-1"></a>    terra<span class="sc">::</span><span class="fu">plot</span>(</span>
+<span id="cb243-34"><a href="silv_sum.html#cb243-34" tabindex="-1"></a>      ortho</span>
+<span id="cb243-35"><a href="silv_sum.html#cb243-35" tabindex="-1"></a>      , <span class="at">col =</span> viridis<span class="sc">::</span><span class="fu">plasma</span>(<span class="at">n=</span><span class="dv">100</span>)</span>
+<span id="cb243-36"><a href="silv_sum.html#cb243-36" tabindex="-1"></a>      <span class="co"># , mar = c(b,l,t,r)</span></span>
+<span id="cb243-37"><a href="silv_sum.html#cb243-37" tabindex="-1"></a>      , <span class="at">mar =</span> <span class="fu">c</span>(<span class="fl">0.2</span>,<span class="fl">0.2</span>,<span class="fl">2.2</span>,<span class="fl">3.5</span>)</span>
+<span id="cb243-38"><a href="silv_sum.html#cb243-38" tabindex="-1"></a>      , <span class="at">axes =</span> F</span>
+<span id="cb243-39"><a href="silv_sum.html#cb243-39" tabindex="-1"></a>      , <span class="at">plg =</span> <span class="fu">list</span>(</span>
+<span id="cb243-40"><a href="silv_sum.html#cb243-40" tabindex="-1"></a>        <span class="co"># title = &quot;CHM (m)&quot;</span></span>
+<span id="cb243-41"><a href="silv_sum.html#cb243-41" tabindex="-1"></a>        <span class="at">cex =</span> <span class="fl">0.8</span>, <span class="at">title.cex =</span> <span class="fl">0.5</span>, <span class="at">shrink =</span> <span class="fl">0.6</span></span>
+<span id="cb243-42"><a href="silv_sum.html#cb243-42" tabindex="-1"></a>      )</span>
+<span id="cb243-43"><a href="silv_sum.html#cb243-43" tabindex="-1"></a>      , <span class="at">main =</span> title, <span class="at">cex.main=</span><span class="fl">0.7</span></span>
+<span id="cb243-44"><a href="silv_sum.html#cb243-44" tabindex="-1"></a>    ) </span>
+<span id="cb243-45"><a href="silv_sum.html#cb243-45" tabindex="-1"></a>  }</span>
+<span id="cb243-46"><a href="silv_sum.html#cb243-46" tabindex="-1"></a>  terra<span class="sc">::</span><span class="fu">plot</span>(</span>
+<span id="cb243-47"><a href="silv_sum.html#cb243-47" tabindex="-1"></a>    boundary <span class="sc">%&gt;%</span> </span>
+<span id="cb243-48"><a href="silv_sum.html#cb243-48" tabindex="-1"></a>      sf<span class="sc">::</span><span class="fu">st_transform</span>(terra<span class="sc">::</span><span class="fu">crs</span>(ortho)) <span class="sc">%&gt;%</span> </span>
+<span id="cb243-49"><a href="silv_sum.html#cb243-49" tabindex="-1"></a>      terra<span class="sc">::</span><span class="fu">vect</span>()</span>
+<span id="cb243-50"><a href="silv_sum.html#cb243-50" tabindex="-1"></a>    , <span class="at">add =</span> T, <span class="at">border =</span> <span class="st">&quot;black&quot;</span>, <span class="at">col =</span> <span class="cn">NA</span></span>
+<span id="cb243-51"><a href="silv_sum.html#cb243-51" tabindex="-1"></a>  )</span>
+<span id="cb243-52"><a href="silv_sum.html#cb243-52" tabindex="-1"></a>  <span class="cf">if</span>(add_crowns){</span>
+<span id="cb243-53"><a href="silv_sum.html#cb243-53" tabindex="-1"></a>    terra<span class="sc">::</span><span class="fu">plot</span>(</span>
+<span id="cb243-54"><a href="silv_sum.html#cb243-54" tabindex="-1"></a>      crowns <span class="sc">%&gt;%</span> </span>
+<span id="cb243-55"><a href="silv_sum.html#cb243-55" tabindex="-1"></a>        sf<span class="sc">::</span><span class="fu">st_transform</span>(terra<span class="sc">::</span><span class="fu">crs</span>(ortho)) <span class="sc">%&gt;%</span> </span>
+<span id="cb243-56"><a href="silv_sum.html#cb243-56" tabindex="-1"></a>        terra<span class="sc">::</span><span class="fu">vect</span>()</span>
+<span id="cb243-57"><a href="silv_sum.html#cb243-57" tabindex="-1"></a>      , <span class="at">add =</span> T</span>
+<span id="cb243-58"><a href="silv_sum.html#cb243-58" tabindex="-1"></a>      , <span class="at">border =</span> col <span class="co"># &quot;cyan&quot;</span></span>
+<span id="cb243-59"><a href="silv_sum.html#cb243-59" tabindex="-1"></a>      , <span class="at">col =</span> <span class="cn">NA</span></span>
+<span id="cb243-60"><a href="silv_sum.html#cb243-60" tabindex="-1"></a>      , <span class="at">lwd =</span> linewidth</span>
+<span id="cb243-61"><a href="silv_sum.html#cb243-61" tabindex="-1"></a>    )</span>
+<span id="cb243-62"><a href="silv_sum.html#cb243-62" tabindex="-1"></a>  }</span>
+<span id="cb243-63"><a href="silv_sum.html#cb243-63" tabindex="-1"></a>}</span></code></pre></div>
 <p>plot example unit</p>
-<div class="sourceCode" id="cb244"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb244-1"><a href="silv_sum.html#cb244-1" tabindex="-1"></a>plt_single_temp <span class="ot">&lt;-</span> <span class="cf">function</span>(x, <span class="at">add =</span> T){</span>
+<div class="sourceCode" id="cb244"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb244-1"><a href="silv_sum.html#cb244-1" tabindex="-1"></a>plt_single_temp <span class="ot">&lt;-</span> <span class="cf">function</span>(x, <span class="at">rgb =</span> T, <span class="at">add =</span> T, <span class="at">add_tit =</span> T, <span class="at">my_col =</span> harrypotter<span class="sc">::</span><span class="fu">hp</span>(<span class="at">n=</span><span class="dv">2</span>, <span class="at">option=</span><span class="st">&quot;hermionegranger&quot;</span>)[<span class="dv">2</span>], <span class="at">my_lwd =</span> <span class="fl">0.6</span>){</span>
 <span id="cb244-2"><a href="silv_sum.html#cb244-2" tabindex="-1"></a>    unit_temp <span class="ot">&lt;-</span> stand_boundary <span class="sc">%&gt;%</span> </span>
 <span id="cb244-3"><a href="silv_sum.html#cb244-3" tabindex="-1"></a>      dplyr<span class="sc">::</span><span class="fu">filter</span>(</span>
 <span id="cb244-4"><a href="silv_sum.html#cb244-4" tabindex="-1"></a>        unit <span class="sc">==</span> unq_units_df<span class="sc">$</span>trtmnt_unit[x]</span>
 <span id="cb244-5"><a href="silv_sum.html#cb244-5" tabindex="-1"></a>        , block <span class="sc">==</span> unq_units_df<span class="sc">$</span>trtmnt_block[x]</span>
-<span id="cb244-6"><a href="silv_sum.html#cb244-6" tabindex="-1"></a>        , stringr<span class="sc">::</span><span class="fu">str_squish</span>(<span class="fu">tolower</span>(tretmnt)) <span class="sc">==</span> unq_units_df<span class="sc">$</span>trtmnt_type[x]</span>
+<span id="cb244-6"><a href="silv_sum.html#cb244-6" tabindex="-1"></a>        , stringr<span class="sc">::</span><span class="fu">str_squish</span>(<span class="fu">tolower</span>(type)) <span class="sc">==</span> unq_units_df<span class="sc">$</span>trtmnt_type[x]</span>
 <span id="cb244-7"><a href="silv_sum.html#cb244-7" tabindex="-1"></a>      ) <span class="sc">%&gt;%</span> </span>
 <span id="cb244-8"><a href="silv_sum.html#cb244-8" tabindex="-1"></a>      sf<span class="sc">::</span><span class="fu">st_transform</span>(terra<span class="sc">::</span><span class="fu">crs</span>(rgb_rast))</span>
-<span id="cb244-9"><a href="silv_sum.html#cb244-9" tabindex="-1"></a>    ortho_temp <span class="ot">&lt;-</span> rgb_rast <span class="sc">%&gt;%</span> </span>
-<span id="cb244-10"><a href="silv_sum.html#cb244-10" tabindex="-1"></a>      terra<span class="sc">::</span><span class="fu">crop</span>(unit_temp <span class="sc">%&gt;%</span> sf<span class="sc">::</span><span class="fu">st_buffer</span>(<span class="dv">3</span>) <span class="sc">%&gt;%</span> terra<span class="sc">::</span><span class="fu">vect</span>(), <span class="at">mask =</span> T)</span>
-<span id="cb244-11"><a href="silv_sum.html#cb244-11" tabindex="-1"></a>    crowns_temp <span class="ot">&lt;-</span> crowns_sf <span class="sc">%&gt;%</span> </span>
-<span id="cb244-12"><a href="silv_sum.html#cb244-12" tabindex="-1"></a>      dplyr<span class="sc">::</span><span class="fu">inner_join</span>(</span>
-<span id="cb244-13"><a href="silv_sum.html#cb244-13" tabindex="-1"></a>        unq_units_df <span class="sc">%&gt;%</span> dplyr<span class="sc">::</span><span class="fu">slice</span>(x)</span>
-<span id="cb244-14"><a href="silv_sum.html#cb244-14" tabindex="-1"></a>        , <span class="at">by =</span> dplyr<span class="sc">::</span><span class="fu">join_by</span>(trtmnt_type,trtmnt_block,trtmnt_unit)</span>
-<span id="cb244-15"><a href="silv_sum.html#cb244-15" tabindex="-1"></a>      )</span>
-<span id="cb244-16"><a href="silv_sum.html#cb244-16" tabindex="-1"></a>    <span class="co"># plt</span></span>
-<span id="cb244-17"><a href="silv_sum.html#cb244-17" tabindex="-1"></a>    <span class="fu">terra_plt_ortho</span>(</span>
-<span id="cb244-18"><a href="silv_sum.html#cb244-18" tabindex="-1"></a>      <span class="at">ortho =</span> ortho_temp</span>
-<span id="cb244-19"><a href="silv_sum.html#cb244-19" tabindex="-1"></a>      , <span class="at">crowns =</span> crowns_temp</span>
-<span id="cb244-20"><a href="silv_sum.html#cb244-20" tabindex="-1"></a>      , <span class="at">boundary =</span> unit_temp</span>
-<span id="cb244-21"><a href="silv_sum.html#cb244-21" tabindex="-1"></a>      , <span class="at">add_crowns =</span> add</span>
-<span id="cb244-22"><a href="silv_sum.html#cb244-22" tabindex="-1"></a>      , <span class="at">title =</span> <span class="fu">paste0</span>(</span>
-<span id="cb244-23"><a href="silv_sum.html#cb244-23" tabindex="-1"></a>        unq_units_df <span class="sc">%&gt;%</span> dplyr<span class="sc">::</span><span class="fu">slice</span>(x) <span class="sc">%&gt;%</span> <span class="fu">recode_treatment_type_fn</span>() <span class="sc">%&gt;%</span> dplyr<span class="sc">::</span><span class="fu">pull</span>(trtmnt_type)</span>
-<span id="cb244-24"><a href="silv_sum.html#cb244-24" tabindex="-1"></a>        , <span class="st">&quot; | block &quot;</span></span>
-<span id="cb244-25"><a href="silv_sum.html#cb244-25" tabindex="-1"></a>        , unq_units_df <span class="sc">%&gt;%</span> dplyr<span class="sc">::</span><span class="fu">slice</span>(x) <span class="sc">%&gt;%</span> dplyr<span class="sc">::</span><span class="fu">pull</span>(trtmnt_block)</span>
-<span id="cb244-26"><a href="silv_sum.html#cb244-26" tabindex="-1"></a>        , <span class="st">&quot; | &quot;</span></span>
-<span id="cb244-27"><a href="silv_sum.html#cb244-27" tabindex="-1"></a>        , unq_units_df <span class="sc">%&gt;%</span> dplyr<span class="sc">::</span><span class="fu">slice</span>(x) <span class="sc">%&gt;%</span> dplyr<span class="sc">::</span><span class="fu">pull</span>(trtmnt_unit)</span>
-<span id="cb244-28"><a href="silv_sum.html#cb244-28" tabindex="-1"></a>      )</span>
-<span id="cb244-29"><a href="silv_sum.html#cb244-29" tabindex="-1"></a>    )</span>
-<span id="cb244-30"><a href="silv_sum.html#cb244-30" tabindex="-1"></a>    </span>
-<span id="cb244-31"><a href="silv_sum.html#cb244-31" tabindex="-1"></a>}</span>
-<span id="cb244-32"><a href="silv_sum.html#cb244-32" tabindex="-1"></a><span class="co"># map over it </span></span>
-<span id="cb244-33"><a href="silv_sum.html#cb244-33" tabindex="-1"></a>unq_units_df <span class="sc">%&gt;%</span> </span>
-<span id="cb244-34"><a href="silv_sum.html#cb244-34" tabindex="-1"></a>  dplyr<span class="sc">::</span><span class="fu">mutate</span>(<span class="at">rn=</span>dplyr<span class="sc">::</span><span class="fu">row_number</span>()) <span class="sc">%&gt;%</span> </span>
-<span id="cb244-35"><a href="silv_sum.html#cb244-35" tabindex="-1"></a>  dplyr<span class="sc">::</span><span class="fu">filter</span>(trtmnt_block<span class="sc">==</span><span class="dv">1</span>,<span class="fu">tolower</span>(trtmnt_type)<span class="sc">==</span><span class="st">&quot;uniform- high&quot;</span>,<span class="fu">tolower</span>(trtmnt_unit)<span class="sc">==</span><span class="st">&quot;u10&quot;</span>) <span class="sc">%&gt;%</span> </span>
-<span id="cb244-36"><a href="silv_sum.html#cb244-36" tabindex="-1"></a>  dplyr<span class="sc">::</span><span class="fu">pull</span>(rn) <span class="sc">%&gt;%</span> </span>
-<span id="cb244-37"><a href="silv_sum.html#cb244-37" tabindex="-1"></a>  <span class="fu">plt_single_temp</span>()</span></code></pre></div>
-<p><img src="blm_trfo_uas_files/figure-html/unnamed-chunk-238-1.png" alt="" width="1008" /></p>
+<span id="cb244-9"><a href="silv_sum.html#cb244-9" tabindex="-1"></a>    <span class="cf">if</span>(rgb){</span>
+<span id="cb244-10"><a href="silv_sum.html#cb244-10" tabindex="-1"></a>      ortho_temp <span class="ot">&lt;-</span> rgb_rast <span class="sc">%&gt;%</span> </span>
+<span id="cb244-11"><a href="silv_sum.html#cb244-11" tabindex="-1"></a>        terra<span class="sc">::</span><span class="fu">crop</span>(unit_temp <span class="sc">%&gt;%</span> sf<span class="sc">::</span><span class="fu">st_buffer</span>(<span class="dv">3</span>) <span class="sc">%&gt;%</span> terra<span class="sc">::</span><span class="fu">vect</span>(), <span class="at">mask =</span> T)  </span>
+<span id="cb244-12"><a href="silv_sum.html#cb244-12" tabindex="-1"></a>    }<span class="cf">else</span>{</span>
+<span id="cb244-13"><a href="silv_sum.html#cb244-13" tabindex="-1"></a>      ortho_temp <span class="ot">&lt;-</span> chm_rast <span class="sc">%&gt;%</span> </span>
+<span id="cb244-14"><a href="silv_sum.html#cb244-14" tabindex="-1"></a>        terra<span class="sc">::</span><span class="fu">crop</span>(unit_temp <span class="sc">%&gt;%</span> sf<span class="sc">::</span><span class="fu">st_buffer</span>(<span class="dv">3</span>) <span class="sc">%&gt;%</span> terra<span class="sc">::</span><span class="fu">vect</span>(), <span class="at">mask =</span> T)  </span>
+<span id="cb244-15"><a href="silv_sum.html#cb244-15" tabindex="-1"></a>    }</span>
+<span id="cb244-16"><a href="silv_sum.html#cb244-16" tabindex="-1"></a>    </span>
+<span id="cb244-17"><a href="silv_sum.html#cb244-17" tabindex="-1"></a>    crowns_temp <span class="ot">&lt;-</span> crowns_sf <span class="sc">%&gt;%</span> </span>
+<span id="cb244-18"><a href="silv_sum.html#cb244-18" tabindex="-1"></a>      dplyr<span class="sc">::</span><span class="fu">inner_join</span>(</span>
+<span id="cb244-19"><a href="silv_sum.html#cb244-19" tabindex="-1"></a>        unq_units_df <span class="sc">%&gt;%</span> dplyr<span class="sc">::</span><span class="fu">slice</span>(x)</span>
+<span id="cb244-20"><a href="silv_sum.html#cb244-20" tabindex="-1"></a>        , <span class="at">by =</span> dplyr<span class="sc">::</span><span class="fu">join_by</span>(trtmnt_type,trtmnt_block,trtmnt_unit)</span>
+<span id="cb244-21"><a href="silv_sum.html#cb244-21" tabindex="-1"></a>      )</span>
+<span id="cb244-22"><a href="silv_sum.html#cb244-22" tabindex="-1"></a>    <span class="cf">if</span>(add_tit){</span>
+<span id="cb244-23"><a href="silv_sum.html#cb244-23" tabindex="-1"></a>      my_tit <span class="ot">&lt;-</span> <span class="fu">paste0</span>(</span>
+<span id="cb244-24"><a href="silv_sum.html#cb244-24" tabindex="-1"></a>        unq_units_df <span class="sc">%&gt;%</span> dplyr<span class="sc">::</span><span class="fu">slice</span>(x) <span class="sc">%&gt;%</span> <span class="fu">recode_treatment_type_fn</span>() <span class="sc">%&gt;%</span> dplyr<span class="sc">::</span><span class="fu">pull</span>(trtmnt_type)</span>
+<span id="cb244-25"><a href="silv_sum.html#cb244-25" tabindex="-1"></a>        , <span class="st">&quot; | block &quot;</span></span>
+<span id="cb244-26"><a href="silv_sum.html#cb244-26" tabindex="-1"></a>        , unq_units_df <span class="sc">%&gt;%</span> dplyr<span class="sc">::</span><span class="fu">slice</span>(x) <span class="sc">%&gt;%</span> dplyr<span class="sc">::</span><span class="fu">pull</span>(trtmnt_block)</span>
+<span id="cb244-27"><a href="silv_sum.html#cb244-27" tabindex="-1"></a>        , <span class="st">&quot; | &quot;</span></span>
+<span id="cb244-28"><a href="silv_sum.html#cb244-28" tabindex="-1"></a>        , unq_units_df <span class="sc">%&gt;%</span> dplyr<span class="sc">::</span><span class="fu">slice</span>(x) <span class="sc">%&gt;%</span> dplyr<span class="sc">::</span><span class="fu">pull</span>(trtmnt_unit)</span>
+<span id="cb244-29"><a href="silv_sum.html#cb244-29" tabindex="-1"></a>      )</span>
+<span id="cb244-30"><a href="silv_sum.html#cb244-30" tabindex="-1"></a>    }<span class="cf">else</span>{</span>
+<span id="cb244-31"><a href="silv_sum.html#cb244-31" tabindex="-1"></a>      my_tit <span class="ot">&lt;-</span> <span class="st">&quot;&quot;</span></span>
+<span id="cb244-32"><a href="silv_sum.html#cb244-32" tabindex="-1"></a>    }</span>
+<span id="cb244-33"><a href="silv_sum.html#cb244-33" tabindex="-1"></a>    <span class="co"># plt</span></span>
+<span id="cb244-34"><a href="silv_sum.html#cb244-34" tabindex="-1"></a>    <span class="fu">terra_plt_ortho</span>(</span>
+<span id="cb244-35"><a href="silv_sum.html#cb244-35" tabindex="-1"></a>      <span class="at">ortho =</span> ortho_temp</span>
+<span id="cb244-36"><a href="silv_sum.html#cb244-36" tabindex="-1"></a>      , <span class="at">crowns =</span> crowns_temp</span>
+<span id="cb244-37"><a href="silv_sum.html#cb244-37" tabindex="-1"></a>      , <span class="at">boundary =</span> unit_temp</span>
+<span id="cb244-38"><a href="silv_sum.html#cb244-38" tabindex="-1"></a>      , <span class="at">add_crowns =</span> add</span>
+<span id="cb244-39"><a href="silv_sum.html#cb244-39" tabindex="-1"></a>      , <span class="at">title =</span> my_tit</span>
+<span id="cb244-40"><a href="silv_sum.html#cb244-40" tabindex="-1"></a>      , <span class="at">col =</span> my_col</span>
+<span id="cb244-41"><a href="silv_sum.html#cb244-41" tabindex="-1"></a>      , <span class="at">linewidth =</span> my_lwd</span>
+<span id="cb244-42"><a href="silv_sum.html#cb244-42" tabindex="-1"></a>    )</span>
+<span id="cb244-43"><a href="silv_sum.html#cb244-43" tabindex="-1"></a>    </span>
+<span id="cb244-44"><a href="silv_sum.html#cb244-44" tabindex="-1"></a>}</span>
+<span id="cb244-45"><a href="silv_sum.html#cb244-45" tabindex="-1"></a><span class="co"># map over it </span></span>
+<span id="cb244-46"><a href="silv_sum.html#cb244-46" tabindex="-1"></a>unq_units_df <span class="sc">%&gt;%</span> </span>
+<span id="cb244-47"><a href="silv_sum.html#cb244-47" tabindex="-1"></a>  dplyr<span class="sc">::</span><span class="fu">mutate</span>(<span class="at">rn=</span>dplyr<span class="sc">::</span><span class="fu">row_number</span>()) <span class="sc">%&gt;%</span> </span>
+<span id="cb244-48"><a href="silv_sum.html#cb244-48" tabindex="-1"></a>  dplyr<span class="sc">::</span><span class="fu">filter</span>(trtmnt_block<span class="sc">==</span><span class="dv">1</span>,<span class="fu">tolower</span>(trtmnt_type)<span class="sc">==</span><span class="st">&quot;uniform- high&quot;</span>,<span class="fu">tolower</span>(trtmnt_unit)<span class="sc">==</span><span class="st">&quot;u10&quot;</span>) <span class="sc">%&gt;%</span> </span>
+<span id="cb244-49"><a href="silv_sum.html#cb244-49" tabindex="-1"></a>  dplyr<span class="sc">::</span><span class="fu">pull</span>(rn) <span class="sc">%&gt;%</span> </span>
+<span id="cb244-50"><a href="silv_sum.html#cb244-50" tabindex="-1"></a>  <span class="fu">plt_single_temp</span>()</span></code></pre></div>
+<p><img src="blm_trfo_uas_files/figure-html/unnamed-chunk-241-1.png" alt="" width="1008" /></p>
+<div class="sourceCode" id="cb245"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb245-1"><a href="silv_sum.html#cb245-1" tabindex="-1"></a>grDevices<span class="sc">::</span><span class="fu">jpeg</span>(<span class="st">&quot;../data/plt_rgb_ex.jpeg&quot;</span>, <span class="at">width =</span> <span class="fl">10.5</span>, <span class="at">height =</span> <span class="dv">7</span>, <span class="at">units =</span> <span class="st">&quot;in&quot;</span>, <span class="at">res =</span> <span class="dv">300</span>)</span>
+<span id="cb245-2"><a href="silv_sum.html#cb245-2" tabindex="-1"></a>unq_units_df <span class="sc">%&gt;%</span> </span>
+<span id="cb245-3"><a href="silv_sum.html#cb245-3" tabindex="-1"></a>  dplyr<span class="sc">::</span><span class="fu">mutate</span>(<span class="at">rn=</span>dplyr<span class="sc">::</span><span class="fu">row_number</span>()) <span class="sc">%&gt;%</span> </span>
+<span id="cb245-4"><a href="silv_sum.html#cb245-4" tabindex="-1"></a>  dplyr<span class="sc">::</span><span class="fu">filter</span>(trtmnt_block<span class="sc">==</span><span class="dv">1</span>,<span class="fu">tolower</span>(trtmnt_type)<span class="sc">==</span><span class="st">&quot;uniform- high&quot;</span>,<span class="fu">tolower</span>(trtmnt_unit)<span class="sc">==</span><span class="st">&quot;u10&quot;</span>) <span class="sc">%&gt;%</span> </span>
+<span id="cb245-5"><a href="silv_sum.html#cb245-5" tabindex="-1"></a>  dplyr<span class="sc">::</span><span class="fu">pull</span>(rn) <span class="sc">%&gt;%</span> </span>
+<span id="cb245-6"><a href="silv_sum.html#cb245-6" tabindex="-1"></a>  <span class="fu">plt_single_temp</span>(<span class="at">add =</span> T, <span class="at">add_tit =</span> F, <span class="at">my_col =</span> <span class="st">&quot;cyan&quot;</span>, <span class="at">my_lwd =</span> <span class="fl">0.7</span>)</span>
+<span id="cb245-7"><a href="silv_sum.html#cb245-7" tabindex="-1"></a>grDevices<span class="sc">::</span><span class="fu">dev.off</span>()</span>
+<span id="cb245-8"><a href="silv_sum.html#cb245-8" tabindex="-1"></a></span>
+<span id="cb245-9"><a href="silv_sum.html#cb245-9" tabindex="-1"></a>grDevices<span class="sc">::</span><span class="fu">jpeg</span>(<span class="st">&quot;../data/plt_chm_ex.jpeg&quot;</span>, <span class="at">width =</span> <span class="fl">10.5</span>, <span class="at">height =</span> <span class="dv">7</span>, <span class="at">units =</span> <span class="st">&quot;in&quot;</span>, <span class="at">res =</span> <span class="dv">300</span>)</span>
+<span id="cb245-10"><a href="silv_sum.html#cb245-10" tabindex="-1"></a>unq_units_df <span class="sc">%&gt;%</span> </span>
+<span id="cb245-11"><a href="silv_sum.html#cb245-11" tabindex="-1"></a>  dplyr<span class="sc">::</span><span class="fu">mutate</span>(<span class="at">rn=</span>dplyr<span class="sc">::</span><span class="fu">row_number</span>()) <span class="sc">%&gt;%</span> </span>
+<span id="cb245-12"><a href="silv_sum.html#cb245-12" tabindex="-1"></a>  dplyr<span class="sc">::</span><span class="fu">filter</span>(trtmnt_block<span class="sc">==</span><span class="dv">1</span>,<span class="fu">tolower</span>(trtmnt_type)<span class="sc">==</span><span class="st">&quot;uniform- high&quot;</span>,<span class="fu">tolower</span>(trtmnt_unit)<span class="sc">==</span><span class="st">&quot;u10&quot;</span>) <span class="sc">%&gt;%</span> </span>
+<span id="cb245-13"><a href="silv_sum.html#cb245-13" tabindex="-1"></a>  dplyr<span class="sc">::</span><span class="fu">pull</span>(rn) <span class="sc">%&gt;%</span> </span>
+<span id="cb245-14"><a href="silv_sum.html#cb245-14" tabindex="-1"></a>  <span class="fu">plt_single_temp</span>(<span class="at">add =</span> T, <span class="at">rgb =</span> F, <span class="at">add_tit =</span> F, <span class="at">my_col =</span> <span class="st">&quot;cyan&quot;</span>, <span class="at">my_lwd =</span> <span class="fl">0.7</span>)</span>
+<span id="cb245-15"><a href="silv_sum.html#cb245-15" tabindex="-1"></a>grDevices<span class="sc">::</span><span class="fu">dev.off</span>()</span></code></pre></div>
 <p>zoom in</p>
-<div class="sourceCode" id="cb245"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb245-1"><a href="silv_sum.html#cb245-1" tabindex="-1"></a>unit_temp <span class="ot">&lt;-</span> stand_boundary <span class="sc">%&gt;%</span> </span>
-<span id="cb245-2"><a href="silv_sum.html#cb245-2" tabindex="-1"></a>  dplyr<span class="sc">::</span><span class="fu">slice</span>(<span class="dv">4</span>) <span class="sc">%&gt;%</span> </span>
-<span id="cb245-3"><a href="silv_sum.html#cb245-3" tabindex="-1"></a>  sf<span class="sc">::</span><span class="fu">st_centroid</span>() <span class="sc">%&gt;%</span> </span>
-<span id="cb245-4"><a href="silv_sum.html#cb245-4" tabindex="-1"></a>  <span class="co"># sf::st_buffer(50) %&gt;% </span></span>
-<span id="cb245-5"><a href="silv_sum.html#cb245-5" tabindex="-1"></a>  sf<span class="sc">::</span><span class="fu">st_buffer</span>(<span class="fu">sqrt</span>(<span class="dv">10000</span><span class="sc">/</span><span class="dv">4</span>),<span class="at">endCapStyle =</span> <span class="st">&quot;SQUARE&quot;</span>) <span class="do">## numerator = desired plot size in m2) %&gt;% </span></span>
-<span id="cb245-6"><a href="silv_sum.html#cb245-6" tabindex="-1"></a><span class="co"># sf::st_area(unit_temp)</span></span>
-<span id="cb245-7"><a href="silv_sum.html#cb245-7" tabindex="-1"></a><span class="co"># terra::plot(stand_boundary %&gt;% </span></span>
-<span id="cb245-8"><a href="silv_sum.html#cb245-8" tabindex="-1"></a><span class="co">#   dplyr::slice(1) %&gt;% terra::vect(),col = NA)</span></span>
-<span id="cb245-9"><a href="silv_sum.html#cb245-9" tabindex="-1"></a><span class="co"># terra::plot(unit_temp %&gt;% terra::vect(), col = NA, border = &quot;red&quot;, add = T)</span></span>
-<span id="cb245-10"><a href="silv_sum.html#cb245-10" tabindex="-1"></a>rgb_temp <span class="ot">&lt;-</span> rgb_rast <span class="sc">%&gt;%</span> </span>
-<span id="cb245-11"><a href="silv_sum.html#cb245-11" tabindex="-1"></a>  terra<span class="sc">::</span><span class="fu">crop</span>(unit_temp <span class="sc">%&gt;%</span> sf<span class="sc">::</span><span class="fu">st_buffer</span>(<span class="dv">3</span>) <span class="sc">%&gt;%</span> terra<span class="sc">::</span><span class="fu">vect</span>(), <span class="at">mask =</span> T)</span>
-<span id="cb245-12"><a href="silv_sum.html#cb245-12" tabindex="-1"></a>crowns_temp <span class="ot">&lt;-</span> crowns_sf <span class="sc">%&gt;%</span> </span>
-<span id="cb245-13"><a href="silv_sum.html#cb245-13" tabindex="-1"></a>  dplyr<span class="sc">::</span><span class="fu">inner_join</span>(</span>
-<span id="cb245-14"><a href="silv_sum.html#cb245-14" tabindex="-1"></a>    treetops_sf <span class="sc">%&gt;%</span> </span>
-<span id="cb245-15"><a href="silv_sum.html#cb245-15" tabindex="-1"></a>      sf<span class="sc">::</span><span class="fu">st_intersection</span>(unit_temp) <span class="sc">%&gt;%</span> </span>
-<span id="cb245-16"><a href="silv_sum.html#cb245-16" tabindex="-1"></a>      sf<span class="sc">::</span><span class="fu">st_drop_geometry</span>() <span class="sc">%&gt;%</span> </span>
-<span id="cb245-17"><a href="silv_sum.html#cb245-17" tabindex="-1"></a>      dplyr<span class="sc">::</span><span class="fu">select</span>(treeID)</span>
-<span id="cb245-18"><a href="silv_sum.html#cb245-18" tabindex="-1"></a>    , <span class="at">by =</span> <span class="st">&quot;treeID&quot;</span></span>
-<span id="cb245-19"><a href="silv_sum.html#cb245-19" tabindex="-1"></a>  )</span>
-<span id="cb245-20"><a href="silv_sum.html#cb245-20" tabindex="-1"></a><span class="fu">terra_plt_ortho</span>(</span>
-<span id="cb245-21"><a href="silv_sum.html#cb245-21" tabindex="-1"></a>  <span class="at">ortho =</span> rgb_temp</span>
-<span id="cb245-22"><a href="silv_sum.html#cb245-22" tabindex="-1"></a>  , <span class="at">crowns =</span> crowns_temp</span>
-<span id="cb245-23"><a href="silv_sum.html#cb245-23" tabindex="-1"></a>  , <span class="at">boundary =</span> unit_temp</span>
-<span id="cb245-24"><a href="silv_sum.html#cb245-24" tabindex="-1"></a>  , <span class="at">title =</span> <span class="st">&quot;example UAS-detected trees&quot;</span></span>
-<span id="cb245-25"><a href="silv_sum.html#cb245-25" tabindex="-1"></a>)</span></code></pre></div>
-<p><img src="blm_trfo_uas_files/figure-html/unnamed-chunk-239-1.png" alt="" width="1008" /></p>
+<div class="sourceCode" id="cb246"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb246-1"><a href="silv_sum.html#cb246-1" tabindex="-1"></a>unit_temp <span class="ot">&lt;-</span> stand_boundary <span class="sc">%&gt;%</span> </span>
+<span id="cb246-2"><a href="silv_sum.html#cb246-2" tabindex="-1"></a>  dplyr<span class="sc">::</span><span class="fu">slice</span>(<span class="dv">4</span>) <span class="sc">%&gt;%</span> </span>
+<span id="cb246-3"><a href="silv_sum.html#cb246-3" tabindex="-1"></a>  sf<span class="sc">::</span><span class="fu">st_centroid</span>() <span class="sc">%&gt;%</span> </span>
+<span id="cb246-4"><a href="silv_sum.html#cb246-4" tabindex="-1"></a>  <span class="co"># sf::st_buffer(50) %&gt;% </span></span>
+<span id="cb246-5"><a href="silv_sum.html#cb246-5" tabindex="-1"></a>  sf<span class="sc">::</span><span class="fu">st_buffer</span>(<span class="fu">sqrt</span>(<span class="dv">10000</span><span class="sc">/</span><span class="dv">4</span>),<span class="at">endCapStyle =</span> <span class="st">&quot;SQUARE&quot;</span>) <span class="do">## numerator = desired plot size in m2) %&gt;% </span></span>
+<span id="cb246-6"><a href="silv_sum.html#cb246-6" tabindex="-1"></a><span class="co"># sf::st_area(unit_temp)</span></span>
+<span id="cb246-7"><a href="silv_sum.html#cb246-7" tabindex="-1"></a><span class="co"># terra::plot(stand_boundary %&gt;% </span></span>
+<span id="cb246-8"><a href="silv_sum.html#cb246-8" tabindex="-1"></a><span class="co">#   dplyr::slice(1) %&gt;% terra::vect(),col = NA)</span></span>
+<span id="cb246-9"><a href="silv_sum.html#cb246-9" tabindex="-1"></a><span class="co"># terra::plot(unit_temp %&gt;% terra::vect(), col = NA, border = &quot;red&quot;, add = T)</span></span>
+<span id="cb246-10"><a href="silv_sum.html#cb246-10" tabindex="-1"></a>rgb_temp <span class="ot">&lt;-</span> rgb_rast <span class="sc">%&gt;%</span> </span>
+<span id="cb246-11"><a href="silv_sum.html#cb246-11" tabindex="-1"></a>  terra<span class="sc">::</span><span class="fu">crop</span>(unit_temp <span class="sc">%&gt;%</span> sf<span class="sc">::</span><span class="fu">st_buffer</span>(<span class="dv">3</span>) <span class="sc">%&gt;%</span> terra<span class="sc">::</span><span class="fu">vect</span>(), <span class="at">mask =</span> T)</span>
+<span id="cb246-12"><a href="silv_sum.html#cb246-12" tabindex="-1"></a>crowns_temp <span class="ot">&lt;-</span> crowns_sf <span class="sc">%&gt;%</span> </span>
+<span id="cb246-13"><a href="silv_sum.html#cb246-13" tabindex="-1"></a>  dplyr<span class="sc">::</span><span class="fu">inner_join</span>(</span>
+<span id="cb246-14"><a href="silv_sum.html#cb246-14" tabindex="-1"></a>    treetops_sf <span class="sc">%&gt;%</span> </span>
+<span id="cb246-15"><a href="silv_sum.html#cb246-15" tabindex="-1"></a>      sf<span class="sc">::</span><span class="fu">st_intersection</span>(unit_temp) <span class="sc">%&gt;%</span> </span>
+<span id="cb246-16"><a href="silv_sum.html#cb246-16" tabindex="-1"></a>      sf<span class="sc">::</span><span class="fu">st_drop_geometry</span>() <span class="sc">%&gt;%</span> </span>
+<span id="cb246-17"><a href="silv_sum.html#cb246-17" tabindex="-1"></a>      dplyr<span class="sc">::</span><span class="fu">select</span>(treeID)</span>
+<span id="cb246-18"><a href="silv_sum.html#cb246-18" tabindex="-1"></a>    , <span class="at">by =</span> <span class="st">&quot;treeID&quot;</span></span>
+<span id="cb246-19"><a href="silv_sum.html#cb246-19" tabindex="-1"></a>  )</span>
+<span id="cb246-20"><a href="silv_sum.html#cb246-20" tabindex="-1"></a><span class="fu">terra_plt_ortho</span>(</span>
+<span id="cb246-21"><a href="silv_sum.html#cb246-21" tabindex="-1"></a>  <span class="at">ortho =</span> rgb_temp</span>
+<span id="cb246-22"><a href="silv_sum.html#cb246-22" tabindex="-1"></a>  , <span class="at">crowns =</span> crowns_temp</span>
+<span id="cb246-23"><a href="silv_sum.html#cb246-23" tabindex="-1"></a>  , <span class="at">boundary =</span> unit_temp</span>
+<span id="cb246-24"><a href="silv_sum.html#cb246-24" tabindex="-1"></a>  , <span class="at">title =</span> <span class="st">&quot;example UAS-detected trees&quot;</span></span>
+<span id="cb246-25"><a href="silv_sum.html#cb246-25" tabindex="-1"></a>)</span></code></pre></div>
+<p><img src="blm_trfo_uas_files/figure-html/unnamed-chunk-243-1.png" alt="" width="1008" /></p>
 <p>how about on the CHM?</p>
-<div class="sourceCode" id="cb246"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb246-1"><a href="silv_sum.html#cb246-1" tabindex="-1"></a>chm_temp <span class="ot">&lt;-</span> chm_rast <span class="sc">%&gt;%</span> </span>
-<span id="cb246-2"><a href="silv_sum.html#cb246-2" tabindex="-1"></a>  terra<span class="sc">::</span><span class="fu">crop</span>(unit_temp <span class="sc">%&gt;%</span> sf<span class="sc">::</span><span class="fu">st_buffer</span>(<span class="dv">3</span>) <span class="sc">%&gt;%</span> terra<span class="sc">::</span><span class="fu">vect</span>(), <span class="at">mask =</span> T) <span class="sc">%&gt;%</span> </span>
-<span id="cb246-3"><a href="silv_sum.html#cb246-3" tabindex="-1"></a>  cloud2trees<span class="sc">:::</span><span class="fu">adjust_raster_resolution</span>(</span>
-<span id="cb246-4"><a href="silv_sum.html#cb246-4" tabindex="-1"></a>    <span class="at">target_resolution =</span> <span class="fl">0.25</span></span>
-<span id="cb246-5"><a href="silv_sum.html#cb246-5" tabindex="-1"></a>    , <span class="at">fun =</span> max</span>
-<span id="cb246-6"><a href="silv_sum.html#cb246-6" tabindex="-1"></a>    , <span class="at">resample_method =</span> <span class="st">&quot;max&quot;</span></span>
-<span id="cb246-7"><a href="silv_sum.html#cb246-7" tabindex="-1"></a>  )</span>
-<span id="cb246-8"><a href="silv_sum.html#cb246-8" tabindex="-1"></a><span class="fu">terra_plt_ortho</span>(</span>
-<span id="cb246-9"><a href="silv_sum.html#cb246-9" tabindex="-1"></a>  <span class="at">ortho =</span> chm_temp</span>
-<span id="cb246-10"><a href="silv_sum.html#cb246-10" tabindex="-1"></a>  , <span class="at">crowns =</span> crowns_temp</span>
-<span id="cb246-11"><a href="silv_sum.html#cb246-11" tabindex="-1"></a>  , <span class="at">boundary =</span> unit_temp</span>
-<span id="cb246-12"><a href="silv_sum.html#cb246-12" tabindex="-1"></a>  , <span class="at">title =</span> <span class="st">&quot;example UAS-detected trees on CHM (m)&quot;</span></span>
-<span id="cb246-13"><a href="silv_sum.html#cb246-13" tabindex="-1"></a>)</span></code></pre></div>
-<p><img src="blm_trfo_uas_files/figure-html/unnamed-chunk-240-1.png" alt="" width="1008" /></p>
-<p>let’s check out some examples of the RGB by treatment block</p>
-<div class="sourceCode" id="cb247"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb247-1"><a href="silv_sum.html#cb247-1" tabindex="-1"></a><span class="co"># mapping</span></span>
-<span id="cb247-2"><a href="silv_sum.html#cb247-2" tabindex="-1"></a>plt_blk_temp <span class="ot">&lt;-</span> <span class="cf">function</span>(blk, <span class="at">add =</span> F, <span class="at">save =</span> F) {</span>
-<span id="cb247-3"><a href="silv_sum.html#cb247-3" tabindex="-1"></a>  <span class="cf">if</span>(save){</span>
-<span id="cb247-4"><a href="silv_sum.html#cb247-4" tabindex="-1"></a>    grDevices<span class="sc">::</span><span class="fu">png</span>(</span>
-<span id="cb247-5"><a href="silv_sum.html#cb247-5" tabindex="-1"></a>      <span class="at">filename =</span> <span class="fu">file.path</span>(<span class="st">&quot;../data&quot;</span>, <span class="fu">paste0</span>(<span class="st">&quot;plt_rgb_block_&quot;</span>, blk, <span class="st">&quot;.png&quot;</span>))</span>
-<span id="cb247-6"><a href="silv_sum.html#cb247-6" tabindex="-1"></a>      , <span class="at">width =</span> <span class="fl">9.5</span></span>
-<span id="cb247-7"><a href="silv_sum.html#cb247-7" tabindex="-1"></a>      , <span class="at">height =</span> <span class="dv">8</span></span>
-<span id="cb247-8"><a href="silv_sum.html#cb247-8" tabindex="-1"></a>      , <span class="at">units =</span> <span class="st">&quot;in&quot;</span></span>
-<span id="cb247-9"><a href="silv_sum.html#cb247-9" tabindex="-1"></a>      , <span class="at">res =</span> <span class="dv">300</span></span>
-<span id="cb247-10"><a href="silv_sum.html#cb247-10" tabindex="-1"></a>    )</span>
-<span id="cb247-11"><a href="silv_sum.html#cb247-11" tabindex="-1"></a>  }</span>
-<span id="cb247-12"><a href="silv_sum.html#cb247-12" tabindex="-1"></a>  <span class="co"># 2x2 grid layout</span></span>
-<span id="cb247-13"><a href="silv_sum.html#cb247-13" tabindex="-1"></a>  graphics<span class="sc">::</span><span class="fu">par</span>(<span class="at">mfrow =</span> <span class="fu">c</span>(<span class="dv">2</span>, <span class="dv">2</span>))</span>
-<span id="cb247-14"><a href="silv_sum.html#cb247-14" tabindex="-1"></a>  </span>
-<span id="cb247-15"><a href="silv_sum.html#cb247-15" tabindex="-1"></a>  unq_units_df <span class="sc">%&gt;%</span> </span>
-<span id="cb247-16"><a href="silv_sum.html#cb247-16" tabindex="-1"></a>    dplyr<span class="sc">::</span><span class="fu">ungroup</span>() <span class="sc">%&gt;%</span> </span>
-<span id="cb247-17"><a href="silv_sum.html#cb247-17" tabindex="-1"></a>    dplyr<span class="sc">::</span><span class="fu">mutate</span>(<span class="at">rownum =</span> dplyr<span class="sc">::</span><span class="fu">row_number</span>()) <span class="sc">%&gt;%</span> </span>
-<span id="cb247-18"><a href="silv_sum.html#cb247-18" tabindex="-1"></a>    dplyr<span class="sc">::</span><span class="fu">filter</span>(trtmnt_block<span class="sc">==</span>blk) <span class="sc">%&gt;%</span> </span>
-<span id="cb247-19"><a href="silv_sum.html#cb247-19" tabindex="-1"></a>    dplyr<span class="sc">::</span><span class="fu">pull</span>(rownum) <span class="sc">%&gt;%</span> </span>
-<span id="cb247-20"><a href="silv_sum.html#cb247-20" tabindex="-1"></a>    purrr<span class="sc">::</span><span class="fu">walk</span>(\(x) <span class="fu">plt_single_temp</span>(x,<span class="at">add=</span>add))</span>
-<span id="cb247-21"><a href="silv_sum.html#cb247-21" tabindex="-1"></a>  </span>
-<span id="cb247-22"><a href="silv_sum.html#cb247-22" tabindex="-1"></a>  <span class="co"># reset </span></span>
-<span id="cb247-23"><a href="silv_sum.html#cb247-23" tabindex="-1"></a>  <span class="cf">if</span>(save){grDevices<span class="sc">::</span><span class="fu">dev.off</span>()}</span>
-<span id="cb247-24"><a href="silv_sum.html#cb247-24" tabindex="-1"></a>  graphics<span class="sc">::</span><span class="fu">par</span>(<span class="at">mfrow =</span> <span class="fu">c</span>(<span class="dv">1</span>, <span class="dv">1</span>))</span>
-<span id="cb247-25"><a href="silv_sum.html#cb247-25" tabindex="-1"></a>}</span>
-<span id="cb247-26"><a href="silv_sum.html#cb247-26" tabindex="-1"></a><span class="co"># map over blks</span></span>
-<span id="cb247-27"><a href="silv_sum.html#cb247-27" tabindex="-1"></a><span class="fu">unique</span>(unq_units_df<span class="sc">$</span>trtmnt_block) <span class="sc">%&gt;%</span> </span>
-<span id="cb247-28"><a href="silv_sum.html#cb247-28" tabindex="-1"></a>  .[<span class="dv">1</span><span class="sc">:</span><span class="dv">2</span>] <span class="sc">%&gt;%</span></span>
-<span id="cb247-29"><a href="silv_sum.html#cb247-29" tabindex="-1"></a>  purrr<span class="sc">::</span><span class="fu">map</span>(\(x) <span class="fu">plt_blk_temp</span>(x, <span class="at">add=</span>T, <span class="at">save =</span> F))</span></code></pre></div>
-<p><img src="blm_trfo_uas_files/figure-html/unnamed-chunk-241-1.png" alt="" width="912" /><img src="blm_trfo_uas_files/figure-html/unnamed-chunk-241-2.png" alt="" width="912" /></p>
+<div class="sourceCode" id="cb247"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb247-1"><a href="silv_sum.html#cb247-1" tabindex="-1"></a>chm_temp <span class="ot">&lt;-</span> chm_rast <span class="sc">%&gt;%</span> </span>
+<span id="cb247-2"><a href="silv_sum.html#cb247-2" tabindex="-1"></a>  terra<span class="sc">::</span><span class="fu">crop</span>(unit_temp <span class="sc">%&gt;%</span> sf<span class="sc">::</span><span class="fu">st_buffer</span>(<span class="dv">3</span>) <span class="sc">%&gt;%</span> terra<span class="sc">::</span><span class="fu">vect</span>(), <span class="at">mask =</span> T) <span class="sc">%&gt;%</span> </span>
+<span id="cb247-3"><a href="silv_sum.html#cb247-3" tabindex="-1"></a>  cloud2trees<span class="sc">:::</span><span class="fu">adjust_raster_resolution</span>(</span>
+<span id="cb247-4"><a href="silv_sum.html#cb247-4" tabindex="-1"></a>    <span class="at">target_resolution =</span> <span class="fl">0.25</span></span>
+<span id="cb247-5"><a href="silv_sum.html#cb247-5" tabindex="-1"></a>    , <span class="at">fun =</span> max</span>
+<span id="cb247-6"><a href="silv_sum.html#cb247-6" tabindex="-1"></a>    , <span class="at">resample_method =</span> <span class="st">&quot;max&quot;</span></span>
+<span id="cb247-7"><a href="silv_sum.html#cb247-7" tabindex="-1"></a>  )</span>
+<span id="cb247-8"><a href="silv_sum.html#cb247-8" tabindex="-1"></a><span class="fu">terra_plt_ortho</span>(</span>
+<span id="cb247-9"><a href="silv_sum.html#cb247-9" tabindex="-1"></a>  <span class="at">ortho =</span> chm_temp</span>
+<span id="cb247-10"><a href="silv_sum.html#cb247-10" tabindex="-1"></a>  , <span class="at">crowns =</span> crowns_temp</span>
+<span id="cb247-11"><a href="silv_sum.html#cb247-11" tabindex="-1"></a>  , <span class="at">boundary =</span> unit_temp</span>
+<span id="cb247-12"><a href="silv_sum.html#cb247-12" tabindex="-1"></a>  , <span class="at">title =</span> <span class="st">&quot;example UAS-detected trees on CHM (m)&quot;</span></span>
+<span id="cb247-13"><a href="silv_sum.html#cb247-13" tabindex="-1"></a>)</span></code></pre></div>
+<p><img src="blm_trfo_uas_files/figure-html/unnamed-chunk-244-1.png" alt="" width="1008" /></p>
+<p>let’s check out some examples of the RGB by treatment block with the segmented crowns outlined in blue</p>
+<div class="sourceCode" id="cb248"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb248-1"><a href="silv_sum.html#cb248-1" tabindex="-1"></a><span class="co"># mapping</span></span>
+<span id="cb248-2"><a href="silv_sum.html#cb248-2" tabindex="-1"></a>plt_blk_temp <span class="ot">&lt;-</span> <span class="cf">function</span>(blk, <span class="at">add =</span> F, <span class="at">save =</span> F) {</span>
+<span id="cb248-3"><a href="silv_sum.html#cb248-3" tabindex="-1"></a>  <span class="cf">if</span>(save){</span>
+<span id="cb248-4"><a href="silv_sum.html#cb248-4" tabindex="-1"></a>    grDevices<span class="sc">::</span><span class="fu">png</span>(</span>
+<span id="cb248-5"><a href="silv_sum.html#cb248-5" tabindex="-1"></a>      <span class="at">filename =</span> <span class="fu">file.path</span>(<span class="st">&quot;../data&quot;</span>, <span class="fu">paste0</span>(<span class="st">&quot;plt_rgb_block_&quot;</span>, blk, <span class="st">&quot;.png&quot;</span>))</span>
+<span id="cb248-6"><a href="silv_sum.html#cb248-6" tabindex="-1"></a>      , <span class="at">width =</span> <span class="fl">9.5</span></span>
+<span id="cb248-7"><a href="silv_sum.html#cb248-7" tabindex="-1"></a>      , <span class="at">height =</span> <span class="dv">8</span></span>
+<span id="cb248-8"><a href="silv_sum.html#cb248-8" tabindex="-1"></a>      , <span class="at">units =</span> <span class="st">&quot;in&quot;</span></span>
+<span id="cb248-9"><a href="silv_sum.html#cb248-9" tabindex="-1"></a>      , <span class="at">res =</span> <span class="dv">300</span></span>
+<span id="cb248-10"><a href="silv_sum.html#cb248-10" tabindex="-1"></a>    )</span>
+<span id="cb248-11"><a href="silv_sum.html#cb248-11" tabindex="-1"></a>  }</span>
+<span id="cb248-12"><a href="silv_sum.html#cb248-12" tabindex="-1"></a>  <span class="co"># 2x2 grid layout</span></span>
+<span id="cb248-13"><a href="silv_sum.html#cb248-13" tabindex="-1"></a>  graphics<span class="sc">::</span><span class="fu">par</span>(<span class="at">mfrow =</span> <span class="fu">c</span>(<span class="dv">2</span>, <span class="dv">2</span>))</span>
+<span id="cb248-14"><a href="silv_sum.html#cb248-14" tabindex="-1"></a>  </span>
+<span id="cb248-15"><a href="silv_sum.html#cb248-15" tabindex="-1"></a>  unq_units_df <span class="sc">%&gt;%</span> </span>
+<span id="cb248-16"><a href="silv_sum.html#cb248-16" tabindex="-1"></a>    dplyr<span class="sc">::</span><span class="fu">ungroup</span>() <span class="sc">%&gt;%</span> </span>
+<span id="cb248-17"><a href="silv_sum.html#cb248-17" tabindex="-1"></a>    dplyr<span class="sc">::</span><span class="fu">mutate</span>(<span class="at">rownum =</span> dplyr<span class="sc">::</span><span class="fu">row_number</span>()) <span class="sc">%&gt;%</span> </span>
+<span id="cb248-18"><a href="silv_sum.html#cb248-18" tabindex="-1"></a>    dplyr<span class="sc">::</span><span class="fu">filter</span>(trtmnt_block<span class="sc">==</span>blk) <span class="sc">%&gt;%</span> </span>
+<span id="cb248-19"><a href="silv_sum.html#cb248-19" tabindex="-1"></a>    dplyr<span class="sc">::</span><span class="fu">pull</span>(rownum) <span class="sc">%&gt;%</span> </span>
+<span id="cb248-20"><a href="silv_sum.html#cb248-20" tabindex="-1"></a>    purrr<span class="sc">::</span><span class="fu">walk</span>(\(x) <span class="fu">plt_single_temp</span>(x,<span class="at">add=</span>add, <span class="at">my_col =</span> <span class="st">&quot;cyan&quot;</span>))</span>
+<span id="cb248-21"><a href="silv_sum.html#cb248-21" tabindex="-1"></a>  </span>
+<span id="cb248-22"><a href="silv_sum.html#cb248-22" tabindex="-1"></a>  <span class="co"># reset </span></span>
+<span id="cb248-23"><a href="silv_sum.html#cb248-23" tabindex="-1"></a>  <span class="cf">if</span>(save){grDevices<span class="sc">::</span><span class="fu">dev.off</span>()}</span>
+<span id="cb248-24"><a href="silv_sum.html#cb248-24" tabindex="-1"></a>  graphics<span class="sc">::</span><span class="fu">par</span>(<span class="at">mfrow =</span> <span class="fu">c</span>(<span class="dv">1</span>, <span class="dv">1</span>))</span>
+<span id="cb248-25"><a href="silv_sum.html#cb248-25" tabindex="-1"></a>}</span>
+<span id="cb248-26"><a href="silv_sum.html#cb248-26" tabindex="-1"></a><span class="co"># map over blks</span></span>
+<span id="cb248-27"><a href="silv_sum.html#cb248-27" tabindex="-1"></a><span class="fu">unique</span>(unq_units_df<span class="sc">$</span>trtmnt_block) <span class="sc">%&gt;%</span> </span>
+<span id="cb248-28"><a href="silv_sum.html#cb248-28" tabindex="-1"></a>  .[<span class="dv">1</span><span class="sc">:</span><span class="dv">2</span>] <span class="sc">%&gt;%</span></span>
+<span id="cb248-29"><a href="silv_sum.html#cb248-29" tabindex="-1"></a>  purrr<span class="sc">::</span><span class="fu">map</span>(\(x) <span class="fu">plt_blk_temp</span>(x, <span class="at">add=</span>T, <span class="at">save =</span> F))</span></code></pre></div>
+<p><img src="blm_trfo_uas_files/figure-html/unnamed-chunk-245-1.png" alt="" width="912" /><img src="blm_trfo_uas_files/figure-html/unnamed-chunk-245-2.png" alt="" width="912" /></p>
 
 </div>
 </div>
