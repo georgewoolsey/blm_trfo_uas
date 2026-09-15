@@ -1479,12 +1479,14 @@ terra_plt_ortho <- function(
     terra::plot(
       ortho
       , col = viridis::plasma(n=100)
-      # , mar = c(b,l,t,r)
+      # # , mar = c(b,l,t,r)
       , mar = c(0.2,0.2,2.2,3.5)
+      # , mar = c(0.2,0.2,2.5,7) # for printing
       , axes = F
       , plg = list(
-        # title = "CHM (m)"
-        cex = 0.8, title.cex = 0.5, shrink = 0.6
+        title = "CHM (m)"
+        , cex = 0.7, title.cex = 0.7, shrink = 0.6
+        # , cex = 1.7, title.cex = 1.7, shrink = 0.68,nudge = c(13, 0) # for printing
       )
       , main = title, cex.main=0.7
     ) 
@@ -1566,13 +1568,14 @@ unq_units_df %>%
 
 ```{r,eval=F,purl=FALSE, results=F}
 grDevices::jpeg("../data/plt_rgb_ex.jpeg", width = 10.5, height = 7, units = "in", res = 300)
-unq_units_df %>% 
-  dplyr::mutate(rn=dplyr::row_number()) %>% 
-  dplyr::filter(trtmnt_block==1,tolower(trtmnt_type)=="uniform- high",tolower(trtmnt_unit)=="u10") %>% 
-  dplyr::pull(rn) %>% 
+unq_units_df %>%
+  dplyr::mutate(rn=dplyr::row_number()) %>%
+  dplyr::filter(trtmnt_block==1,tolower(trtmnt_type)=="uniform- high",tolower(trtmnt_unit)=="u10") %>%
+  dplyr::pull(rn) %>%
   plt_single_temp(add = T, add_tit = F, my_col = "cyan", my_lwd = 0.7)
 grDevices::dev.off()
 
+# grDevices::jpeg("../data/plt_chm_ex.jpeg", width = 10.8, height = 7.2, units = "in", res = 300)  # for printing
 grDevices::jpeg("../data/plt_chm_ex.jpeg", width = 10.5, height = 7, units = "in", res = 300)
 unq_units_df %>% 
   dplyr::mutate(rn=dplyr::row_number()) %>% 

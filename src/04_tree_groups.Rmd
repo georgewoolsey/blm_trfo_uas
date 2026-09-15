@@ -511,8 +511,8 @@ plt_dist_rast_fn <-
       unq_units_df %>% dplyr::slice(x) %>% recode_treatment_type_fn() %>% dplyr::pull(trtmnt_type)
       , " | block "
       , unq_units_df %>% dplyr::slice(x) %>% dplyr::pull(trtmnt_block)
-      , " | "
-      , unq_units_df %>% dplyr::slice(x) %>% dplyr::pull(trtmnt_unit)
+      # , " | "
+      # , unq_units_df %>% dplyr::slice(x) %>% dplyr::pull(trtmnt_unit)
     )
     
     # get around empty levels that causes problems in the legend of ggplot
@@ -578,7 +578,7 @@ plt_dist_rast_fn <-
         harrypotter::scale_fill_hp(
           "mischief"
           , na.value = "transparent"
-          , name = "distance to\nnearest tree (m)"
+          , name = "distance to\nnearest tree (m)  "
           , limits = c(0,max_dist)
           , labels = scales::comma_format(accuracy = 1)
         )
@@ -587,7 +587,7 @@ plt_dist_rast_fn <-
         harrypotter::scale_fill_hp(
           "mischief"
           , na.value = "transparent"
-          , name = "distance to\nnearest tree (m)"
+          , name = "distance to\nnearest tree (m)  "
           # , limits = c(0,max_dist)
           , labels = scales::comma_format(accuracy = 1)
         )
@@ -673,6 +673,19 @@ ggplot2::ggsave(
       , axis.title.x =ggplot2::element_blank()
     )
   , height = 8, width = 10.5, dpi = "print"
+)
+ggplot2::ggsave(
+  "../data/plt_dist_rast_ex_big.jpg"
+  , plot = 
+    p_temp+
+    ggplot2::theme(
+      plot.subtitle = ggplot2::element_blank()
+      , plot.title = ggplot2::element_blank()
+      , axis.title.x =ggplot2::element_blank()
+      , legend.text =ggplot2::element_text(size = 14) #, margin = ggplot2::margin(t = -0.01))
+      , legend.title =ggplot2::element_text(size = 11)
+    ) 
+  , height = 9, width = 10.8, dpi = "print"
 )
 ```
 
@@ -921,6 +934,7 @@ plt_blk_temp <- function(blk, add = F, save = F) {
 # map over blks
 unique(unq_units_df$trtmnt_block) %>% 
   # .[1:2] %>%
+  # .[5] %>%
   purrr::map(\(x) plt_blk_temp(blk=x, add = T, save = F))
 ```
 
@@ -2960,7 +2974,7 @@ plt_fn_temp <- function(x) {
         , rescaler = ~ scales::rescale_mid(.x, mid = tree_obj_polys_temp$target_nearest_dist_m[1])
       ) + 
       ggplot2::labs(
-        fill = "distance to\nnearest tree (m)"
+        fill = "distance to\nnearest tree (m)   "
         , color = ""
         , title = plt_tit
         , subtitle = paste0("*tree spacing target: ", scales::comma(tree_obj_polys_temp$target_nearest_dist_m[1],accuracy=0.1,suffix=" m"))
@@ -3148,6 +3162,26 @@ ggplot2::ggsave(
       , legend.position = "top"
     )
   , height = 8, width = 10.5, dpi = "print"
+)
+
+ggplot2::ggsave(
+  "../data/plt_tree_dist_ex_big.jpg"
+  , plot = 
+    pl_temp[[1]]+
+    ggplot2::theme(
+      plot.subtitle = ggplot2::element_blank()
+      , plot.title = ggplot2::element_blank()
+      , axis.title.x =ggplot2::element_blank()
+      , legend.text =ggplot2::element_text(size = 14) #, margin = ggplot2::margin(t = -0.01))
+      , legend.title =ggplot2::element_text(size = 11)
+      , legend.box = "vertical"
+    ) +
+    ggplot2::guides(
+      fill = ggplot2::guide_colorbar(
+        barwidth = unit(1.85, "in")
+      )
+    )
+  , height = 9, width = 10.8, dpi = "print"
 )
 ```
 
